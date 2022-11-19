@@ -14,6 +14,15 @@ using System.Threading.Tasks;
 
 namespace NumbersGoUp.Utils
 {
+    public interface ITickerFile
+    {
+        public Task<Stream> OpenRead();
+    }
+    public interface ITickerHash
+    {
+        public Task<string> GetCurrentHash();
+        public Task WriteNewHash(string hash);
+    }
     public interface ITickerProcessor
     {
         Task<List<Ticker>> DownloadTickers(bool alwaysProcessData = false);
@@ -121,13 +130,13 @@ namespace NumbersGoUp.Utils
         private readonly ITickerFile _tickerFile;
 
         public TickerProcessCustom(IConfiguration configuration, IHostEnvironment environment, HttpClient client, IAppCancellation appCancellation, ILogger<TickerProcessCustom> logger, 
-                                    IRuntimeSettings runtimeSettings, ITickerHash tickerHash, ITickerFile tickerFile)
+                                    ITickerHash tickerHash, ITickerFile tickerFile)
         {
             _appCancellation = appCancellation;
             _httpClient = client;
             _logger = logger;
             var path = configuration["NUMBERS_GO_UP_EXTERNAL"];
-            _externalFilesPath = $"{runtimeSettings.Path}{Path.DirectorySeparatorChar}{path}";
+            _externalFilesPath = $"{Directory.GetCurrentDirectory()}{Path.DirectorySeparatorChar}{path}";
             _tickerHash = tickerHash;
             _tickerFile = tickerFile;
         }
@@ -192,84 +201,6 @@ namespace NumbersGoUp.Utils
             }
             fields = null;
             return false;
-        }
-    }
-
-    public interface ITickerFile
-    {
-        public Task<Stream> OpenRead();
-    }
-    public class LocalTickerFile : ITickerFile
-    {
-        private readonly string _externalFilesPath;
-        private FileInfo _tickerFile;
-
-        public string CustomTickersFile { get; protected set; }
-        public LocalTickerFile(IConfiguration configuration, IRuntimeSettings runtimeSettings)
-        {
-            var path = configuration["NUMBERS_GO_UP_EXTERNAL"];
-            _externalFilesPath = $"{runtimeSettings.Path}{Path.DirectorySeparatorChar}{path}";
-            CustomTickersFile = "ticker_picks.csv";
-        }
-        private FileInfo GetFile()
-        {
-            if(_tickerFile == null)
-            {
-                var directoryInfo = Directory.CreateDirectory(_externalFilesPath);
-                _tickerFile = directoryInfo.GetFiles(CustomTickersFile).FirstOrDefault();
-                if (_tickerFile == null)
-                {
-                    throw new Exception($"Couldn't find custom tickers file {CustomTickersFile} at {_externalFilesPath}");
-                }
-            }
-            return _tickerFile;
-        }
-        public Task<Stream> OpenRead()
-        {
-            return Task.FromResult<Stream>(GetFile().OpenRead());
-        }
-    }
-    public interface ITickerHash
-    {
-        public Task<string> GetCurrentHash();
-        public Task WriteNewHash(string hash);
-    }
-    public class LocalTickerHash : ITickerHash
-    {
-        private readonly DirectoryInfo _externalFilesDirectory;
-        private readonly IAppCancellation _appCancellation;
-
-        public string CustomTickersHashFile { get; protected set; }
-        public LocalTickerHash(IRuntimeSettings runtimeSettings, IConfiguration configuration, IAppCancellation appCancellation)
-        {
-            var path = configuration["NUMBERS_GO_UP_EXTERNAL"];
-            var externalFilesPath = $"{runtimeSettings.Path}{Path.DirectorySeparatorChar}{path}";
-            _externalFilesDirectory = Directory.CreateDirectory(externalFilesPath);
-            _appCancellation = appCancellation;
-            CustomTickersHashFile = "ticker_picks_hash";
-        }
-        public async Task<string> GetCurrentHash()
-        {
-            var oldHash = string.Empty;
-            var hashFile = _externalFilesDirectory.GetFiles(CustomTickersHashFile).FirstOrDefault();
-            if (hashFile != null)
-            {
-                oldHash = await File.ReadAllTextAsync(hashFile.FullName, _appCancellation.Token);
-            }
-            return oldHash;
-        }
-
-        public async Task WriteNewHash(string hash)
-        {
-            var hashFile = _externalFilesDirectory.GetFiles(CustomTickersHashFile).FirstOrDefault();
-            if (hashFile == null)
-            {
-                hashFile = new FileInfo($"{_externalFilesDirectory.FullName}{Path.DirectorySeparatorChar}{CustomTickersHashFile}");
-            }
-            using (var sr = new StreamWriter(hashFile.OpenWrite()))
-            {
-                await sr.WriteAsync(hash);
-            }
         }
     }
 }

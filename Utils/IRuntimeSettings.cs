@@ -8,7 +8,6 @@ namespace NumbersGoUp.Utils
 {
     public interface IRuntimeSettings
     {
-        public string Path { get; }
         public bool ForceDataCollection { get; set; }
     }
 }

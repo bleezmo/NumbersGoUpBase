@@ -104,18 +104,4 @@ namespace NumbersGoUp.Utils
             return false;
         }
     }
-    public class LocalTickerBankFile : LocalTickerFile
-    {
-        public LocalTickerBankFile(IConfiguration configuration, IRuntimeSettings runtimeSettings) : base(configuration, runtimeSettings)
-        {
-            CustomTickersFile = "ticker_bank.csv";
-        }
-    }
-    public class LocalTickerBankHash : LocalTickerHash
-    {
-        public LocalTickerBankHash(IRuntimeSettings runtimeSettings, IConfiguration configuration, IAppCancellation appCancellation): base(runtimeSettings,configuration,appCancellation)
-        {
-            CustomTickersHashFile = "ticker_bank_hash";
-        }
-    }
 }
