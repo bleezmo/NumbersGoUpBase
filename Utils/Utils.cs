@@ -56,6 +56,16 @@ namespace NumbersGoUp.Utils
             if (barsDesc.Count() < 2) { throw new Exception("Length does not meet minimum requirements to calculate velocity"); }
             return angleValueFn(barsDesc.First()) - angleValueFn(barsDesc.Last());
         }
+        public static double CalculateAvgVelocity<T>(this T[] barsDesc, Func<T, double> angleValueFn)
+        {
+            if (barsDesc.Length < 2) { throw new Exception("Length does not meet minimum requirements to calculate velocity"); }
+            double sum = 0;
+            for(var i = 0; i < (barsDesc.Length-1); i++)
+            {
+                sum += angleValueFn(barsDesc[i]) - angleValueFn(barsDesc[i + 1]);
+            }
+            return sum / (barsDesc.Length - 1);
+        }
         public static double CalculateAcceleration<T>(this IEnumerable<T> barsDesc, Func<T, double> angleValueFn)
         {
             var size = barsDesc.Count();
