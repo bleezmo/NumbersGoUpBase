@@ -18,7 +18,6 @@ namespace NumbersGoUp.Services
 {
     public class TickerService
     {
-        public const double PERATIO_CUTOFF = 30;
         public const int MAX_TICKERS = 100;
 
         private const string POLYGON_API_KEY = "polygon_api_key";
@@ -46,6 +45,8 @@ namespace NumbersGoUp.Services
         private readonly IRuntimeSettings _runtimeSettings;
         private readonly TickerBankService _tickerBankService;
         private readonly string[] _blackList;
+        
+        public double PERatioCutoff { get; }
 
         public TickerService(IConfiguration configuration, IHostEnvironment environment, IHttpClientFactory httpClientFactory, IStocksContextFactory contextFactory, IRuntimeSettings runtimeSettings,
                                 IAppCancellation appCancellation, ILogger<TickerService> logger, IBrokerService brokerService, RateLimiter rateLimiter, TickerBankService tickerBankService)
@@ -60,6 +61,7 @@ namespace NumbersGoUp.Services
             _contextFactory = contextFactory;
             _runtimeSettings = runtimeSettings;
             _tickerBankService = tickerBankService;
+            PERatioCutoff = tickerBankService.PERatioCutoff;
             _blackList = configuration["TickerBlacklist"]?.Split(',') ?? new string[] { };
         }
         public async Task<IEnumerable<Ticker>> GetTickers()
@@ -89,6 +91,7 @@ namespace NumbersGoUp.Services
         }
         public async Task LoadTickers()
         {
+            _logger.LogInformation($"Using PE Ratio cutoff as {PERatioCutoff}");
             try
             {
                 await _tickerBankService.Load();
@@ -152,7 +155,7 @@ namespace NumbersGoUp.Services
                         var tickers = await stocksContext.Tickers.ToArrayAsync(_appCancellation.Token);
                         foreach(var ticker in tickers)
                         {
-                            if(ticker.AvgMonthPerc > -1000 && ticker.PERatio > 0 && ticker.PERatio < PERATIO_CUTOFF)
+                            if(ticker.AvgMonthPerc > -1000 && ticker.PERatio > 0 && ticker.PERatio < PERatioCutoff)
                             {
                                 toUpdate.Add(ticker);
                             }

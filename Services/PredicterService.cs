@@ -21,15 +21,16 @@ namespace NumbersGoUp.Services
         private readonly IBrokerService _brokerService;
         private readonly IStocksContextFactory _contextFactory;
         private readonly double _encouragementMultiplier;
+        private readonly double _peratioCutoff;
 
-        public PredicterService(IAppCancellation appCancellation, ILogger<PredicterService> logger, IBrokerService brokerService, IStocksContextFactory contextFactory, IConfiguration configuration)
+        public PredicterService(IAppCancellation appCancellation, ILogger<PredicterService> logger, IBrokerService brokerService, TickerService tickerService, IStocksContextFactory contextFactory, IConfiguration configuration)
         {
             _logger = logger;
             _appCancellation = appCancellation;
             _brokerService = brokerService;
             _contextFactory = contextFactory;
             _encouragementMultiplier = Math.Min(Math.Max(double.TryParse(configuration["EncouragementMultiplier"], out var encouragementMultiplier) ? encouragementMultiplier : 0, -1), 1);
-
+            _peratioCutoff = tickerService.PERatioCutoff;
         }
         public Task<double?> BuyPredict(string symbol) => Predict(symbol, true);
         public Task<double> BuyPredict(BarMetric barMetric) => Predict(barMetric, true);
@@ -100,7 +101,7 @@ namespace NumbersGoUp.Services
         {
             if (barMetrics.Length == FEATURE_HISTORY_DAY)
             {
-                double peRatio = ticker.EPS > 0 ? (barMetrics[0].HistoryBar.Price() / ticker.EPS) : TickerService.PERATIO_CUTOFF;
+                double peRatio = ticker.EPS > 0 ? (barMetrics[0].HistoryBar.Price() / ticker.EPS) : _peratioCutoff;
                 const double alpha = 0.45;
                 double pricePrediction; double longPricePrediction;
                 if (buy)
@@ -143,7 +144,7 @@ namespace NumbersGoUp.Services
                 var totalPrediction = (pricePrediction * alpha) + (longPricePrediction * (1 - alpha));
                 if (buy)
                 {
-                    totalPrediction *= (1 - peRatio.DoubleReduce(TickerService.PERATIO_CUTOFF, TickerService.PERATIO_CUTOFF * 0.5));
+                    totalPrediction *= (1 - peRatio.DoubleReduce(_peratioCutoff, _peratioCutoff * 0.5));
                 }
                 totalPrediction += buy ? ((1 - totalPrediction) * _encouragementMultiplier.DoubleReduce(1, 0)) : ((1 - totalPrediction) * (1 - _encouragementMultiplier.DoubleReduce(0, -1)));
                 return totalPrediction;

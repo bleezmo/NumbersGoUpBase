@@ -19,6 +19,7 @@ namespace NumbersGoUp.Services
 {
     public class TickerBankService
     {
+        private const string PERATIO_CUTOFF_KEY = "PERatioCutoff";
         private const string FINANCIAL_API_KEY = "fmp_api_key";
 
         private readonly IHttpClientFactory _httpClientFactory;
@@ -32,6 +33,7 @@ namespace NumbersGoUp.Services
         private readonly IRuntimeSettings _runtimeSettings;
         private readonly string _apiKey;
         private readonly DateTime _lookbackDate = DateTime.Now.AddYears(-DataService.LOOKBACK_YEARS);
+        public double PERatioCutoff { get; }
 
         private const string BaseURL = "https://financialmodelingprep.com";
         private string QuotePath => $"{BaseURL}/api/v3/quote/{{0}}?apikey={_apiKey}";
@@ -56,6 +58,7 @@ namespace NumbersGoUp.Services
             _contextFactory = contextFactory;
             _runtimeSettings = runtimeSettings;
             _apiKey = _configuration[$"{FINANCIAL_API_KEY}:{_environmentName}"];
+            PERatioCutoff = double.TryParse(configuration[PERATIO_CUTOFF_KEY], out var peratioCutoff) ? peratioCutoff : 30;
         }
         public async Task Load()
         {
@@ -104,7 +107,7 @@ namespace NumbersGoUp.Services
                     var tickers = new List<BankTicker>();
                     foreach(var t in dbTickers)
                     {
-                        if(t.Earnings > 0 && t.PERatio < TickerService.PERATIO_CUTOFF && t.EVEBITDA < TickerService.PERATIO_CUTOFF && t.PERatio > t.EVEBITDA && t.PERatio > 1 && t.EVEBITDA > 1 && 
+                        if(t.Earnings > 0 && t.PERatio < PERatioCutoff && t.EVEBITDA < PERatioCutoff && t.PERatio > t.EVEBITDA && t.PERatio > 1 && t.EVEBITDA > 1 && 
                             t.DebtEquityRatio < 2 && t.DebtEquityRatio > 0 && t.CurrentRatio > 1.2 && t.CurrentRatio > (t.DebtEquityRatio*0.75) && t.DividendYield > 0.005 && t.PriceChangeAvg > 0 && t.EPS > 1)
                         {
                             tickers.Add(t);
