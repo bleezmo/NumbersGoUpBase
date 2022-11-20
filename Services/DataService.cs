@@ -302,11 +302,7 @@ namespace NumbersGoUp.Services
                 barMetric.PriceSMA2 = GetAngle(bars[0].Price() - sma2, sma2Upper - sma2);
                 barMetric.PriceSMA3 = GetAngle(bars[0].Price() - sma3, sma3Upper - sma3);
                 barMetric.SMASMA = GetAngle(sma - sma3, sma3Upper - sma3);
-                barMetric.RSI = RSI(bars.Take(RSI_LENGTH).ToArray());
-                barMetric.StochasticOscillator = StochasticOscillator(bars.Take(RSI_LENGTH).ToArray());
-                (barMetric.WeekDiff, barMetric.WeekVariance) = GetWeekMetrics(bars.Take(SMA3_LENGTH).ToArray());
                 barMetric.ProfitLossPerc = (bars.First().Price() - bars.Last().Price()) * 100 / bars.Last().Price();
-                barMetric.StDevSMA1 = GetAngle((smaUpper - sma) - (smaUpperPrev - smaPrev), smaUpperPrev - smaPrev);
                 var volAlma = ApplyAlma(bars.Take(ALMA_LENGTH).ToArray(), (bar) => Convert.ToDouble(bar.Volume));
                 var (volSma, volSmaUpper, volSmaLower) = BollingerBands(bars.Take(SMA_LENGTH).ToArray(), (bar) => Convert.ToDouble(bar.Volume));
                 barMetric.VolAlmaSMA = GetAngle(volAlma - volSma, volSmaUpper - volSma);
@@ -322,54 +318,6 @@ namespace NumbersGoUp.Services
             var smaUpper = sma + (stdev * 2);
             var smaLower = sma - (stdev * 2);
             return (sma, smaUpper, smaLower);
-        }
-        private static double RSI(HistoryBar[] bars)
-        {
-            var barGains = new List<double>();
-            var barLosses = new List<double>();
-            for(var i = 0; i < (bars.Length-1); i++)
-            {
-                if(bars[i].ClosePrice > bars[i + 1].ClosePrice)
-                {
-                    barGains.Add((bars[i].ClosePrice - bars[i+1].ClosePrice) * _gaussianWeights[i] / bars[i+1].ClosePrice);
-                }
-                else if (bars[i].ClosePrice < bars[i + 1].ClosePrice)
-                {
-                    barLosses.Add(Math.Abs(bars[i].ClosePrice - bars[i+1].ClosePrice) * _gaussianWeights[i] / bars[i+1].ClosePrice);
-                }
-            }
-            var avgGains = barGains.Count > 0 ? barGains.Sum() / _gaussianWeights.Take(barGains.Count).Sum() : 0;
-            var avgLosses = barLosses.Count > 0 ? barLosses.Sum() / _gaussianWeights.Take(barLosses.Count).Sum() : 0;
-            if(avgLosses == 0 && avgGains == 0)
-            {
-                return 50;
-            }
-            else if(avgLosses == 0)
-            {
-                return 100;
-            }
-            return 100 - (100 / (1 + (avgGains / avgLosses)));
-        }
-        private static double StochasticOscillator(HistoryBar[] bars)
-        {
-            var high = bars.Select(b => b.HighPrice).Max();
-            var low = bars.Select(b => b.LowPrice).Min();
-            return high == low ? 0 : (bars[0].Price() - low) * 100 / (high - low);
-        }
-        private static (double weekDiff, double variance) GetWeekMetrics(HistoryBar[] barsDesc)
-        {
-            var weekDiffs = new List<double>();
-            var weekLength = 5;
-            for (var i = 0; i < barsDesc.Length; i += weekLength)
-            {
-                var beginBar = barsDesc.Length > (weekLength + i) ? barsDesc[i + weekLength] : barsDesc.Last();
-                var endBar = barsDesc[i];
-                weekDiffs.Add((endBar.Price() - beginBar.Price()) * 100 / beginBar.Price());
-            }
-            if(weekDiffs.Count == 0) { return (0.0, 0.0); }
-            var avg = weekDiffs.Sum() / weekDiffs.Count;
-            var variance = weekDiffs.Aggregate(0.0, (acc, s) => acc + Math.Pow(s - avg, 2)) / weekDiffs.Count;
-            return (weekDiffs[0], variance);
         }
         private static double GetAngle(double num, double denom)
         {

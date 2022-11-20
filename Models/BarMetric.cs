@@ -19,16 +19,11 @@ namespace NumbersGoUp.Models
         public double AlmaSMA1 { get; set; }
         public double AlmaSMA2 { get; set; }
         public double AlmaSMA3 { get; set; }
-        public double RSI { get; set; }
-        public double StochasticOscillator { get; set; }
-        public double WeekDiff { get; set; }
-        public double WeekVariance { get; set; }
         public double PriceSMA1 { get; set; }
         public double PriceSMA2 { get; set; }
         public double PriceSMA3 { get; set; }
         public double SMASMA { get; set; }
         public double ProfitLossPerc { get; set; }
-        public double StDevSMA1 { get; set; }
         public double VolAlmaSMA { get; set; }
     }
 }

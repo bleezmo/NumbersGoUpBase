@@ -255,8 +255,7 @@ namespace NumbersGoUp.Services
             {
                 await _brokerService.Ready();
                 var nowMillis = new DateTimeOffset(now).ToUnixTimeMilliseconds();
-                var offsetDays = -30 - new Random().Next(15); //don't want to calculate all at once since it takes forever
-                var cutoff = new DateTimeOffset(now.AddDays(offsetDays)).ToUnixTimeMilliseconds();
+                var cutoff = new DateTimeOffset(now.AddDays(-30)).ToUnixTimeMilliseconds();
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
                     var tickers = await stocksContext.Tickers.ToArrayAsync(_appCancellation.Token);
@@ -273,6 +272,12 @@ namespace NumbersGoUp.Services
                                 ticker.PERatio = bankTicker.PERatio;
                                 ticker.EPS = bankTicker.EPS;
                                 ticker.EBIT = bankTicker.Earnings;
+                                ticker.LastCalculated = now;
+                                ticker.LastCalculatedMillis = nowMillis;
+                                stocksContext.Tickers.Update(ticker);
+                            }
+                            else if(bankTickers.Length < 150 && ticker.PerformanceVector > 25) //keep some tickers if the bank size is to small
+                            {
                                 ticker.LastCalculated = now;
                                 ticker.LastCalculatedMillis = nowMillis;
                                 stocksContext.Tickers.Update(ticker);
