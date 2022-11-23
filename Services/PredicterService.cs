@@ -142,11 +142,19 @@ namespace NumbersGoUp.Services
                 pricePrediction *= reverseInd + ((1 - reverseInd) * (1 - barMetrics[0].SMASMA.DoubleReduce(ticker.SMASMAAvg - (ticker.SMASMAStDev * 0.5), ticker.SMASMAAvg - (ticker.SMASMAStDev * 1.5))));
 
                 var totalPrediction = (pricePrediction * alpha) + (longPricePrediction * (1 - alpha));
+
+                var encouragementMultiplier = _encouragementMultiplier;
                 if (buy)
                 {
-                    totalPrediction *= (1 - peRatio.DoubleReduce(_peratioCutoff, _peratioCutoff * 0.5));
+                    totalPrediction *= (1 - peRatio.DoubleReduce(_peratioCutoff, _peratioCutoff * 0.5)) * encouragementMultiplier.DoubleReduce(0, -1);
+                    totalPrediction += (1 - totalPrediction) * encouragementMultiplier.DoubleReduce(1, 0);
                 }
-                totalPrediction += buy ? ((1 - totalPrediction) * _encouragementMultiplier.DoubleReduce(1, 0)) : ((1 - totalPrediction) * (1 - _encouragementMultiplier.DoubleReduce(0, -1)));
+                else
+                {
+                    totalPrediction *= 1 - encouragementMultiplier.DoubleReduce(1, 0);
+                    totalPrediction += (1 - totalPrediction) * (1 - encouragementMultiplier.DoubleReduce(0, -1));
+                }
+
                 return totalPrediction;
             }
             return 0.0;
