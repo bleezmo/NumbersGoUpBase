@@ -18,6 +18,7 @@ namespace NumbersGoUp.Services
         public const bool FRACTIONAL = false;
         public const int MAX_SECURITIES = 10;
         public const bool USE_MARGIN = false;
+        public const double MULTIPLIER_THRESHOLD = 0.4;
 
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<TraderService> _logger;
@@ -52,7 +53,11 @@ namespace NumbersGoUp.Services
                 var marketOpen = await _brokerService.GetMarketOpen();
                 if (DateTime.Now.CompareTo(marketOpen.AddHours(-4)) > 0)
                 {
-                    _account = await _brokerService.GetAccount();
+                    _account = await _brokerService.GetAccount(); 
+                    if(_account.Balance.LastEquity == 0)
+                    {
+                        _logger.LogError("Error retrieving equity value!");
+                    }
                     _logger.LogInformation("Running previous-day metrics");
                     await PreviousDayTradeMetrics();
                     _logger.LogInformation("Running buy orders");
@@ -124,7 +129,8 @@ namespace NumbersGoUp.Services
                                 multiplier *= (lastBarMetric.ProfitLossPerc - percProfit).DoubleReduce(0, -ticker.ProfitLossStDev);
                             }
                         }
-                        if(multiplier > 0.4)
+                        multiplier = multiplier > MULTIPLIER_THRESHOLD ? FinalBuyMultiplier(multiplier) : 0;
+                        if(multiplier > MULTIPLIER_THRESHOLD)
                         {
                             buys.Add(new BuySellState
                             {
@@ -142,7 +148,7 @@ namespace NumbersGoUp.Services
             {
                 if (currentOrders.Any(o => o.Symbol == buyState.BarMetric.Symbol)) continue;
                 //_logger.LogInformation($"Buying {barMetric.Symbol} at target price {price} with prediction {prediction}");
-                await AddOrder(OrderSide.Buy, buyState.BarMetric.Symbol, buyState.BarMetric.HistoryBar.ClosePrice, 1 + Math.Pow(Math.Pow(buyState.Multiplier, (1 - cashEquityRatio).DoubleReduce(1, 0, 4, 1)) - 1, 3));
+                await AddOrder(OrderSide.Buy, buyState.BarMetric.Symbol, buyState.BarMetric.HistoryBar.ClosePrice, buyState.Multiplier);
             }
         }
         public async Task Sell()
@@ -194,7 +200,8 @@ namespace NumbersGoUp.Services
                     //}
                     var percProfit = position.UnrealizedProfitLossPercent.HasValue ? position.UnrealizedProfitLossPercent.Value * 100 : ((currentPrice - position.CostBasis) * 100 / position.CostBasis);
                     sellMultiplier *= ((1 - percProfit.ZeroReduce(0, -20)) + (1 - cashEquityRatio.DoubleReduce(0.3, 0))) * 0.5;
-                    if (sellMultiplier > 0.4)
+                    sellMultiplier = sellMultiplier > MULTIPLIER_THRESHOLD ? FinalSellMultiplier(sellMultiplier) : 0.0;
+                    if (sellMultiplier > MULTIPLIER_THRESHOLD)
                     {
                         sells.Add(new BuySellState
                         {
@@ -209,8 +216,18 @@ namespace NumbersGoUp.Services
             foreach (var sell in sells.OrderBy(s => s.TickerPosition.Ticker.PerformanceVector * s.ProfitLossPerc.ZeroReduce(s.TickerPosition.Ticker.ProfitLossAvg + s.TickerPosition.Ticker.ProfitLossStDev, (s.TickerPosition.Ticker.ProfitLossAvg + s.TickerPosition.Ticker.ProfitLossStDev)*-1)).Take((int)Math.Ceiling(1 / Math.Max(cashEquityRatio, 0.1))))
             {
                 var limit = sell.BarMetric.HistoryBar.ClosePrice;
-                await AddOrder(OrderSide.Sell, sell.BarMetric.Symbol, limit, 1 + Math.Pow(Math.Pow(sell.Multiplier, cashEquityRatio.DoubleReduce(1, 0, 6, 1)) - 1, 3));
+                await AddOrder(OrderSide.Sell, sell.BarMetric.Symbol, limit, sell.Multiplier);
             }
+        }
+        private double FinalSellMultiplier(double multiplier)
+        {
+            var cashEquityRatio = Math.Max(_account.Balance.TradableCash / _account.Balance.LastEquity, 0);
+            return 1 + Math.Pow(Math.Pow(multiplier, cashEquityRatio.DoubleReduce(1, 0, 6, 1)) - 1, 3);
+        }
+        private double FinalBuyMultiplier(double multiplier)
+        {
+            var cashEquityRatio = Math.Max(_account.Balance.TradableCash / _account.Balance.LastEquity, 0);
+            return 1 + Math.Pow(Math.Pow(multiplier, (1 - cashEquityRatio).DoubleReduce(1, 0, 4, 1)) - 1, 3);
         }
         private async Task AddOrder(OrderSide orderSide, string symbol, double targetPrice, double multiplier)
         {
