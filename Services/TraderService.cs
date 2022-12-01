@@ -1,15 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NumbersGoUp.Models;
 using NumbersGoUp.Utils;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace NumbersGoUp.Services
 {
@@ -29,7 +22,7 @@ namespace NumbersGoUp.Services
         private readonly string _environmentName;
         private readonly IStocksContextFactory _contextFactory;
         private Account _account;
-        private double _remainingBuyAmount;
+        private double _cashEquityRatio;
 
         public TraderService(IAppCancellation appCancellation, IHostEnvironment environment, ILogger<TraderService> logger, TickerService tickerService, 
                              IBrokerService brokerService, PredicterService predicterService, DataService dataService, IStocksContextFactory contextFactory)
@@ -53,19 +46,30 @@ namespace NumbersGoUp.Services
                 var marketOpen = await _brokerService.GetMarketOpen();
                 if (DateTime.Now.CompareTo(marketOpen.AddHours(-4)) > 0)
                 {
-                    _account = await _brokerService.GetAccount(); 
-                    if(_account.Balance.LastEquity == 0)
+                    _account = await _brokerService.GetAccount();
+                    _logger.LogInformation("Running previous-day metrics");
+                    await PreviousDayTradeMetrics();
+                    var equity = _account.Balance.LastEquity;
+                    var cash = _account.Balance.TradableCash;
+                    if (equity == 0)
                     {
                         _logger.LogError("Error retrieving equity value!");
                     }
-                    _logger.LogInformation("Running previous-day metrics");
-                    await PreviousDayTradeMetrics();
-                    _logger.LogInformation("Running buy orders");
-                    await Buy();
-                    _logger.LogInformation("Running sell orders");
-                    await Sell();
-                    _logger.LogInformation("Running order executions");
-                    await ExecuteOrders();
+                    else
+                    {
+                        if (cash < 0)
+                        {
+                            _logger.LogError("Negative cash balance!");
+                        }
+                        _cashEquityRatio = Math.Max(cash / equity, 0);
+                        _logger.LogInformation($"Using Cash-Equity Ratio: {_cashEquityRatio}");
+                        _logger.LogInformation("Running buy orders");
+                        await Buy();
+                        _logger.LogInformation("Running sell orders");
+                        await Sell();
+                        _logger.LogInformation("Running order executions");
+                        await ExecuteOrders();
+                    }
                     _logger.LogInformation("Cleaning up");
                     await CleanUp();
                 }
@@ -97,9 +101,6 @@ namespace NumbersGoUp.Services
             var maxEquityPerc = Convert.ToDouble(TickerService.MAX_TICKERS) / (5 * Math.Min(tickers.Count(), TickerService.MAX_TICKERS));
             var positions = await _brokerService.GetPositions();
             var tickerPositions = tickers.Select(t => new TickerPosition { Ticker = t, Position = positions.FirstOrDefault(p => t.Symbol == p.Symbol) }).ToArray();
-            var equity = _account.Balance.LastEquity;
-            var cash = _account.Balance.TradableCash;
-            var cashEquityRatio = Math.Max(cash / equity, 0);
 
             var buys = new List<BuySellState>();
             foreach (var tickerPosition in tickerPositions.Where(tp => !currentOrders.Any(o => o.Symbol == tp.Ticker.Symbol)))
@@ -123,7 +124,7 @@ namespace NumbersGoUp.Services
                                                                                                                                           (currentPrice - tickerPosition.Position.CostBasis) * 100 / tickerPosition.Position.CostBasis) : 0.0;
                         if (tickerPosition.Position != null)
                         {
-                            multiplier *= 1 - ((tickerPosition.Position.Quantity * currentPrice) / (equity * maxEquityPerc)).DoubleReduce(1, 0.25);
+                            multiplier *= 1 - ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * maxEquityPerc)).DoubleReduce(1, 0.25);
                             if(percProfit < 1 && lastBarMetric.ProfitLossPerc < 1)
                             {
                                 multiplier *= (lastBarMetric.ProfitLossPerc - percProfit).DoubleReduce(0, -ticker.ProfitLossStDev);
@@ -144,7 +145,7 @@ namespace NumbersGoUp.Services
                 }
             }
             foreach (var buyState in buys.OrderByDescending(b => b.TickerPosition.Ticker.PerformanceVector * b.ProfitLossPerc.ZeroReduce(b.TickerPosition.Ticker.ProfitLossAvg + b.TickerPosition.Ticker.ProfitLossStDev, (b.TickerPosition.Ticker.ProfitLossAvg + b.TickerPosition.Ticker.ProfitLossStDev) * -1))
-                                          .Take((int)Math.Ceiling(MAX_SECURITIES * Math.Max(1 + Math.Pow(cashEquityRatio - 1, 3), 0.1))))
+                                          .Take((int)Math.Ceiling(MAX_SECURITIES * Math.Max(1 + Math.Pow(_cashEquityRatio - 1, 3), 0.1))))
             {
                 if (currentOrders.Any(o => o.Symbol == buyState.BarMetric.Symbol)) continue;
                 //_logger.LogInformation($"Buying {barMetric.Symbol} at target price {price} with prediction {prediction}");
@@ -158,9 +159,6 @@ namespace NumbersGoUp.Services
             var tickers = await _tickerService.GetTickers(positions.Select(p => p.Symbol).ToArray());
             var tickerPositions = positions.Select(p => new TickerPosition { Position = p, Ticker = tickers.FirstOrDefault(t => t.Symbol == p.Symbol) });
 
-            var equity = _account.Balance.LastEquity;
-            var cash = _account.Balance.TradableCash;
-            var cashEquityRatio = Math.Max(cash / equity, 0);
             var dayStart = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds();
             List<DbOrder> currentOrders;
             using (var stocksContext = _contextFactory.CreateDbContext())
@@ -199,7 +197,7 @@ namespace NumbersGoUp.Services
                     //    continue;
                     //}
                     var percProfit = position.UnrealizedProfitLossPercent.HasValue ? position.UnrealizedProfitLossPercent.Value * 100 : ((currentPrice - position.CostBasis) * 100 / position.CostBasis);
-                    sellMultiplier *= ((1 - percProfit.ZeroReduce(0, -20)) + (1 - cashEquityRatio.DoubleReduce(0.3, 0))) * 0.5;
+                    sellMultiplier *= ((1 - percProfit.ZeroReduce(0, -20)) + (1 - _cashEquityRatio.DoubleReduce(0.3, 0))) * 0.5;
                     sellMultiplier = sellMultiplier > MULTIPLIER_THRESHOLD ? FinalSellMultiplier(sellMultiplier) : 0.0;
                     if (sellMultiplier > MULTIPLIER_THRESHOLD)
                     {
@@ -213,22 +211,14 @@ namespace NumbersGoUp.Services
                     }
                 }
             }
-            foreach (var sell in sells.OrderBy(s => s.TickerPosition.Ticker.PerformanceVector * s.ProfitLossPerc.ZeroReduce(s.TickerPosition.Ticker.ProfitLossAvg + s.TickerPosition.Ticker.ProfitLossStDev, (s.TickerPosition.Ticker.ProfitLossAvg + s.TickerPosition.Ticker.ProfitLossStDev)*-1)).Take((int)Math.Ceiling(1 / Math.Max(cashEquityRatio, 0.1))))
+            foreach (var sell in sells.OrderBy(s => s.TickerPosition.Ticker.PerformanceVector * s.ProfitLossPerc.ZeroReduce(s.TickerPosition.Ticker.ProfitLossAvg + s.TickerPosition.Ticker.ProfitLossStDev, (s.TickerPosition.Ticker.ProfitLossAvg + s.TickerPosition.Ticker.ProfitLossStDev)*-1)).Take((int)Math.Ceiling(1 / Math.Max(_cashEquityRatio, 0.1))))
             {
                 var limit = sell.BarMetric.HistoryBar.ClosePrice;
                 await AddOrder(OrderSide.Sell, sell.BarMetric.Symbol, limit, sell.Multiplier);
             }
         }
-        private double FinalSellMultiplier(double multiplier)
-        {
-            var cashEquityRatio = Math.Max(_account.Balance.TradableCash / _account.Balance.LastEquity, 0);
-            return 1 + Math.Pow(Math.Pow(multiplier, cashEquityRatio.DoubleReduce(1, 0, 6, 1)) - 1, 3);
-        }
-        private double FinalBuyMultiplier(double multiplier)
-        {
-            var cashEquityRatio = Math.Max(_account.Balance.TradableCash / _account.Balance.LastEquity, 0);
-            return 1 + Math.Pow(Math.Pow(multiplier, (1 - cashEquityRatio).DoubleReduce(1, 0, 4, 1)) - 1, 3);
-        }
+        private double FinalSellMultiplier(double multiplier) => 1 + Math.Pow(Math.Pow(multiplier, _cashEquityRatio.DoubleReduce(1, 0, 6, 1)) - 1, 3);
+        private double FinalBuyMultiplier(double multiplier) => 1 + Math.Pow(Math.Pow(multiplier, (1 - _cashEquityRatio).DoubleReduce(1, 0, 4, 1)) - 1, 3);
         private async Task AddOrder(OrderSide orderSide, string symbol, double targetPrice, double multiplier)
         {
             var now = DateTime.UtcNow;
@@ -349,12 +339,12 @@ namespace NumbersGoUp.Services
             var sellOrders = currentOrders.Where(o => o.Side == OrderSide.Sell).ToArray();
 
             //var avgBuyMultiplier = buyOrders.Any() ? buyOrders.Select(o => o.Multiplier).Average() : 0.0;
-            _remainingBuyAmount = Math.Min(_account.Balance.LastEquity * 0.1, balance);
+            var remainingBuyAmount = Math.Min(_account.Balance.LastEquity * 0.1, balance);
 
-            _remainingBuyAmount -= currentOrders.Select(o => o.Side == OrderSide.Buy ? o.AppliedAmt : 0).Sum();
-            _logger.LogInformation($"Starting balance {balance:C2} and remaining buy amount {_remainingBuyAmount:C2}");
+            remainingBuyAmount -= currentOrders.Select(o => o.Side == OrderSide.Buy ? o.AppliedAmt : 0).Sum();
+            _logger.LogInformation($"Starting balance {balance:C2} and remaining buy amount {remainingBuyAmount:C2}");
             await ExecuteSells(sellOrders);
-            await ExecuteBuys(buyOrders);
+            await ExecuteBuys(buyOrders, remainingBuyAmount);
         }
         private async Task ExecuteSells(DbOrder[] orders)
         {
@@ -421,7 +411,7 @@ namespace NumbersGoUp.Services
             }
         }
 
-        private async Task ExecuteBuys(DbOrder[] orders)
+        private async Task ExecuteBuys(DbOrder[] orders, double remainingBuyAmount)
         {
             var equity = _account.Balance.LastEquity;
             var positions = await _brokerService.GetPositions();
@@ -431,7 +421,7 @@ namespace NumbersGoUp.Services
                 var buy = equity * 0.02 * order.Multiplier;
                 var currentPrice = position?.AssetLastPrice != null ? position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(order.Symbol)).Price;
                 if (FRACTIONAL && currentPrice > order.TargetPrice) { continue; }
-                if (_remainingBuyAmount < buy) { buy = _remainingBuyAmount; }
+                if (remainingBuyAmount < buy) { buy = remainingBuyAmount; }
                 if (buy > 5 || !FRACTIONAL)
                 {
                     var qty = 0.0;
@@ -452,8 +442,8 @@ namespace NumbersGoUp.Services
                     if (brokerOrder != null)
                     {
                         //just approximate here. it's probably fine
-                        _remainingBuyAmount -= buy;
-                        _logger.LogInformation($"Submitted buy order for {order.Symbol} at price {order.TargetPrice:C2}. Remaining amount for buys {_remainingBuyAmount:C2}");
+                        remainingBuyAmount -= buy;
+                        _logger.LogInformation($"Submitted buy order for {order.Symbol} at price {order.TargetPrice:C2}. Remaining amount for buys {remainingBuyAmount:C2}");
                         order.AppliedAmt += buy;
                         order.BrokerOrderId = brokerOrder.BrokerOrderId;
                         using (var stocksContext = _contextFactory.CreateDbContext())
