@@ -118,25 +118,25 @@ namespace NumbersGoUp.Services
                     var lastBarMetric = await _dataService.GetLastMetric(ticker.Symbol);
                     if (lastBarMetric != null)
                     {
-                        var multiplier = prediction.Value;
+                        var buyMultiplier = prediction.Value;
                         var currentPrice = tickerPosition.Position?.AssetLastPrice != null ? tickerPosition.Position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(ticker.Symbol)).Price;
                         var percProfit = tickerPosition.Position != null ? (tickerPosition.Position.UnrealizedProfitLossPercent != null ? tickerPosition.Position.UnrealizedProfitLossPercent.Value * 100 :
                                                                                                                                           (currentPrice - tickerPosition.Position.CostBasis) * 100 / tickerPosition.Position.CostBasis) : 0.0;
                         if (tickerPosition.Position != null)
                         {
-                            multiplier *= 1 - ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * maxEquityPerc)).DoubleReduce(1, 0.25);
+                            buyMultiplier *= 1 - ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * maxEquityPerc)).DoubleReduce(1, 0.25);
                             if(percProfit < 1 && lastBarMetric.ProfitLossPerc < 1)
                             {
-                                multiplier *= (lastBarMetric.ProfitLossPerc - percProfit).DoubleReduce(0, -ticker.ProfitLossStDev);
+                                buyMultiplier *= (lastBarMetric.ProfitLossPerc - percProfit).DoubleReduce(0, -ticker.ProfitLossStDev);
                             }
                         }
-                        multiplier = multiplier > MULTIPLIER_THRESHOLD ? FinalBuyMultiplier(multiplier) : 0;
-                        if(multiplier > MULTIPLIER_THRESHOLD)
+                        buyMultiplier = buyMultiplier > MULTIPLIER_THRESHOLD ? buyMultiplier.Curve3((1 - _cashEquityRatio).DoubleReduce(1, 0, 4, 1)) : 0;
+                        if(buyMultiplier > MULTIPLIER_THRESHOLD)
                         {
                             buys.Add(new BuySellState
                             {
                                 BarMetric = lastBarMetric,
-                                Multiplier = multiplier,
+                                Multiplier = buyMultiplier,
                                 TickerPosition = tickerPosition,
                                 ProfitLossPerc = percProfit
                             });
@@ -198,7 +198,7 @@ namespace NumbersGoUp.Services
                     //}
                     var percProfit = position.UnrealizedProfitLossPercent.HasValue ? position.UnrealizedProfitLossPercent.Value * 100 : ((currentPrice - position.CostBasis) * 100 / position.CostBasis);
                     sellMultiplier *= ((1 - percProfit.ZeroReduce(0, -20)) + (1 - _cashEquityRatio.DoubleReduce(0.3, 0))) * 0.5;
-                    sellMultiplier = sellMultiplier > MULTIPLIER_THRESHOLD ? FinalSellMultiplier(sellMultiplier) : 0.0;
+                    sellMultiplier = sellMultiplier > MULTIPLIER_THRESHOLD ? sellMultiplier.Curve3(_cashEquityRatio.DoubleReduce(1, 0, 6, 1)) : 0.0;
                     if (sellMultiplier > MULTIPLIER_THRESHOLD)
                     {
                         sells.Add(new BuySellState
@@ -217,8 +217,6 @@ namespace NumbersGoUp.Services
                 await AddOrder(OrderSide.Sell, sell.BarMetric.Symbol, limit, sell.Multiplier);
             }
         }
-        private double FinalSellMultiplier(double multiplier) => 1 + Math.Pow(Math.Pow(multiplier, _cashEquityRatio.DoubleReduce(1, 0, 6, 1)) - 1, 3);
-        private double FinalBuyMultiplier(double multiplier) => 1 + Math.Pow(Math.Pow(multiplier, (1 - _cashEquityRatio).DoubleReduce(1, 0, 4, 1)) - 1, 3);
         private async Task AddOrder(OrderSide orderSide, string symbol, double targetPrice, double multiplier)
         {
             var now = DateTime.UtcNow;

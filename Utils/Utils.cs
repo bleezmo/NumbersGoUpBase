@@ -51,7 +51,8 @@ namespace NumbersGoUp.Utils
         public static double Sqrt(this double value) => Math.Sqrt(value);
         public static double Square(this double value) => Math.Pow(value, 2);
 
-        public static double Curve(this double x, double exp) => 1 - Math.Pow(Math.Pow(x, exp) - 1, 4);
+        public static double Curve3(this double x, double exp) => 1 + Math.Pow(Math.Pow(x, exp) - 1, 3);
+        public static double Curve4(this double x, double exp) => 1 - Math.Pow(Math.Pow(x, exp) - 1, 4);
 
         public static double CalculateVelocity<T>(this IEnumerable<T> barsDesc, Func<T, double> angleValueFn)
         {
