@@ -332,8 +332,9 @@ namespace NumbersGoUp.Services
             {
                 currentOrders = await stocksContext.Orders.Where(o => o.Account == _account.AccountId && o.TimeLocalMilliseconds > dayStart).Include(o => o.Ticker).ToListAsync(_appCancellation.Token);
             }
-            currentOrders.Where(o1 => (o1.Side == OrderSide.Buy && !currentOrders.Any(o2 => o2.Side == OrderSide.Sell && o2.Symbol == o1.Symbol)) ||
-                                      (o1.Side == OrderSide.Sell && !currentOrders.Any(o2 => o2.Side == OrderSide.Buy && o2.Symbol == o1.Symbol)));
+            currentOrders = currentOrders.Where(o => string.IsNullOrWhiteSpace(o.BrokerOrderId))
+                                         .Where(o1 => (o1.Side == OrderSide.Buy && !currentOrders.Any(o2 => o2.Side == OrderSide.Sell && o2.Symbol == o1.Symbol)) ||
+                                                      (o1.Side == OrderSide.Sell && !currentOrders.Any(o2 => o2.Side == OrderSide.Buy && o2.Symbol == o1.Symbol))).ToList();
 
             var buyOrders = currentOrders.Where(o => o.Side == OrderSide.Buy).OrderByDescending(o => o.Ticker.PerformanceVector).ToArray();
             var sellOrders = currentOrders.Where(o => o.Side == OrderSide.Sell).ToArray();

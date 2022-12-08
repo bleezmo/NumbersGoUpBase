@@ -75,10 +75,10 @@ namespace NumbersGoUp.Services
                 };
                 await _rateLimiter.LimitTradierRate();
                 var balances = await GetResponse<JsonModels.TradierAccountBalance>(AccountPath);
-                if(balances.Balance.Cash == null)
+                if(balances.Balance.Cash == null && balances.Balance.Margin == null)
                 {
 #if !DEBUG
-                    _logger.LogError("Cash balance unavailable. Manual intervention required");
+                    _logger.LogError("Balance unavailable. Manual intervention required");
 #endif
                 }
                 double.TryParse(_configuration[CASH_MIN], out var cashMinimum);
@@ -86,7 +86,7 @@ namespace NumbersGoUp.Services
                 {
                     BuyingPower = balances.Balance.Margin?.BuyingPower ?? 0.0,
                     LastEquity = balances.Balance.Equity,
-                    TradableCash = balances.Balance.Cash != null ? balances.Balance.Cash.CashAvailable - balances.Balance.Cash.UnsettledFunds - cashMinimum : 0.0
+                    TradableCash = balances.Balance.Cash != null ? (balances.Balance.Cash.CashAvailable - balances.Balance.Cash.UnsettledFunds - cashMinimum) : (balances.Balance.Margin != null ? balances.Balance.TotalCash : 0.0)
                 };
                 await LoadMarketDays(now.Month, now.Year);
                 if (_marketDay == null) //if null, it means we're on the last day of the month
