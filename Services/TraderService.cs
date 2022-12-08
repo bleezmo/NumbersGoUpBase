@@ -144,12 +144,12 @@ namespace NumbersGoUp.Services
                     }
                 }
             }
-            foreach (var buyState in buys.OrderByDescending(b => b.TickerPosition.Ticker.PerformanceVector * b.ProfitLossPerc.ZeroReduce(b.TickerPosition.Ticker.ProfitLossAvg + b.TickerPosition.Ticker.ProfitLossStDev, (b.TickerPosition.Ticker.ProfitLossAvg + b.TickerPosition.Ticker.ProfitLossStDev) * -1))
+            foreach (var buy in buys.OrderByDescending(b => b.TickerPosition.Ticker.PerformanceVector * b.ProfitLossPerc.ZeroReduce(b.TickerPosition.Ticker.ProfitLossAvg + b.TickerPosition.Ticker.ProfitLossStDev, (b.TickerPosition.Ticker.ProfitLossAvg + b.TickerPosition.Ticker.ProfitLossStDev) * -1))
                                           .Take((int)Math.Ceiling(MAX_SECURITIES * Math.Max(1 + Math.Pow(_cashEquityRatio - 1, 3), 0.1))))
             {
-                if (currentOrders.Any(o => o.Symbol == buyState.BarMetric.Symbol)) continue;
-                //_logger.LogInformation($"Buying {barMetric.Symbol} at target price {price} with prediction {prediction}");
-                await AddOrder(OrderSide.Buy, buyState.BarMetric.Symbol, buyState.BarMetric.HistoryBar.ClosePrice, buyState.Multiplier);
+                var limit = buy.BarMetric.HistoryBar.ClosePrice;
+                await AddOrder(OrderSide.Buy, buy.BarMetric.Symbol, limit, buy.Multiplier);
+                _logger.LogInformation($"Added buy order for {buy.BarMetric.Symbol} with multiplier {buy.Multiplier} at price {limit:C2}");
             }
         }
         public async Task Sell()
@@ -192,10 +192,6 @@ namespace NumbersGoUp.Services
                     var sellMultiplier = predictionSell.Value;
                     var lastBarMetric = await _dataService.GetLastMetric(position.Symbol);
                     var currentPrice = position.AssetLastPrice.HasValue ? position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(position.Symbol)).Price;
-                    //if ((currentPrice * 1.05) < lastBarMetric.HistoryBar.Price())
-                    //{
-                    //    continue;
-                    //}
                     var percProfit = position.UnrealizedProfitLossPercent.HasValue ? position.UnrealizedProfitLossPercent.Value * 100 : ((currentPrice - position.CostBasis) * 100 / position.CostBasis);
                     sellMultiplier *= ((1 - percProfit.ZeroReduce(0, -20)) + (1 - _cashEquityRatio.DoubleReduce(0.3, 0))) * 0.5;
                     sellMultiplier = sellMultiplier > MULTIPLIER_THRESHOLD ? FinalSellMultiplier(sellMultiplier) : 0.0;
@@ -215,6 +211,7 @@ namespace NumbersGoUp.Services
             {
                 var limit = sell.BarMetric.HistoryBar.ClosePrice;
                 await AddOrder(OrderSide.Sell, sell.BarMetric.Symbol, limit, sell.Multiplier);
+                _logger.LogInformation($"Added sell order for {sell.BarMetric.Symbol} with multiplier {sell.Multiplier} at price {limit:C2}");
             }
         }
         private double FinalSellMultiplier(double sellMultiplier) => sellMultiplier.Curve3(_cashEquityRatio.DoubleReduce(1, 0, 6, 1));
