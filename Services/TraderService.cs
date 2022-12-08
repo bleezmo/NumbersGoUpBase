@@ -125,12 +125,12 @@ namespace NumbersGoUp.Services
                         if (tickerPosition.Position != null)
                         {
                             buyMultiplier *= 1 - ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * maxEquityPerc)).DoubleReduce(1, 0.25);
-                            if(percProfit < 1 && lastBarMetric.ProfitLossPerc < 1)
+                            if(percProfit < 0 && lastBarMetric.ProfitLossPerc < 0)
                             {
                                 buyMultiplier *= (lastBarMetric.ProfitLossPerc - percProfit).DoubleReduce(0, -ticker.ProfitLossStDev);
                             }
                         }
-                        buyMultiplier = buyMultiplier > MULTIPLIER_THRESHOLD ? buyMultiplier.Curve3((1 - _cashEquityRatio).DoubleReduce(1, 0, 4, 1)) : 0;
+                        buyMultiplier = buyMultiplier > MULTIPLIER_THRESHOLD ? FinalBuyMultiplier(buyMultiplier) : 0;
                         if(buyMultiplier > MULTIPLIER_THRESHOLD)
                         {
                             buys.Add(new BuySellState
@@ -198,7 +198,7 @@ namespace NumbersGoUp.Services
                     //}
                     var percProfit = position.UnrealizedProfitLossPercent.HasValue ? position.UnrealizedProfitLossPercent.Value * 100 : ((currentPrice - position.CostBasis) * 100 / position.CostBasis);
                     sellMultiplier *= ((1 - percProfit.ZeroReduce(0, -20)) + (1 - _cashEquityRatio.DoubleReduce(0.3, 0))) * 0.5;
-                    sellMultiplier = sellMultiplier > MULTIPLIER_THRESHOLD ? sellMultiplier.Curve3(_cashEquityRatio.DoubleReduce(1, 0, 6, 1)) : 0.0;
+                    sellMultiplier = sellMultiplier > MULTIPLIER_THRESHOLD ? FinalSellMultiplier(sellMultiplier) : 0.0;
                     if (sellMultiplier > MULTIPLIER_THRESHOLD)
                     {
                         sells.Add(new BuySellState
@@ -217,6 +217,8 @@ namespace NumbersGoUp.Services
                 await AddOrder(OrderSide.Sell, sell.BarMetric.Symbol, limit, sell.Multiplier);
             }
         }
+        private double FinalSellMultiplier(double sellMultiplier) => sellMultiplier.Curve3(_cashEquityRatio.DoubleReduce(1, 0, 6, 1));
+        private double FinalBuyMultiplier(double buyMultiplier) => buyMultiplier.Curve3((1 - _cashEquityRatio).DoubleReduce(1, 0, 4, 1));
         private async Task AddOrder(OrderSide orderSide, string symbol, double targetPrice, double multiplier)
         {
             var now = DateTime.UtcNow;
