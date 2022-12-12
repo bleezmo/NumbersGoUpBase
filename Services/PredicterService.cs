@@ -12,7 +12,7 @@ namespace NumbersGoUp.Services
 {
     public class PredicterService
     {
-        public const int FEATURE_HISTORY_DAY = 5;
+        public const int FEATURE_HISTORY_DAY = 4;
         public const int LOOKAHEAD_DAYS = 1;
         public const int LOOKAHEAD_DAYS_LONG = 15;
         public const int FEATURE_HISTORY_INTRADAY = 10;
@@ -102,7 +102,7 @@ namespace NumbersGoUp.Services
             if (barMetrics.Length == FEATURE_HISTORY_DAY)
             {
                 double peRatio = ticker.EPS > 0 ? (barMetrics[0].HistoryBar.Price() / ticker.EPS) : _peratioCutoff;
-                const double alpha = 0.45;
+                const double alpha = 0.5;
                 const double defaultExp = 3;
                 double pricePrediction; double longPricePrediction;
                 if (buy)
@@ -125,22 +125,26 @@ namespace NumbersGoUp.Services
                 if (buy)
                 {
                     var profitLossMin = ticker.ProfitLossAvg - (ticker.ProfitLossStDev * 1.5);
-                    pricePrediction = ((1 - (barMetrics[0].PriceSMA3.DoubleReduce(30, -90).Curve4(defaultExp))) * 0.25) +
-                                          ((1 - (barMetrics[0].PriceSMA2.DoubleReduce(60, -90).Curve4(defaultExp))) * 0.25) +
-                                          ((1 - (barMetrics[0].PriceSMA1.DoubleReduce(90, -90).Curve4(defaultExp))) * 0.25) +
-                    ((1 - (barMetrics[0].ProfitLossPerc.DoubleReduce(ticker.ProfitLossAvg, profitLossMin).Curve4(defaultExp))) * 0.25);
+                    pricePrediction = ((1 - (barMetrics[0].PriceSMA3.DoubleReduce(30, -90).Curve4(defaultExp))) * 0.15) +
+                                          ((1 - (barMetrics[0].PriceSMA2.DoubleReduce(60, -90).Curve4(defaultExp))) * 0.15) +
+                                          ((1 - (barMetrics[0].PriceSMA1.DoubleReduce(90, -90).Curve4(defaultExp))) * 0.15) +
+                    ((1 - (barMetrics[0].ProfitLossPerc.DoubleReduce(ticker.ProfitLossAvg, profitLossMin).Curve4(defaultExp))) * 0.25) +
+                    ((barMetrics.Average(b => b.PriceSMA3) - barMetrics.Average(b => b.AlmaSMA3)).DoubleReduce(15, -15) * 0.1) +
+                    ((barMetrics.Average(b => b.PriceSMA2) - barMetrics.Average(b => b.AlmaSMA2)).DoubleReduce(15, -15) * 0.1) +
+                    ((barMetrics.Average(b => b.PriceSMA1) - barMetrics.Average(b => b.AlmaSMA1)).DoubleReduce(15, -15) * 0.1);
                     pricePrediction *= Math.Pow(barMetrics[0].ProfitLossPerc.DoubleReduce(profitLossMin, profitLossMin - 20), 2);
                 }
                 else
                 {
                     var profitLossMax = ticker.ProfitLossAvg + (ticker.ProfitLossStDev * 1.5);
-                    pricePrediction = (barMetrics[0].PriceSMA3.DoubleReduce(90, 0).Curve4(defaultExp) * 0.25) +
-                                          (barMetrics[0].PriceSMA2.DoubleReduce(90, 30).Curve4(defaultExp) * 0.25) +
-                                          (barMetrics[0].PriceSMA1.DoubleReduce(90, 60).Curve4(defaultExp) * 0.25) +
-                    (barMetrics[0].ProfitLossPerc.DoubleReduce(profitLossMax, ticker.ProfitLossAvg).Curve4(defaultExp) * 0.25);
+                    pricePrediction = (barMetrics[0].PriceSMA3.DoubleReduce(90, 0).Curve4(defaultExp) * 0.15) +
+                                          (barMetrics[0].PriceSMA2.DoubleReduce(90, 30).Curve4(defaultExp) * 0.15) +
+                                          (barMetrics[0].PriceSMA1.DoubleReduce(90, 60).Curve4(defaultExp) * 0.15) +
+                    (barMetrics[0].ProfitLossPerc.DoubleReduce(profitLossMax, ticker.ProfitLossAvg).Curve4(defaultExp) * 0.25) +
+                    ((barMetrics.Average(b => b.AlmaSMA3) - barMetrics.Average(b => b.PriceSMA3)).DoubleReduce(15, -15) * 0.1) +
+                    ((barMetrics.Average(b => b.AlmaSMA2) - barMetrics.Average(b => b.PriceSMA2)).DoubleReduce(15, -15) * 0.1) +
+                    ((barMetrics.Average(b => b.AlmaSMA1) - barMetrics.Average(b => b.PriceSMA1)).DoubleReduce(15, -15) * 0.1);
                 }
-                var reverseInd = barMetrics[0].VolAlmaSMA.ZeroReduce(20, -20);
-                pricePrediction *= reverseInd + ((1 - reverseInd) * (1 - barMetrics[0].SMASMA.DoubleReduce(ticker.SMASMAAvg - (ticker.SMASMAStDev * 0.5), ticker.SMASMAAvg - (ticker.SMASMAStDev * 1.5))));
 
                 var totalPrediction = (pricePrediction * alpha) + (longPricePrediction * (1 - alpha));
 
