@@ -108,17 +108,17 @@ namespace NumbersGoUp.Services
                 if (buy)
                 {
                     longPricePrediction = (barMetrics[0].SMASMA.ZeroReduce(Math.Min(ticker.SMASMAAvg + (ticker.SMASMAStDev * 1.5), 90), Math.Min(ticker.SMASMAAvg - ticker.SMASMAStDev, 0)) * 0.31) +
-                                          ((1 - barMetrics[0].AlmaSMA3.DoubleReduce(Math.Max(ticker.AlmaSma3Avg, 0), Math.Min(ticker.AlmaSma3Avg - (ticker.AlmaSma3StDev * 1.5), 0)).Curve4(defaultExp)) * 0.23) +
-                                          ((1 - barMetrics[0].AlmaSMA2.DoubleReduce(Math.Max(ticker.AlmaSma2Avg, 0), Math.Min(ticker.AlmaSma2Avg - (ticker.AlmaSma2StDev * 1.5), 0)).Curve4(defaultExp)) * 0.23) +
-                                          ((1 - barMetrics[0].AlmaSMA1.DoubleReduce(Math.Max(ticker.AlmaSma1Avg, 0), Math.Min(ticker.AlmaSma1Avg - (ticker.AlmaSma1StDev * 1.5), 0)).Curve4(defaultExp)) * 0.23);
+                                          ((1 - barMetrics[0].AlmaSMA3.DoubleReduce(Math.Max(ticker.AlmaSma3Avg, 0), Math.Min(ticker.AlmaSma3Avg - (ticker.AlmaSma3StDev * 1.5), 0))) * 0.23) +
+                                          ((1 - barMetrics[0].AlmaSMA2.DoubleReduce(Math.Max(ticker.AlmaSma2Avg, 0), Math.Min(ticker.AlmaSma2Avg - (ticker.AlmaSma2StDev * 1.5), 0))) * 0.23) +
+                                          ((1 - barMetrics[0].AlmaSMA1.DoubleReduce(Math.Max(ticker.AlmaSma1Avg, 0), Math.Min(ticker.AlmaSma1Avg - (ticker.AlmaSma1StDev * 1.5), 0))) * 0.23);
                     longPricePrediction *= ticker.PerformanceVector.DoubleReduce(50, 0);
                 }
                 else
                 {
                     longPricePrediction = (barMetrics[0].SMASMA.ZeroReduce(Math.Min(ticker.SMASMAAvg + ticker.SMASMAStDev, 90), Math.Min(ticker.SMASMAAvg - (ticker.SMASMAStDev * 1.5), 0)) * 0.31) +
-                                          (barMetrics[0].AlmaSMA3.DoubleReduce(Math.Min(ticker.AlmaSma3Avg + (ticker.AlmaSma3StDev * 1.5), 90), Math.Max(ticker.AlmaSma3Avg, 0)).Curve4(defaultExp) * 0.23) +
-                                          (barMetrics[0].AlmaSMA2.DoubleReduce(Math.Min(ticker.AlmaSma2Avg + (ticker.AlmaSma2StDev * 1.5), 90), Math.Max(ticker.AlmaSma2Avg, 0)).Curve4(defaultExp) * 0.23) +
-                                          (barMetrics[0].AlmaSMA1.DoubleReduce(Math.Min(ticker.AlmaSma1Avg + (ticker.AlmaSma1StDev * 1.5), 90), Math.Max(ticker.AlmaSma1Avg, 0)).Curve4(defaultExp) * 0.23);
+                                          (barMetrics[0].AlmaSMA3.DoubleReduce(Math.Min(ticker.AlmaSma3Avg + (ticker.AlmaSma3StDev * 1.5), 90), Math.Max(ticker.AlmaSma3Avg, 0)) * 0.23) +
+                                          (barMetrics[0].AlmaSMA2.DoubleReduce(Math.Min(ticker.AlmaSma2Avg + (ticker.AlmaSma2StDev * 1.5), 90), Math.Max(ticker.AlmaSma2Avg, 0)) * 0.23) +
+                                          (barMetrics[0].AlmaSMA1.DoubleReduce(Math.Min(ticker.AlmaSma1Avg + (ticker.AlmaSma1StDev * 1.5), 90), Math.Max(ticker.AlmaSma1Avg, 0)) * 0.23);
                     longPricePrediction *= 1 - ticker.PerformanceVector.DoubleReduce(150, 0);
                 }
 
