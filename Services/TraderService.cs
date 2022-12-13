@@ -226,7 +226,7 @@ namespace NumbersGoUp.Services
             var now = DateTime.UtcNow;
             using (var stocksContext = _contextFactory.CreateDbContext())
             {
-                var ticker = await stocksContext.Tickers.Where(t => t.Symbol == symbol).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
+                var ticker = await stocksContext.Tickers.Where(t => t.Symbol == symbol).FirstOrDefaultAsync(_appCancellation.Token);
                 var lastBuyOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == ticker.Symbol && o.Side == OrderSide.Buy).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
                 stocksContext.Orders.Add(new DbOrder
                 {
