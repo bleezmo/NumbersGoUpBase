@@ -9,7 +9,9 @@ namespace NumbersGoUp.Services
     public class TraderService
     {
         public const bool FRACTIONAL = false;
-        public const int MAX_SECURITIES = 10;
+        public const double MAX_DAILY_BUY = 0.1;
+        public const double MAX_SECURITY_BUY = 0.02;
+        public const double MAX_SECURITY_SELL = 0.01;
         public const bool USE_MARGIN = false;
         public const double MULTIPLIER_THRESHOLD = 0.4;
 
@@ -144,9 +146,11 @@ namespace NumbersGoUp.Services
                     }
                 }
             }
-            foreach (var buy in buys.OrderByDescending(b => b.TickerPosition.Ticker.PerformanceVector * b.ProfitLossPerc.ZeroReduce(b.TickerPosition.Ticker.ProfitLossAvg + b.TickerPosition.Ticker.ProfitLossStDev, (b.TickerPosition.Ticker.ProfitLossAvg + b.TickerPosition.Ticker.ProfitLossStDev) * -1))
-                                          .Take((int)Math.Ceiling(MAX_SECURITIES * Math.Max(1 + Math.Pow(_cashEquityRatio - 1, 3), 0.1))))
+            var multiplierSum = 0.0;
+            foreach (var buy in buys.OrderByDescending(priorityOrdering))
             {
+                multiplierSum += buy.Multiplier * MAX_SECURITY_BUY;
+                if(multiplierSum > MAX_DAILY_BUY) { break; }
                 var limit = buy.BarMetric.HistoryBar.ClosePrice;
                 await AddOrder(OrderSide.Buy, buy.BarMetric.Symbol, limit, buy.Multiplier);
                 _logger.LogInformation($"Added buy order for {buy.BarMetric.Symbol} with multiplier {buy.Multiplier} at price {limit:C2}");
@@ -207,13 +211,14 @@ namespace NumbersGoUp.Services
                     }
                 }
             }
-            foreach (var sell in sells.OrderBy(s => s.TickerPosition.Ticker.PerformanceVector * s.ProfitLossPerc.ZeroReduce(s.TickerPosition.Ticker.ProfitLossAvg + s.TickerPosition.Ticker.ProfitLossStDev, (s.TickerPosition.Ticker.ProfitLossAvg + s.TickerPosition.Ticker.ProfitLossStDev)*-1)).Take((int)Math.Ceiling(1 / Math.Max(_cashEquityRatio, 0.1))))
+            foreach (var sell in sells.OrderBy(priorityOrdering).Take((int)Math.Ceiling(1 / Math.Max(_cashEquityRatio, 0.1))))
             {
                 var limit = sell.BarMetric.HistoryBar.ClosePrice;
                 await AddOrder(OrderSide.Sell, sell.BarMetric.Symbol, limit, sell.Multiplier);
                 _logger.LogInformation($"Added sell order for {sell.BarMetric.Symbol} with multiplier {sell.Multiplier} at price {limit:C2}");
             }
         }
+        private double priorityOrdering(BuySellState bss) => bss.TickerPosition.Ticker.PerformanceVector * bss.ProfitLossPerc.ZeroReduce(bss.TickerPosition.Ticker.ProfitLossAvg + bss.TickerPosition.Ticker.ProfitLossStDev, (bss.TickerPosition.Ticker.ProfitLossAvg + bss.TickerPosition.Ticker.ProfitLossStDev) * -1);
         private double FinalSellMultiplier(double sellMultiplier) => sellMultiplier.Curve3(_cashEquityRatio.DoubleReduce(1, 0, 6, 1));
         private double FinalBuyMultiplier(double buyMultiplier) => buyMultiplier.Curve3((1 - _cashEquityRatio).DoubleReduce(1, 0, 4, 1));
         private async Task AddOrder(OrderSide orderSide, string symbol, double targetPrice, double multiplier)
@@ -337,7 +342,7 @@ namespace NumbersGoUp.Services
             var sellOrders = currentOrders.Where(o => o.Side == OrderSide.Sell).ToArray();
 
             //var avgBuyMultiplier = buyOrders.Any() ? buyOrders.Select(o => o.Multiplier).Average() : 0.0;
-            var remainingBuyAmount = Math.Min(_account.Balance.LastEquity * 0.1, balance);
+            var remainingBuyAmount = Math.Min(_account.Balance.LastEquity * MAX_DAILY_BUY, balance);
 
             remainingBuyAmount -= currentOrders.Select(o => o.Side == OrderSide.Buy ? o.AppliedAmt : 0).Sum();
             _logger.LogInformation($"Starting balance {balance:C2} and remaining buy amount {remainingBuyAmount:C2}");
@@ -359,7 +364,7 @@ namespace NumbersGoUp.Services
                 var lastBarMetric = await _dataService.GetLastMetric(order.Symbol);
                 var currentPrice = position.AssetLastPrice.HasValue ? position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(order.Symbol)).Price;
                 if (FRACTIONAL && currentPrice < order.TargetPrice) { continue; }
-                var sellAmt = equity * 0.01 * order.Multiplier;
+                var sellAmt = equity * MAX_SECURITY_SELL * order.Multiplier;
                 var qty = FRACTIONAL ? sellAmt / currentPrice : Math.Floor(sellAmt / order.TargetPrice);
                 var currentQty = position.Quantity;
                 if (qty > currentQty)
@@ -416,7 +421,7 @@ namespace NumbersGoUp.Services
             foreach (var order in orders)
             {
                 var position = positions.FirstOrDefault(p => p.Symbol == order.Symbol);
-                var buy = equity * 0.02 * order.Multiplier;
+                var buy = equity * MAX_SECURITY_BUY * order.Multiplier;
                 var currentPrice = position?.AssetLastPrice != null ? position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(order.Symbol)).Price;
                 if (FRACTIONAL && currentPrice > order.TargetPrice) { continue; }
                 if (remainingBuyAmount < buy) { buy = remainingBuyAmount; }
