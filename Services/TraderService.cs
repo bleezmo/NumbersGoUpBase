@@ -13,7 +13,7 @@ namespace NumbersGoUp.Services
         public const double MAX_SECURITY_BUY = 0.02;
         public const double MAX_SECURITY_SELL = 0.01;
         public const bool USE_MARGIN = false;
-        public const double MULTIPLIER_THRESHOLD = 0.37;
+        public const double MULTIPLIER_THRESHOLD = 0.33;
 
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<TraderService> _logger;
@@ -220,7 +220,7 @@ namespace NumbersGoUp.Services
         }
         private double priorityOrdering(BuySellState bss) => bss.TickerPosition.Ticker.PerformanceVector * bss.ProfitLossPerc.ZeroReduce(bss.TickerPosition.Ticker.ProfitLossAvg + bss.TickerPosition.Ticker.ProfitLossStDev, (bss.TickerPosition.Ticker.ProfitLossAvg + bss.TickerPosition.Ticker.ProfitLossStDev) * -1);
         private double FinalSellMultiplier(double sellMultiplier) => sellMultiplier.Curve3(_cashEquityRatio.DoubleReduce(1, 0, 6, 1));
-        private double FinalBuyMultiplier(double buyMultiplier) => buyMultiplier.Curve3((1 - _cashEquityRatio).DoubleReduce(1, 0, 4, 1));
+        private double FinalBuyMultiplier(double buyMultiplier) => buyMultiplier.Curve3((1 - _cashEquityRatio).DoubleReduce(1, 0, 4, 2));
         private async Task AddOrder(OrderSide orderSide, string symbol, double targetPrice, double multiplier)
         {
             var now = DateTime.UtcNow;
