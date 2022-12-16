@@ -13,7 +13,7 @@ namespace NumbersGoUp.Services
         public const double MAX_SECURITY_BUY = 0.02;
         public const double MAX_SECURITY_SELL = 0.01;
         public const bool USE_MARGIN = false;
-        public const double MULTIPLIER_THRESHOLD = 0.4;
+        public const double MULTIPLIER_THRESHOLD = 0.37;
 
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<TraderService> _logger;
