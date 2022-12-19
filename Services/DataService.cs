@@ -56,7 +56,7 @@ namespace NumbersGoUp.Services
             {
                 await _tickerService.LoadTickers();
                 _logger.LogInformation("Ticker collection complete");
-                var financialsTask = _tickerBankService.UpdateFinancials(25);
+                //var financialsTask = _tickerBankService.UpdateFinancials(25);
                 var tickers = await _tickerService.GetFullTickerList();
                 await StartCollection(tickers);
                 _logger.LogInformation("Done collecting bar history");
@@ -68,8 +68,8 @@ namespace NumbersGoUp.Services
                 _logger.LogInformation($"Completed calculation of averages");
                 await _tickerService.CalculatePerformance();
                 _logger.LogInformation($"Completed performance calculation");
-                await financialsTask;
-                _logger.LogInformation($"Completed financials updates");
+                //await financialsTask;
+                //_logger.LogInformation($"Completed financials updates");
             }
             catch (Exception e)
             {

@@ -103,7 +103,7 @@ namespace NumbersGoUp.Services
             {
                 double peRatio = ticker.EPS > 0 ? (barMetrics[0].HistoryBar.Price() / ticker.EPS) : _peratioCutoff;
                 const double alpha = 0.5;
-                const double defaultExp = 3;
+                const double defaultExp = 4;
                 double pricePrediction; double longPricePrediction;
                 if (buy)
                 {
@@ -127,10 +127,10 @@ namespace NumbersGoUp.Services
                 if (buy)
                 {
                     var profitLossMin = ticker.ProfitLossAvg - (ticker.ProfitLossStDev * 1.5);
-                    pricePrediction = ((1 - (barMetrics[0].PriceSMA3.DoubleReduce(30, -90).Curve4(defaultExp))) * 0.15) +
-                                          ((1 - (barMetrics[0].PriceSMA2.DoubleReduce(60, -90).Curve4(defaultExp))) * 0.15) +
-                                          ((1 - (barMetrics[0].PriceSMA1.DoubleReduce(90, -90).Curve4(defaultExp))) * 0.15) +
-                    ((1 - (barMetrics[0].ProfitLossPerc.DoubleReduce(ticker.ProfitLossAvg, profitLossMin).Curve4(defaultExp))) * 0.25) +
+                    pricePrediction = ((1 - (barMetrics[0].PriceSMA3.DoubleReduce(30, -90))).Curve4(defaultExp) * 0.15) +
+                                          ((1 - (barMetrics[0].PriceSMA2.DoubleReduce(60, -90))).Curve4(defaultExp) * 0.15) +
+                                          ((1 - (barMetrics[0].PriceSMA1.DoubleReduce(90, -90))).Curve4(defaultExp) * 0.15) +
+                    ((1 - (barMetrics[0].ProfitLossPerc.DoubleReduce(ticker.ProfitLossAvg, profitLossMin))).Curve4(defaultExp) * 0.25) +
                     ((barMetrics.Average(b => b.PriceSMA3) - barMetrics.Average(b => b.AlmaSMA3)).DoubleReduce(15, -15) * 0.1) +
                     ((barMetrics.Average(b => b.PriceSMA2) - barMetrics.Average(b => b.AlmaSMA2)).DoubleReduce(15, -15) * 0.1) +
                     ((barMetrics.Average(b => b.PriceSMA1) - barMetrics.Average(b => b.AlmaSMA1)).DoubleReduce(15, -15) * 0.1);

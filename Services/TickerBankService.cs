@@ -35,6 +35,7 @@ namespace NumbersGoUp.Services
         private readonly DateTime _lookbackDate = DateTime.Now.AddYears(-DataService.LOOKBACK_YEARS);
         public double PERatioCutoff { get; }
 
+        private readonly IBrokerService _brokerService;
         private const string BaseURL = "https://financialmodelingprep.com";
         private string QuotePath => $"{BaseURL}/api/v3/quote/{{0}}?apikey={_apiKey}";
         private string QuarterlyIncomePath => $"{BaseURL}/api/v3/income-statement/{{0}}?period=quarter&limit=4&apikey={_apiKey}";
@@ -46,7 +47,7 @@ namespace NumbersGoUp.Services
 
 
         public TickerBankService(IConfiguration configuration, IHostEnvironment environment, IHttpClientFactory httpClientFactory, IStocksContextFactory contextFactory, IRuntimeSettings runtimeSettings,
-                                IAppCancellation appCancellation, ILogger<TickerBankService> logger, RateLimiter rateLimiter, ITickerBankProcessor tickerProcessor)
+                                IAppCancellation appCancellation, ILogger<TickerBankService> logger, RateLimiter rateLimiter, ITickerBankProcessor tickerProcessor, IBrokerService brokerService)
         {
             _httpClientFactory = httpClientFactory;
             _appCancellation = appCancellation;
@@ -59,6 +60,7 @@ namespace NumbersGoUp.Services
             _runtimeSettings = runtimeSettings;
             _apiKey = _configuration[$"{FINANCIAL_API_KEY}:{_environmentName}"];
             PERatioCutoff = double.TryParse(configuration[PERATIO_CUTOFF_KEY], out var peratioCutoff) ? peratioCutoff : 30;
+            _brokerService = brokerService;
         }
         public async Task Load()
         {
@@ -70,21 +72,24 @@ namespace NumbersGoUp.Services
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
                     var dbTickers = await stocksContext.TickerBank.ToArrayAsync(_appCancellation.Token);
-                    //foreach(var ticker in tickers)
-                    //{
-                    //    var dbTicker = dbTickers.FirstOrDefault(t => t.Symbol == ticker.Symbol);
-                    //    if (dbTicker != null)
-                    //    {
-                    //        dbTicker.Sector = ticker.Sector;
-                    //        dbTicker.MarketCap = ticker.MarketCap;
-                    //        stocksContext.TickerBank.Update(dbTicker);
-                    //    }
-                    //}
-                    await stocksContext.SaveChangesAsync(_appCancellation.Token);
                     var toRemove = dbTickers.Where(t1 => !tickers.Any(t2 => t1.Symbol == t2.Symbol)).ToArray();
                     stocksContext.TickerBank.RemoveRange(toRemove);
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
-                    stocksContext.TickerBank.AddRange(tickers.Where(t => !dbTickers.Any(dbt => dbt.Symbol == t.Symbol)).ToArray());
+                    List<BankTicker> toUpdate = new List<BankTicker>(), toAdd = new List<BankTicker>();
+                    foreach (var bankTicker in tickers)
+                    {
+                        var bars = await stocksContext.HistoryBars.Where(b => b.Symbol == bankTicker.Symbol).ToArrayAsync();
+                        bankTicker.PriceChangeAvg = CalculatePriceChangeAvg(bars.Length > 0 ? bars : (await _brokerService.GetBarHistoryDay(bankTicker.Symbol, _lookbackDate)).ToArray());
+                        var dbTicker = dbTickers.FirstOrDefault(dbt => dbt.Symbol == bankTicker.Symbol);
+                        if (dbTicker != null) {
+                            _tickerProcessor.UpdateBankTicker(dbTicker, bankTicker);
+                            toUpdate.Add(dbTicker); 
+                        }
+                        else { toAdd.Add(bankTicker); }
+                    }
+                    stocksContext.TickerBank.UpdateRange(toUpdate);
+                    await stocksContext.SaveChangesAsync(_appCancellation.Token);
+                    stocksContext.TickerBank.AddRange(toAdd);
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
                 }
             }
@@ -107,8 +112,8 @@ namespace NumbersGoUp.Services
                     var tickers = new List<BankTicker>();
                     foreach(var t in dbTickers)
                     {
-                        if(t.Earnings > 0 && t.PERatio < PERatioCutoff && t.EVEBITDA < PERatioCutoff && t.PERatio > t.EVEBITDA && t.PERatio > 1 && t.EVEBITDA > 1 && 
-                            t.DebtEquityRatio < 2 && t.DebtEquityRatio > 0 && t.CurrentRatio > 1.2 && t.CurrentRatio > (t.DebtEquityRatio*0.75) && t.DividendYield > 0.005 && t.PriceChangeAvg > 0 && t.EPS > 1)
+                        if(t.DebtEquityRatio > 0 && t.DebtEquityRatio < 1.5 && (t.CurrentRatio > 1.2 || t.DebtEquityRatio < 1) && 
+                            t.Earnings > 0 && t.PERatio < PERatioCutoff && t.PERatio > 1 && t.DividendYield > 0.005 && t.PriceChangeAvg > 0 && t.EPS > 0)
                         {
                             tickers.Add(t);
                         }
@@ -124,19 +129,23 @@ namespace NumbersGoUp.Services
                     Func<BankTicker, double> performanceFn1 = (t) => Math.Sqrt(t.Earnings) * 2;
                     Func<BankTicker, double> performanceFn2 = (t) => t.PriceChangeAvg;
                     Func<BankTicker, double> performanceFn3 = (t) => Math.Min(t.DividendYield, 0.06);
+                    Func<BankTicker, double> performanceFn4 = (t) => 1 - t.DebtEquityRatio.DoubleReduce(1.5, 0);
                     //slope here is based on a graph where x-axis is MedianMonthPercVariance and y-axis is MedianMonthPerc
                     var minmax1 = new MinMaxStore<BankTicker>(performanceFn1);
                     var minmax2 = new MinMaxStore<BankTicker>(performanceFn2);
                     var minmax3 = new MinMaxStore<BankTicker>(performanceFn3);
+                    var minmax4 = new MinMaxStore<BankTicker>(performanceFn4);
                     foreach (var ticker in tickers)
                     {
                         minmax1.Run(ticker);
                         minmax2.Run(ticker);
                         minmax3.Run(ticker);
+                        minmax4.Run(ticker);
                     }
-                    Func<BankTicker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 60) +
-                                                                         (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 30) +
-                                                                         (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 10);
+                    Func<BankTicker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 55) +
+                                                                         (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 25) +
+                                                                         (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 10) +
+                                                                         (performanceFn4(t).DoubleReduce(minmax4.Max, minmax4.Min) * 10);
                     var minmaxTotal = new MinMaxStore<BankTicker>(performanceFnTotal);
                     foreach (var ticker in tickers)
                     {
@@ -151,6 +160,36 @@ namespace NumbersGoUp.Services
                     }
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
                 }
+            }
+        }
+        private double CalculatePriceChangeAvg(HistoryBar[] bars)
+        {
+            if(bars == null || bars.Length == 0) { return 0; }
+            var now = DateTime.Now;
+            var datePointer = _lookbackDate;
+            var priceChanges = new List<double>();
+            for (var i = 0; now.CompareTo(datePointer) > 0 && i < 1000; i++)
+            {
+                var from = datePointer;
+                var to = datePointer.AddMonths(6);
+                var priceWindow = bars.Where(b => b.BarDay.CompareTo(from) > 0 && b.BarDay.CompareTo(to) < 0).OrderByDescending(b => b.BarDayMilliseconds).ToArray();
+                if (priceWindow.Length > 2)
+                {
+                    priceChanges.Add((priceWindow.First().Price() - priceWindow.Last().Price()) * 100 / priceWindow.Last().Price());
+                }
+                datePointer = to;
+            }
+            if (priceChanges.Count > ((DataService.LOOKBACK_YEARS - 2) * 2))
+            {
+                var avg = priceChanges.Average();
+                var stdev = Math.Sqrt(priceChanges.Sum(p => Math.Pow(p - avg, 2)) / priceChanges.Count);
+                var mode = priceChanges.OrderBy(p => p).Skip(priceChanges.Count / 2).FirstOrDefault();
+                return avg / stdev;
+            }
+            else
+            {
+                _logger.LogDebug($"Insufficient price information for {bars[0].Symbol}");
+                return 0;
             }
         }
         public async Task UpdateFinancials(int limit = 1000)
@@ -195,6 +234,7 @@ namespace NumbersGoUp.Services
                 _logger.LogError(ex, $"Ticker bank financials update failed");
             }
         }
+
         private async Task<bool> PopulateFinancials(BankTicker ticker)
         {
             try
@@ -222,44 +262,6 @@ namespace NumbersGoUp.Services
                 else
                 {
                     _logger.LogWarning($"Shares outstanding or price was zero for {ticker.Symbol}.");
-                }
-                #endregion
-                #region Price section
-                var prices = (await GetResponse<FMPHistorical>(string.Format(HistoricalPricesPath, ticker.Symbol)))?.Prices?.ToArray();
-                if (prices != null && prices.Length > 0)
-                {
-                    var now = DateTime.Now;
-                    var datePointer = _lookbackDate;
-                    var priceChanges = new List<double>();
-                    for (var i = 0; now.CompareTo(datePointer) > 0 && i < 1000; i++)
-                    {
-                        var from = datePointer;
-                        var to = datePointer.AddMonths(6);
-                        var priceWindow = prices.Where(p => p.Date.HasValue && p.Date.Value.CompareTo(from) > 0 && p.Date.Value.CompareTo(to) < 0).OrderByDescending(p => p.Date).ToArray();
-                        if (priceWindow.Length > 2)
-                        {
-                            priceChanges.Add((priceWindow.First().Price - priceWindow.Last().Price) * 100 / priceWindow.Last().Price);
-                        }
-                        datePointer = to;
-                    }
-                    if (priceChanges.Count > ((DataService.LOOKBACK_YEARS - 1) * 2))
-                    {
-                        var avg = priceChanges.Average();
-                        var stdev = Math.Sqrt(priceChanges.Sum(p => Math.Pow(p - avg, 2)) / priceChanges.Count);
-                        var mode = priceChanges.OrderBy(p => p).Skip(priceChanges.Count / 2).FirstOrDefault();
-                        ticker.PriceChangeAvg = avg / stdev;
-                    }
-                    else
-                    {
-                        _logger.LogDebug($"Insufficient price information for {ticker.Symbol}");
-                        ticker.PriceChangeAvg = 0;
-                        return false;
-                    }
-                }
-                else
-                {
-                    _logger.LogError($"Error retrieving FMP Price Change data for {ticker.Symbol}");
-                    return false;
                 }
                 #endregion
                 #region Dividend section

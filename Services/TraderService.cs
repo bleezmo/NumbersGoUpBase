@@ -8,12 +8,12 @@ namespace NumbersGoUp.Services
 {
     public class TraderService
     {
-        public const bool FRACTIONAL = false;
         public const double MAX_DAILY_BUY = 0.1;
         public const double MAX_SECURITY_BUY = 0.02;
         public const double MAX_SECURITY_SELL = 0.01;
-        public const bool USE_MARGIN = false;
         public const double MULTIPLIER_THRESHOLD = 0.33;
+        public const bool USE_MARGIN = false;
+        public const bool FRACTIONAL = false;
 
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<TraderService> _logger;
@@ -100,7 +100,7 @@ namespace NumbersGoUp.Services
                 currentOrders = await stocksContext.Orders.Where(o => o.Account == _account.AccountId && o.TimeLocalMilliseconds > dayStart).ToListAsync(_appCancellation.Token);
             }
             var tickers = await _tickerService.GetTickers();
-            var maxEquityPerc = Convert.ToDouble(TickerService.MAX_TICKERS) / (5 * Math.Min(tickers.Count(), TickerService.MAX_TICKERS));
+            var maxEquityPerc = Convert.ToDouble(TickerService.MAX_TICKERS) / (10 * Math.Min(tickers.Count(), TickerService.MAX_TICKERS));
             var positions = await _brokerService.GetPositions();
             var tickerPositions = tickers.Select(t => new TickerPosition { Ticker = t, Position = positions.FirstOrDefault(p => t.Symbol == p.Symbol) }).ToArray();
 
@@ -126,12 +126,8 @@ namespace NumbersGoUp.Services
                                                                                                                                           (currentPrice - tickerPosition.Position.CostBasis) * 100 / tickerPosition.Position.CostBasis) : 0.0;
                         if (tickerPosition.Position != null)
                         {
-                            var maxTickerEquityPerc = maxEquityPerc + ((1 - maxEquityPerc) * ticker.PerformanceVector.DoubleReduce(150, 0));
+                            var maxTickerEquityPerc = (maxEquityPerc * percProfit.DoubleReduce(0, -ticker.ProfitLossStDev)) + ((1 - maxEquityPerc) * ticker.PerformanceVector.DoubleReduce(150, 0));
                             buyMultiplier *= 1 - ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * maxTickerEquityPerc)).DoubleReduce(1, 0.25);
-                            if(percProfit < 0 && lastBarMetric.ProfitLossPerc < 0)
-                            {
-                                buyMultiplier *= (lastBarMetric.ProfitLossPerc - percProfit).DoubleReduce(0, -ticker.ProfitLossStDev);
-                            }
                         }
                         buyMultiplier = buyMultiplier > MULTIPLIER_THRESHOLD ? FinalBuyMultiplier(buyMultiplier) : 0;
                         if(buyMultiplier > MULTIPLIER_THRESHOLD)
@@ -180,6 +176,7 @@ namespace NumbersGoUp.Services
             foreach (var tickerPosition in tickerPositionsNP.Where(tp => tp.Ticker != null))
             {
                 var position = tickerPosition.Position;
+                var ticker = tickerPosition.Ticker;
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
                     var lastSellOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == position.Symbol && o.NextSell != null).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
@@ -198,7 +195,7 @@ namespace NumbersGoUp.Services
                     var lastBarMetric = await _dataService.GetLastMetric(position.Symbol);
                     var currentPrice = position.AssetLastPrice.HasValue ? position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(position.Symbol)).Price;
                     var percProfit = position.UnrealizedProfitLossPercent.HasValue ? position.UnrealizedProfitLossPercent.Value * 100 : ((currentPrice - position.CostBasis) * 100 / position.CostBasis);
-                    sellMultiplier *= ((1 - percProfit.ZeroReduce(0, -20)) + (1 - _cashEquityRatio.DoubleReduce(0.3, 0))) * 0.5;
+                    sellMultiplier *= ((1 - percProfit.ZeroReduce(ticker.ProfitLossAvg + ticker.ProfitLossStDev, ticker.ProfitLossAvg - ticker.ProfitLossStDev)) + (1 - _cashEquityRatio.DoubleReduce(0.3, 0))) * 0.5;
                     sellMultiplier = sellMultiplier > MULTIPLIER_THRESHOLD ? FinalSellMultiplier(sellMultiplier) : 0.0;
                     if (sellMultiplier > MULTIPLIER_THRESHOLD)
                     {
@@ -220,7 +217,7 @@ namespace NumbersGoUp.Services
             }
         }
         private double priorityOrdering(BuySellState bss) => bss.TickerPosition.Ticker.PerformanceVector * bss.ProfitLossPerc.ZeroReduce(bss.TickerPosition.Ticker.ProfitLossAvg + bss.TickerPosition.Ticker.ProfitLossStDev, (bss.TickerPosition.Ticker.ProfitLossAvg + bss.TickerPosition.Ticker.ProfitLossStDev) * -1);
-        private double FinalSellMultiplier(double sellMultiplier) => sellMultiplier.Curve2(_cashEquityRatio.DoubleReduce(1, 0, 6, 1));
+        private double FinalSellMultiplier(double sellMultiplier) => sellMultiplier.Curve1(_cashEquityRatio.DoubleReduce(1, 0, 6, 1));
         private double FinalBuyMultiplier(double buyMultiplier) => buyMultiplier.Curve3((1 - _cashEquityRatio).DoubleReduce(1, 0, 4, 2));
         private async Task AddOrder(OrderSide orderSide, string symbol, double targetPrice, double multiplier)
         {

@@ -196,7 +196,7 @@ namespace NumbersGoUp.Services
                         {
                             ticker.LastCalculatedPerformance = now;
                             ticker.LastCalculatedPerformanceMillis = nowMillis;
-                            ticker.PerformanceVector = performanceFnTotal(ticker).DoubleReduce(minmaxTotal.Max * 0.9, minmaxTotal.Min) * 100;
+                            ticker.PerformanceVector = performanceFnTotal(ticker).DoubleReduce(minmaxTotal.Max * 0.75, minmaxTotal.Min) * 100;
                             stocksContext.Tickers.Update(ticker);
                         }
                         await stocksContext.SaveChangesAsync(_appCancellation.Token);
@@ -263,7 +263,7 @@ namespace NumbersGoUp.Services
                 {
                     var tickers = await stocksContext.Tickers.ToArrayAsync(_appCancellation.Token);
                     var toUpdate = _runtimeSettings.ForceDataCollection ? tickers : tickers.Where(t => t.LastCalculatedMillis < cutoff).ToArray();
-                    var bankTickers = await stocksContext.TickerBank.Where(t => t.PerformanceVector > 0).OrderByDescending(t => t.PerformanceVector).Take(225).ToArrayAsync(_appCancellation.Token);
+                    var bankTickers = await stocksContext.TickerBank.Where(t => t.PerformanceVector > 0).OrderByDescending(t => t.PerformanceVector).Take(215).ToArrayAsync(_appCancellation.Token);
                     if (toUpdate.Any())
                     {
                         var positions = await _brokerService.GetPositions();
@@ -308,21 +308,16 @@ namespace NumbersGoUp.Services
                     {
                         if (!tickers.Any(t => t.Symbol == bankTicker.Symbol))
                         {
-                            var info = await _brokerService.GetTickerInfo(bankTicker.Symbol);
-                            _logger.LogDebug($"Completed ticker info retrieval for {bankTicker.Symbol}");
-                            if(info != null && info.IsTradable)
+                            stocksContext.Tickers.Add(new Ticker
                             {
-                                stocksContext.Tickers.Add(new Ticker
-                                {
-                                    Symbol = bankTicker.Symbol,
-                                    Sector = bankTicker.Sector,
-                                    EBIT = bankTicker.Earnings,
-                                    EPS = bankTicker.EPS,
-                                    PERatio = bankTicker.PERatio,
-                                    LastCalculated = now,
-                                    LastCalculatedMillis = nowMillis
-                                });
-                            }
+                                Symbol = bankTicker.Symbol,
+                                Sector = bankTicker.Sector,
+                                EBIT = bankTicker.Earnings,
+                                EPS = bankTicker.EPS,
+                                PERatio = bankTicker.PERatio,
+                                LastCalculated = now,
+                                LastCalculatedMillis = nowMillis
+                            });
                         }
                     }
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
