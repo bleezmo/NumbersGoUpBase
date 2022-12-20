@@ -27,7 +27,8 @@ namespace NumbersGoUp.Services
         private readonly ILogger<TradierService> _logger;
         private readonly IHostEnvironment _environment;
         private readonly RateLimiter _rateLimiter;
-        private readonly HttpClient _tradierClient;
+        private readonly HttpClient _tradierDataClient;
+        private readonly HttpClient _tradierOrderClient;
         private readonly IConfiguration _configuration;
         private Account _account;
         private MarketDay _marketDay;
@@ -52,18 +53,25 @@ namespace NumbersGoUp.Services
             _logger = logger;
             _environment = environment;
             _rateLimiter = rateLimiter;
-            _tradierClient = httpClientFactory.CreateClient("retry");
+            _tradierDataClient = httpClientFactory.CreateClient("retry");
+            _tradierOrderClient = httpClientFactory.CreateClient();
             _configuration = configuration;
+        }
+        private void SetTradierHttpClients(string token, params HttpClient[] clients)
+        {
+            foreach(var client in clients)
+            {
+                client.BaseAddress = new Uri($"https://{(_environment.IsProduction() ? PRODUCTION_URL : SANDBOX_URL)}");
+                client.DefaultRequestHeaders.Add("Accept", "application/json");
+                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
+            }
         }
         private async Task Init()
         {
             var now = DateTime.Now;
             _logger.LogInformation($"Running in {_environment.EnvironmentName} mode");
-            var token = _configuration[$"tradier_token:{_environment.EnvironmentName}"];
 
-            _tradierClient.BaseAddress = new Uri($"https://{(_environment.IsProduction() ? PRODUCTION_URL : SANDBOX_URL)}");
-            _tradierClient.DefaultRequestHeaders.Add("Accept", "application/json");
-            _tradierClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
+            SetTradierHttpClients(_configuration[$"tradier_token:{_environment.EnvironmentName}"], _tradierDataClient, _tradierOrderClient);
 
             try
             {
@@ -554,14 +562,14 @@ namespace NumbersGoUp.Services
 #endif
         private async Task<T> GetResponse<T>(string path)
         {
-            using var response = await _tradierClient.GetAsync(path, _appCancellation.Token);
+            using var response = await _tradierDataClient.GetAsync(path, _appCancellation.Token);
             response.EnsureSuccessStatusCode();
             var json = await response.Content.ReadAsStringAsync(_appCancellation.Token);
             return JsonConvert.DeserializeObject<T>(json);
         }
         private async Task<JsonModels.TradierPostOrderResponse> PostOrder(string path, TradierPostOrder order)
         {
-            using var response = await _tradierClient.PostAsync(path, order.HttpContent(), _appCancellation.Token);
+            using var response = await _tradierOrderClient.PostAsync(path, order.HttpContent(), _appCancellation.Token);
             response.EnsureSuccessStatusCode();
             var json = await response.Content.ReadAsStringAsync(_appCancellation.Token);
             return JsonConvert.DeserializeObject<JsonModels.TradierPostOrderResponseWrapper>(json).Order;
