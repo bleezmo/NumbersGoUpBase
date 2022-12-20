@@ -168,7 +168,7 @@ namespace NumbersGoUp.Services
                             }
                         }
                         await stocksContext.SaveChangesAsync(_appCancellation.Token);
-                        Func<Ticker, double> performanceFn1 = (t) => t.MonthPercVariance > 0 ? t.AvgMonthPerc * (1 - t.MaxMonthConsecutiveLosses.DoubleReduce(12, 1)) / t.MonthPercVariance : 0.0;
+                        Func<Ticker, double> performanceFn1 = (t) => t.MonthPercVariance > 0 ? t.AvgMonthPerc * (1 - t.MaxMonthConsecutiveLosses.DoubleReduce(12, 1)) / Math.Sqrt(t.MonthPercVariance) : 0.0;
                         Func<Ticker, double> performanceFn2 = (t) => t.ProfitLossStDev > 0 ? t.ProfitLossAvg / t.ProfitLossStDev : 0.0;
                         Func<Ticker, double> performanceFn3 = (t) => t.SMASMAStDev > 0 ? t.SMASMAAvg / t.SMASMAStDev : 0.0;
                         Func<Ticker, double> performanceFnEarnings = (t) => Math.Sqrt(t.EBIT) * 2;
@@ -183,8 +183,8 @@ namespace NumbersGoUp.Services
                             minmax3.Run(ticker);
                             minmaxEarnings.Run(ticker);
                         }
-                        Func<Ticker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 35) +
-                                                                      (performanceFnEarnings(t).DoubleReduce(minmaxEarnings.Max, minmaxEarnings.Min) * 30) +
+                        Func<Ticker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 32) +
+                                                                      (performanceFnEarnings(t).DoubleReduce(minmaxEarnings.Max, minmaxEarnings.Min) * 33) +
                                                                       (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 25) +
                                                                       (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 10);
                         var minmaxTotal = new MinMaxStore<Ticker>(performanceFnTotal);

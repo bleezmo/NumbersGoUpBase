@@ -152,11 +152,13 @@ namespace NumbersGoUp.Services
 
                 if (buy)
                 {
+                    totalPrediction *= barMetrics.CalculateVelocity(b => b.SMASMA).DoubleReduce(0, -ticker.AlmaSma3StDev);
                     totalPrediction *= (1 - peRatio.DoubleReduce(_peratioCutoff, _peratioCutoff * 0.5)) * _encouragementMultiplier.DoubleReduce(0, -1);
                     totalPrediction += (1 - totalPrediction) * _encouragementMultiplier.DoubleReduce(1, 0);
                 }
                 else
                 {
+                    totalPrediction *= 1 - barMetrics.CalculateVelocity(b => b.SMASMA).DoubleReduce(ticker.AlmaSma3StDev, 0);
                     totalPrediction *= 1 - _encouragementMultiplier.DoubleReduce(1, 0);
                     totalPrediction += (1 - totalPrediction) * (1 - _encouragementMultiplier.DoubleReduce(0, -1));
                 }
