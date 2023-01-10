@@ -83,7 +83,7 @@ namespace NumbersGoUp.Services
                         var dbTicker = dbTickers.FirstOrDefault(dbt => dbt.Symbol == bankTicker.Symbol);
                         if (dbTicker != null) {
                             _tickerProcessor.UpdateBankTicker(dbTicker, bankTicker);
-                            toUpdate.Add(dbTicker); 
+                            toUpdate.Add(dbTicker);
                         }
                         else { toAdd.Add(bankTicker); }
                     }
@@ -164,7 +164,7 @@ namespace NumbersGoUp.Services
         }
         private double CalculatePriceChangeAvg(HistoryBar[] bars)
         {
-            if(bars == null || bars.Length == 0) { return 0; }
+            if(bars == null || bars.Length == 0) { return 0.0; }
             var now = DateTime.Now;
             var datePointer = _lookbackDate;
             var priceChanges = new List<double>();
@@ -173,7 +173,7 @@ namespace NumbersGoUp.Services
                 var from = datePointer;
                 var to = datePointer.AddMonths(6);
                 var priceWindow = bars.Where(b => b.BarDay.CompareTo(from) > 0 && b.BarDay.CompareTo(to) < 0).OrderByDescending(b => b.BarDayMilliseconds).ToArray();
-                if (priceWindow.Length > 2)
+                if (priceWindow.Length > 2 && priceWindow.Last().Price() > 0)
                 {
                     priceChanges.Add((priceWindow.First().Price() - priceWindow.Last().Price()) * 100 / priceWindow.Last().Price());
                 }
@@ -183,13 +183,21 @@ namespace NumbersGoUp.Services
             {
                 var avg = priceChanges.Average();
                 var stdev = Math.Sqrt(priceChanges.Sum(p => Math.Pow(p - avg, 2)) / priceChanges.Count);
-                var mode = priceChanges.OrderBy(p => p).Skip(priceChanges.Count / 2).FirstOrDefault();
-                return avg / stdev;
+                //var mode = priceChanges.OrderBy(p => p).Skip(priceChanges.Count / 2).FirstOrDefault();
+                if (stdev > 0)
+                {
+                    return avg / stdev;
+                }
+                else
+                {
+                    _logger.LogWarning($"Standard deviation was zero for some reason. Symbol {bars[0].Symbol}");
+                    return 0.0;
+                }
             }
             else
             {
                 _logger.LogDebug($"Insufficient price information for {bars[0].Symbol}");
-                return 0;
+                return 0.0;
             }
         }
         public async Task UpdateFinancials(int limit = 1000)
