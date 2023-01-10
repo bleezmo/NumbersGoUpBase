@@ -281,7 +281,7 @@ namespace NumbersGoUp.Services
             await Ready();
             await _rateLimiter.LimitTradierRate();
             var jsonBars = await GetResponse<JsonModels.TradierHistoryBars>(string.Format(HistoryBarPath, symbol, from.ToString("yyyy-MM-dd"), _lastMarketDay.TradingTimeClose.ToString("yyyy-MM-dd")));
-            return jsonBars?.History?.Quotes?.Select(b => new HistoryBar
+            return jsonBars?.History?.Quotes?.Where(b => b.Close > 0 && b.Open > 0 && b.Low > 0 && b.High > 0).Select(b => new HistoryBar
             {
                 Symbol = symbol,
                 ClosePrice = b.Close,

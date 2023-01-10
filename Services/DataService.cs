@@ -165,6 +165,7 @@ namespace NumbersGoUp.Services
                             await StartDayCollection(tickerLocal);
                             _logger.LogDebug($"Completed StartCollection for {tickerLocal.Symbol}");
                         }
+                        catch (TaskCanceledException) { }
                         catch (Exception e)
                         {
                             _logger.LogError(e, $"Error occurred collecting history for {tickerLocal.Symbol}");
@@ -180,56 +181,47 @@ namespace NumbersGoUp.Services
         private async Task StartDayCollection(Ticker ticker)
         {
             using var stocksContext = _contextFactory.CreateDbContext();
-            try
+            var symbol = ticker.Symbol;
+            var lastBar = await stocksContext.HistoryBars.Where(t => t.Symbol == symbol).OrderByDescending(t => t.BarDayMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
+            //if(lastBar == null || DateTime.UtcNow.Subtract(lastBar.TimeUtc).TotalDays > 5)
+            //{
+            //    var info = await _brokerService.GetTickerInfo(symbol); //make sure we can use it with alpaca
+            //    if (info == null || !info.IsTradable || !info.Fractionable)
+            //    {
+            //        _logger.LogError($"Couldn't retrieve symbol {symbol}!!!!");
+            //        ticker.LastCalculatedMillis = 0;
+            //        stocksContext.Tickers.Update(ticker);
+            //        await stocksContext.SaveChangesAsync(_appCancellation.Token);
+            //        return;
+            //    }
+            //}
+            DateTime? from = null;
+            if (lastBar != null)
             {
-                var symbol = ticker.Symbol;
-                var lastBar = await stocksContext.HistoryBars.Where(t => t.Symbol == symbol).OrderByDescending(t => t.BarDayMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
-                //if(lastBar == null || DateTime.UtcNow.Subtract(lastBar.TimeUtc).TotalDays > 5)
-                //{
-                //    var info = await _brokerService.GetTickerInfo(symbol); //make sure we can use it with alpaca
-                //    if (info == null || !info.IsTradable || !info.Fractionable)
-                //    {
-                //        _logger.LogError($"Couldn't retrieve symbol {symbol}!!!!");
-                //        ticker.LastCalculatedMillis = 0;
-                //        stocksContext.Tickers.Update(ticker);
-                //        await stocksContext.SaveChangesAsync(_appCancellation.Token);
-                //        return;
-                //    }
-                //}
-                DateTime? from = null;
-                if(lastBar != null)
+                var lastDay = await _brokerService.GetLastMarketDay();
+                if (lastBar.BarDay.Date.CompareTo(lastDay.Date) < 0)
                 {
-                    var lastDay = await _brokerService.GetLastMarketDay();
-                    if(lastBar.BarDay.Date.CompareTo(lastDay.Date) < 0)
-                    {
-                        from = lastBar.BarDay;
-                    }
-                }
-                else
-                {
-                    from = DateTime.Now.AddYears(0 - LOOKBACK_YEARS);
-                }
-                if (from.HasValue)
-                {
-                    _logger.LogDebug($"Collecting bar history for {symbol}");
-                    foreach (var bar in await _brokerService.GetBarHistoryDay(symbol, from.Value))
-                    {
-                        //just make sure
-                        if(lastBar == null || lastBar.BarDay.CompareTo(bar.BarDay) < 0)
-                        {
-                            bar.TickerId = ticker.Id;
-                            stocksContext.HistoryBars.Add(bar);
-                        }
-                    }
-                    await stocksContext.SaveChangesAsync(_appCancellation.Token);
-                    _logger.LogDebug($"Completed bar history collection for {symbol}");
+                    from = lastBar.BarDay;
                 }
             }
-            catch (TaskCanceledException) { }
-            catch (Exception e)
+            else
             {
-                _logger.LogError(e, "Error when collecting");
-                //throw;
+                from = DateTime.Now.AddYears(0 - LOOKBACK_YEARS);
+            }
+            if (from.HasValue)
+            {
+                _logger.LogDebug($"Collecting bar history for {symbol}");
+                foreach (var bar in await _brokerService.GetBarHistoryDay(symbol, from.Value))
+                {
+                    //just make sure
+                    if (lastBar == null || lastBar.BarDay.CompareTo(bar.BarDay) < 0)
+                    {
+                        bar.TickerId = ticker.Id;
+                        stocksContext.HistoryBars.Add(bar);
+                    }
+                }
+                await stocksContext.SaveChangesAsync(_appCancellation.Token);
+                _logger.LogDebug($"Completed bar history collection for {symbol}");
             }
         }
 

@@ -20,107 +20,15 @@ namespace NumbersGoUp.Utils
         Task<List<BankTicker>> DownloadTickers(bool alwaysProcessData = false);
         void UpdateBankTicker(BankTicker src, BankTicker dest);
     }
-    public class TickerBankProcessor : ITickerBankProcessor
-    {
-        private readonly IAppCancellation _appCancellation;
-        private readonly ILogger<TickerBankProcessor> _logger;
-        private readonly ITickerHash _tickerHash;
-        private readonly ITickerFile _tickerFile;
-
-        private static readonly string[] _sectorBlacklist = new[]
-        {
-            "Cash and/or Derivatives"
-        };
-
-        public TickerBankProcessor(IAppCancellation appCancellation, ILogger<TickerBankProcessor> logger, ITickerHash tickerHash, ITickerFile tickerFile)
-        {
-            _appCancellation = appCancellation;
-            _logger = logger;
-            _tickerHash = tickerHash;
-            _tickerFile = tickerFile;
-        }
-        public async Task<List<BankTicker>> DownloadTickers(bool alwaysProcessData = false)
-        {
-            var oldHash = await _tickerHash.GetCurrentHash();
-            var currentHash = string.Empty;
-            using (var md5 = MD5.Create())
-            {
-                using (var stream = await _tickerFile.OpenRead())
-                {
-                    currentHash = Convert.ToBase64String(md5.ComputeHash(stream));
-                }
-            }
-            List<BankTicker> tickers = new List<BankTicker>();
-            if (oldHash != currentHash || alwaysProcessData)
-            {
-                using (var sr = new StreamReader(await _tickerFile.OpenRead()))
-                {
-                    var headerLookup = new Dictionary<string, int>();
-                    while (sr.Peek() >= 0)
-                    {
-
-                        var line = await sr.ReadLineAsync();
-                        if (line.StartsWith("Ticker"))
-                        {
-                            var headers = line.Split(',');
-                            for (var i = 0; i < headers.Length; i++)
-                            {
-                                headerLookup.Add(headers[i], i);
-                            }
-                            break;
-                        }
-                    }
-                    while (tickers.Count < 1200 && CheckLine(await sr.ReadLineAsync(), out var fields))
-                    {
-                        var symbol = fields[headerLookup["Ticker"]];
-                        var sector = fields[headerLookup["Sector"]];
-                        if (!string.IsNullOrWhiteSpace(symbol) && !_sectorBlacklist.Any(s => s == sector))
-                        {
-                            tickers.Add(new BankTicker
-                            {
-                                Symbol = symbol,
-                                Sector = sector
-                            });
-                        }
-                    }
-                }
-                await _tickerHash.WriteNewHash(currentHash);
-            }
-            var distinctTickers = new List<BankTicker>();
-            foreach (var ticker in tickers)
-            {
-                if (!distinctTickers.Any(t => t.Symbol == ticker.Symbol))
-                {
-                    distinctTickers.Add(ticker);
-                }
-            }
-            return distinctTickers;
-        }
-        public void UpdateBankTicker(BankTicker src, BankTicker dest) 
-        {
-            dest.PriceChangeAvg = src.PriceChangeAvg;
-        }
-
-        private static bool CheckLine(string line, out string[] fields)
-        {
-            if (!string.IsNullOrWhiteSpace(line))
-            {
-                fields = line.Split(',').Select(field => field.Trim('\"')).ToArray();
-                return true;
-            }
-            fields = null;
-            return false;
-        }
-    }
 
     public class TradingViewTickerBankProcessor : ITickerBankProcessor
     {
         private readonly IAppCancellation _appCancellation;
-        private readonly ILogger<TickerBankProcessor> _logger;
+        private readonly ILogger<TradingViewTickerBankProcessor> _logger;
         private readonly ITickerHash _tickerHash;
         private readonly ITickerFile _tickerFile;
 
-        public TradingViewTickerBankProcessor(IAppCancellation appCancellation, ILogger<TickerBankProcessor> logger, ITickerHash tickerHash, ITickerFile tickerFile)
+        public TradingViewTickerBankProcessor(IAppCancellation appCancellation, ILogger<TradingViewTickerBankProcessor> logger, ITickerHash tickerHash, ITickerFile tickerFile)
         {
             _appCancellation = appCancellation;
             _logger = logger;
@@ -276,7 +184,7 @@ namespace NumbersGoUp.Utils
             return tickers;
         }
         
-        public void UpdateBankTicker(BankTicker src, BankTicker dest)
+        public void UpdateBankTicker(BankTicker dest, BankTicker src)
         {
             dest.MarketCap = src.MarketCap;
             dest.CurrentRatio = src.CurrentRatio;

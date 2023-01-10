@@ -9,9 +9,10 @@ namespace NumbersGoUp.Services
     public class TraderService
     {
         public const double MAX_DAILY_BUY = 0.1;
-        public const double MAX_SECURITY_BUY = 0.02;
-        public const double MAX_SECURITY_SELL = 0.01;
+        public const double MAX_SECURITY_BUY = 0.03;
+        public const double MAX_SECURITY_SELL = 0.015;
         public const double MULTIPLIER_THRESHOLD = 0.33;
+        public const double MAX_COOLDOWN_DAYS = 10;
         public const bool USE_MARGIN = false;
         public const bool FRACTIONAL = false;
 
@@ -252,13 +253,13 @@ namespace NumbersGoUp.Services
             {
                 var profitLossPerc = 0.0;
                 var dayOfWeek = brokerOrder.FilledAt.Value.DayOfWeek;
-                var daysToNextBuy = Math.Max((int)dayOfWeek, 3); var daysToNextSell = daysToNextBuy + 1;
+                var daysToNextBuy = Math.Max((int)dayOfWeek, (int) Math.Round(order.Multiplier * MAX_COOLDOWN_DAYS)); var daysToNextSell = daysToNextBuy;
                 if (order != null && brokerOrder.OrderSide == OrderSide.Sell && order.AvgEntryPrice > 0)
                 {
                     profitLossPerc = (brokerOrder.AverageFillPrice.Value - order.AvgEntryPrice) * 100 / order.AvgEntryPrice;
                     if ((order.AvgEntryPrice * brokerOrder.FilledQuantity) > _account.Balance.LastEquity * 0.01 && profitLossPerc < -5 && DateTime.Now.Month > 10)
                     {
-                        daysToNextBuy = 62 * (int)Math.Round(1 - order.Ticker.PerformanceVector.DoubleReduce(100, 0));
+                        daysToNextBuy = Math.Max(62 * (int)Math.Round(1 - order.Ticker.PerformanceVector.DoubleReduce(100, 25)), daysToNextBuy);
                     }
                 }
                 var historyOrder = new DbOrderHistory
