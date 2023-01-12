@@ -127,7 +127,7 @@ namespace NumbersGoUp.Services
                                                                                                                                           (currentPrice - tickerPosition.Position.CostBasis) * 100 / tickerPosition.Position.CostBasis) : 0.0;
                         if (tickerPosition.Position != null)
                         {
-                            var maxTickerEquityPerc = (maxEquityPerc * percProfit.DoubleReduce(0, -ticker.ProfitLossStDev)) + ((1 - maxEquityPerc) * ticker.PerformanceVector.DoubleReduce(200, 0));
+                            var maxTickerEquityPerc = (maxEquityPerc * percProfit.DoubleReduce(ticker.ProfitLossAvg, ticker.ProfitLossAvg - ticker.ProfitLossStDev)) + ((1 - maxEquityPerc) * ticker.PerformanceVector.DoubleReduce(200, 0));
                             buyMultiplier *= 1 - ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * maxTickerEquityPerc)).DoubleReduce(1, 0.25);
                         }
                         buyMultiplier = buyMultiplier > MULTIPLIER_THRESHOLD ? FinalBuyMultiplier(buyMultiplier) : 0;
