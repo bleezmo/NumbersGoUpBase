@@ -275,6 +275,7 @@ namespace NumbersGoUp.Services
                                 ticker.PERatio = bankTicker.PERatio;
                                 ticker.EPS = bankTicker.EPS;
                                 ticker.EBIT = bankTicker.Earnings;
+                                ticker.DividendYield = bankTicker.DividendYield;
                                 ticker.LastCalculated = now;
                                 ticker.LastCalculatedMillis = nowMillis;
                                 stocksContext.Tickers.Update(ticker);
@@ -313,6 +314,7 @@ namespace NumbersGoUp.Services
                                 Symbol = bankTicker.Symbol,
                                 Sector = bankTicker.Sector,
                                 EBIT = bankTicker.Earnings,
+                                DividendYield = bankTicker.DividendYield,
                                 EPS = bankTicker.EPS,
                                 PERatio = bankTicker.PERatio,
                                 LastCalculated = now,

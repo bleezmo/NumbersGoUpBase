@@ -8,9 +8,9 @@ namespace NumbersGoUp.Services
 {
     public class TraderService
     {
-        public const double MAX_DAILY_BUY = 0.1;
         public const double MAX_SECURITY_BUY = 0.03;
         public const double MAX_SECURITY_SELL = 0.015;
+        public const double MAX_DAILY_BUY = 0.1;
         public const double MULTIPLIER_THRESHOLD = 0.33;
         public const double MAX_COOLDOWN_DAYS = 10;
         public const bool USE_MARGIN = false;
@@ -127,7 +127,7 @@ namespace NumbersGoUp.Services
                                                                                                                                           (currentPrice - tickerPosition.Position.CostBasis) * 100 / tickerPosition.Position.CostBasis) : 0.0;
                         if (tickerPosition.Position != null)
                         {
-                            var maxTickerEquityPerc = (maxEquityPerc * percProfit.DoubleReduce(ticker.ProfitLossAvg, ticker.ProfitLossAvg - ticker.ProfitLossStDev)) + ((1 - maxEquityPerc) * ticker.PerformanceVector.DoubleReduce(200, 0));
+                            var maxTickerEquityPerc = (maxEquityPerc * percProfit.DoubleReduce(ticker.ProfitLossAvg, ticker.ProfitLossAvg - ticker.ProfitLossStDev)) + ((1 - maxEquityPerc) * ticker.PerformanceVector.DoubleReduce(100, 0) * ticker.DividendYield.DoubleReduce(0.04, 0));
                             buyMultiplier *= 1 - ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * maxTickerEquityPerc)).DoubleReduce(1, 0.25);
                         }
                         buyMultiplier = buyMultiplier > MULTIPLIER_THRESHOLD ? FinalBuyMultiplier(buyMultiplier) : 0;
@@ -218,7 +218,7 @@ namespace NumbersGoUp.Services
             }
         }
         private double priorityOrdering(BuySellState bss) => bss.TickerPosition.Ticker.PerformanceVector * bss.ProfitLossPerc.ZeroReduce(bss.TickerPosition.Ticker.ProfitLossAvg + bss.TickerPosition.Ticker.ProfitLossStDev, (bss.TickerPosition.Ticker.ProfitLossAvg + bss.TickerPosition.Ticker.ProfitLossStDev) * -1);
-        private double FinalSellMultiplier(double sellMultiplier) => sellMultiplier.Curve1(_cashEquityRatio.DoubleReduce(1, 0, 6, 1));
+        private double FinalSellMultiplier(double sellMultiplier) => sellMultiplier.Curve1(_cashEquityRatio.DoubleReduce(1, 0, 12, 0.5));
         private double FinalBuyMultiplier(double buyMultiplier) => buyMultiplier.Curve3((1 - _cashEquityRatio).DoubleReduce(1, 0, 4, 2));
         private async Task AddOrder(OrderSide orderSide, string symbol, double targetPrice, double multiplier)
         {

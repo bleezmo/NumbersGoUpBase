@@ -112,7 +112,7 @@ namespace NumbersGoUp.Services
                                           ((1 - barMetrics[0].AlmaSMA2.DoubleReduce(Math.Max(ticker.AlmaSma2Avg, 0), Math.Min(ticker.AlmaSma2Avg - (ticker.AlmaSma2StDev * 1.5), 0))) * 0.15) +
                                           ((1 - barMetrics[0].AlmaSMA1.DoubleReduce(Math.Max(ticker.AlmaSma1Avg, 0), Math.Min(ticker.AlmaSma1Avg - (ticker.AlmaSma1StDev * 1.5), 0))) * 0.15) +
                                           ((barMetrics.Average(b => b.AlmaSMA3) - barMetrics.Average(b => b.SMASMA)).DoubleReduce(ticker.AlmaSma3StDev, -ticker.AlmaSma3StDev) * 0.3);
-                    longPricePrediction *= ticker.PerformanceVector.DoubleReduce(50, 0);
+                    longPricePrediction *= ticker.PerformanceVector.DoubleReduce(75, 0).Curve4(2);
                 }
                 else
                 {

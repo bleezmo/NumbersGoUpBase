@@ -42,6 +42,7 @@ namespace NumbersGoUp.Models
         public double ProfitLossAvg { get; set; }
         public double ProfitLossStDev { get; set; }
         public double EBIT { get; set; }
+        public double DividendYield { get; set; }
 
         public List<HistoryBar> HistoryBars { get; set; }
         public List<DbOrder> Orders { get; set; }
