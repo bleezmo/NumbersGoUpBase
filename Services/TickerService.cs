@@ -19,6 +19,7 @@ namespace NumbersGoUp.Services
     public class TickerService
     {
         public const int MAX_TICKERS = 100;
+        public const int PERFORMANCE_CUTOFF = 25;
 
         private const string POLYGON_API_KEY = "polygon_api_key";
         private const string FINNHUB_API_KEY = "finnhub_api_key";
@@ -68,7 +69,7 @@ namespace NumbersGoUp.Services
         {
             using (var stocksContext = _contextFactory.CreateDbContext())
             {
-                var tickers = await stocksContext.Tickers.Where(t => t.PerformanceVector > 25 && t.AvgMonthPerc > -1000)
+                var tickers = await stocksContext.Tickers.Where(t => t.PerformanceVector > PERFORMANCE_CUTOFF && t.AvgMonthPerc > -1000)
                                                   .OrderByDescending(t => t.PerformanceVector).Take(MAX_TICKERS).ToListAsync(_appCancellation.Token);
                 return tickers.Where(t => !_blackList.Any(s => string.Equals(s, t.Symbol, StringComparison.InvariantCultureIgnoreCase)));
             }
