@@ -9,7 +9,7 @@ namespace NumbersGoUp.Services
     public class TraderService
     {
         public const double MAX_SECURITY_BUY = 0.03;
-        public const double MAX_SECURITY_SELL = 0.015;
+        public const double MAX_SECURITY_SELL = 0.02;
         public const double MAX_DAILY_BUY = 0.1;
         public const double MULTIPLIER_THRESHOLD = 0.33;
         public const double MAX_COOLDOWN_DAYS = 10;
@@ -126,7 +126,7 @@ namespace NumbersGoUp.Services
                                                                                                                                           (currentPrice - tickerPosition.Position.CostBasis) * 100 / tickerPosition.Position.CostBasis) : 0.0;
                         if (tickerPosition.Position != null)
                         {
-                            var maxTickerEquityPerc = (0.1 * percProfit.DoubleReduce(ticker.ProfitLossAvg, ticker.ProfitLossAvg - ticker.ProfitLossStDev)) + (0.9 * ticker.PerformanceVector.DoubleReduce(100, 0) * ticker.DividendYield.DoubleReduce(0.04, 0));
+                            var maxTickerEquityPerc = (0.5 * percProfit.DoubleReduce(ticker.ProfitLossAvg, ticker.ProfitLossAvg - (ticker.ProfitLossStDev * 1.5))) + (0.5 * ticker.PerformanceVector.DoubleReduce(100, 0) * ticker.DividendYield.DoubleReduce(0.04, 0));
                             buyMultiplier *= 1 - ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * maxTickerEquityPerc)).DoubleReduce(1, 0.25);
                         }
                         buyMultiplier = buyMultiplier > MULTIPLIER_THRESHOLD ? FinalBuyMultiplier(buyMultiplier) : 0;
