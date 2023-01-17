@@ -8,8 +8,8 @@ namespace NumbersGoUp.Services
 {
     public class TraderService
     {
-        public const double MAX_SECURITY_BUY = 0.03;
-        public const double MAX_SECURITY_SELL = 0.02;
+        public const double MAX_SECURITY_BUY = 0.02;
+        public const double MAX_SECURITY_SELL = MAX_SECURITY_BUY * 2 / 3;
         public const double MAX_DAILY_BUY = 0.1;
         public const double MAX_DAILY_SELL = 0.1;
         public const double MULTIPLIER_THRESHOLD = 0.33;
@@ -365,7 +365,7 @@ namespace NumbersGoUp.Services
             var sellOrders = currentOrders.Where(o => o.Side == OrderSide.Sell).ToArray();
 
             //var avgBuyMultiplier = buyOrders.Any() ? buyOrders.Select(o => o.Multiplier).Average() : 0.0;
-            var remainingBuyAmount = Math.Min(_account.Balance.LastEquity * MAX_DAILY_BUY, balance);
+            var remainingBuyAmount = Math.Min(_account.Balance.LastEquity * MAX_DAILY_BUY * _cashEquityRatio.DoubleReduce(0.3,0).Curve4(1), balance);
 
             remainingBuyAmount -= currentOrders.Select(o => o.Side == OrderSide.Buy ? o.AppliedAmt : 0).Sum();
             _logger.LogInformation($"Starting balance {balance:C2} and remaining buy amount {remainingBuyAmount:C2}");
