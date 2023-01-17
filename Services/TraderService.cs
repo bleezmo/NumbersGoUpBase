@@ -205,9 +205,11 @@ namespace NumbersGoUp.Services
                     var lastBarMetric = await _dataService.GetLastMetric(position.Symbol);
                     var currentPrice = position.AssetLastPrice.HasValue ? position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(position.Symbol)).Price;
                     var percProfit = position.UnrealizedProfitLossPercent.HasValue ? position.UnrealizedProfitLossPercent.Value * 100 : ((currentPrice - position.CostBasis) * 100 / position.CostBasis);
-                    sellMultiplier *= (0.5 * percProfit.DoubleReduce(ticker.ProfitLossAvg + ticker.ProfitLossStDev, ticker.ProfitLossAvg - (ticker.ProfitLossStDev * 3)).VTailCurve()) + (0.5 * (1 - _cashEquityRatio.DoubleReduce(0.3, 0)));
-
-                    sellMultiplier = sellMultiplier > MULTIPLIER_THRESHOLD ? FinalSellMultiplier(sellMultiplier) : 0.0;
+                    if((currentPrice / ticker.EPS) < (_tickerService.PERatioCutoff * 2)) //if pe is to high, just try to sell it any given chance
+                    {
+                        sellMultiplier *= (0.5 * percProfit.DoubleReduce(ticker.ProfitLossAvg + ticker.ProfitLossStDev, ticker.ProfitLossAvg - (ticker.ProfitLossStDev * 3)).VTailCurve()) + (0.5 * (1 - _cashEquityRatio.DoubleReduce(0.3, 0)));
+                        sellMultiplier = sellMultiplier > MULTIPLIER_THRESHOLD ? FinalSellMultiplier(sellMultiplier) : 0.0;
+                    }
                     if (sellMultiplier > MULTIPLIER_THRESHOLD)
                     {
                         sells.Add(new BuySellState

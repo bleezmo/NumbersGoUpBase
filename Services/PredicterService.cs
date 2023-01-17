@@ -78,7 +78,7 @@ namespace NumbersGoUp.Services
                     ticker = await stocksContext.Tickers.Where(t => t.Symbol == symbol).FirstOrDefaultAsync(_appCancellation.Token);
                     if (ticker == null)
                     {
-                        _logger.LogCritical($"Ticker {ticker.Symbol} not found. Manual intervention required");
+                        _logger.LogCritical($"Ticker {symbol} not found. Manual intervention required");
                         return 0.0;
                     }
                     barMetrics = await stocksContext.BarMetrics.Where(p => p.Symbol == symbol).OrderByDescending(b => b.BarDayMilliseconds).Take(FEATURE_HISTORY_DAY).Include(b => b.HistoryBar).ToArrayAsync(_appCancellation.Token);
