@@ -107,13 +107,14 @@ namespace NumbersGoUp.Services
         }
         public async Task CalculatePerformance()
         {
-            var now = DateTime.UtcNow;
+            var now = DateTimeOffset.UtcNow;
             if (_runtimeSettings.ForceDataCollection || now.DayOfWeek == DayOfWeek.Monday || now.DayOfWeek == DayOfWeek.Thursday) //don't need to check every day
             {
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
-                    var nowMillis = new DateTimeOffset(now).ToUnixTimeMilliseconds();
-                    var cutoff = new DateTimeOffset(now.AddDays(-15)).ToUnixTimeMilliseconds();
+                    var nowMillis = now.ToUnixTimeMilliseconds();
+                    var cutoff = now.AddDays(-15).ToUnixTimeMilliseconds();
+                    var lookback = now.AddYears(-DataService.LOOKBACK_YEARS).ToUnixTimeMilliseconds();
                     var tickersToUpdate = _runtimeSettings.ForceDataCollection ? await stocksContext.Tickers.ToListAsync(_appCancellation.Token) : await stocksContext.Tickers.Where(t => t.LastCalculatedPerformanceMillis == null || t.LastCalculatedPerformanceMillis < cutoff).ToListAsync(_appCancellation.Token);
                     if (tickersToUpdate.Any())
                     {
@@ -121,7 +122,7 @@ namespace NumbersGoUp.Services
                         {
                             ticker.AvgMonthPerc = -1000; //default if ticker is invalid
                             //var nowTestMillis = new DateTimeOffset(now.AddYears(-5)).ToUnixTimeMilliseconds();
-                            var bars = await stocksContext.HistoryBars.Where(bar => bar.Symbol == ticker.Symbol).OrderBy(b => b.BarDayMilliseconds).ToArrayAsync(_appCancellation.Token);
+                            var bars = await stocksContext.HistoryBars.Where(bar => bar.Symbol == ticker.Symbol && bar.BarDayMilliseconds > lookback).OrderBy(b => b.BarDayMilliseconds).ToArrayAsync(_appCancellation.Token);
                             if (bars.Any())
                             {
                                 if (now.AddYears(1 - DataService.LOOKBACK_YEARS).CompareTo(bars.First().BarDay) > 0 && now.AddDays(-7).CompareTo(bars.Last().BarDay) < 0) //remove anything that doesn't have enough history
@@ -163,7 +164,7 @@ namespace NumbersGoUp.Services
                             else
                             {
                                 ticker.PerformanceVector = 0;
-                                ticker.LastCalculatedPerformance = now;
+                                ticker.LastCalculatedPerformance = now.UtcDateTime;
                                 ticker.LastCalculatedPerformanceMillis = nowMillis;
                                 stocksContext.Tickers.Update(ticker);
                             }
@@ -189,15 +190,18 @@ namespace NumbersGoUp.Services
                                                                       (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 25) +
                                                                       (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 10);
                         var minmaxTotal = new MinMaxStore<Ticker>(performanceFnTotal);
+                        var perfAvg = 0.0;
                         foreach (var ticker in toUpdate)
                         {
-                            minmaxTotal.Run(ticker);
+                            perfAvg += minmaxTotal.Run(ticker) / toUpdate.Count;
                         }
+                        var idealAvg = minmaxTotal.Max / 2;
+                        var maxMultiplier = idealAvg / Math.Max(minmaxTotal.Max - perfAvg, idealAvg);
                         foreach (var ticker in toUpdate)
                         {
-                            ticker.LastCalculatedPerformance = now;
+                            ticker.LastCalculatedPerformance = now.UtcDateTime;
                             ticker.LastCalculatedPerformanceMillis = nowMillis;
-                            ticker.PerformanceVector = performanceFnTotal(ticker).DoubleReduce(minmaxTotal.Max * 0.75, minmaxTotal.Min) * 100;
+                            ticker.PerformanceVector = performanceFnTotal(ticker).DoubleReduce(minmaxTotal.Max * maxMultiplier, minmaxTotal.Min) * 100;
                             stocksContext.Tickers.Update(ticker);
                         }
                         await stocksContext.SaveChangesAsync(_appCancellation.Token);
@@ -208,19 +212,20 @@ namespace NumbersGoUp.Services
 
         public async Task ApplyAverages()
         {
-            var now = DateTime.UtcNow;
+            var now = DateTimeOffset.UtcNow;
             if (_runtimeSettings.ForceDataCollection || now.DayOfWeek == DayOfWeek.Monday || now.DayOfWeek == DayOfWeek.Thursday) //don't need to check every day
             {
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
-                    var nowMillis = new DateTimeOffset(now).ToUnixTimeMilliseconds();
-                    var cutoff = new DateTimeOffset(now.AddDays(-15)).ToUnixTimeMilliseconds();
+                    var nowMillis = now.ToUnixTimeMilliseconds();
+                    var cutoff = now.AddDays(-15).ToUnixTimeMilliseconds();
+                    var lookback = now.AddYears(-DataService.LOOKBACK_YEARS).ToUnixTimeMilliseconds();
                     var tickersToUpdate = _runtimeSettings.ForceDataCollection ? await stocksContext.Tickers.ToListAsync(_appCancellation.Token) : await stocksContext.Tickers.Where(t => t.LastCalculatedAvgsMillis == null || t.LastCalculatedAvgsMillis < cutoff).ToListAsync(_appCancellation.Token);
                     var updatedTickers = new List<Ticker>();
                     //var nowTestMillis = new DateTimeOffset(now.AddYears(-5)).ToUnixTimeMilliseconds();
                     foreach (var ticker in tickersToUpdate)
                     {
-                        var bars = await stocksContext.BarMetrics.Where(b => b.Symbol == ticker.Symbol).ToArrayAsync();
+                        var bars = await stocksContext.BarMetrics.Where(b => b.Symbol == ticker.Symbol && b.BarDayMilliseconds > lookback).ToArrayAsync();
                         if (bars.Any())
                         {
                             ticker.SMASMAAvg = bars.Average(b => b.SMASMA);
@@ -238,7 +243,7 @@ namespace NumbersGoUp.Services
                             ticker.ProfitLossAvg = bars.Average(b => b.ProfitLossPerc);
                             ticker.ProfitLossStDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.ProfitLossPerc - ticker.ProfitLossAvg, 2)) / bars.Length);
 
-                            ticker.LastCalculatedAvgs = now;
+                            ticker.LastCalculatedAvgs = now.UtcDateTime;
                             ticker.LastCalculatedAvgsMillis = nowMillis;
                             updatedTickers.Add(ticker);
                         }
@@ -254,12 +259,12 @@ namespace NumbersGoUp.Services
 
         public async Task Load()
         {
-            var now = DateTime.UtcNow;
+            var now = DateTimeOffset.UtcNow;
             if (_runtimeSettings.ForceDataCollection || now.DayOfWeek == DayOfWeek.Tuesday || now.DayOfWeek == DayOfWeek.Friday) //don't need to check every day
             {
                 await _brokerService.Ready();
-                var nowMillis = new DateTimeOffset(now).ToUnixTimeMilliseconds();
-                var cutoff = new DateTimeOffset(now.AddDays(-30)).ToUnixTimeMilliseconds();
+                var nowMillis = now.ToUnixTimeMilliseconds();
+                var cutoff = now.AddDays(-30).ToUnixTimeMilliseconds();
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
                     var tickers = await stocksContext.Tickers.ToArrayAsync(_appCancellation.Token);
@@ -277,13 +282,13 @@ namespace NumbersGoUp.Services
                                 ticker.EPS = bankTicker.EPS;
                                 ticker.EBIT = bankTicker.Earnings;
                                 ticker.DividendYield = bankTicker.DividendYield;
-                                ticker.LastCalculated = now;
+                                ticker.LastCalculated = now.UtcDateTime;
                                 ticker.LastCalculatedMillis = nowMillis;
                                 stocksContext.Tickers.Update(ticker);
                             }
                             else if(bankTickers.Length < 150 && ticker.PerformanceVector > 25) //keep some tickers if the bank size is to small
                             {
-                                ticker.LastCalculated = now;
+                                ticker.LastCalculated = now.UtcDateTime;
                                 ticker.LastCalculatedMillis = nowMillis;
                                 stocksContext.Tickers.Update(ticker);
                             }
@@ -294,7 +299,7 @@ namespace NumbersGoUp.Services
                                 ticker.EPS = 0.01;
                                 ticker.EBIT = 1;
                                 ticker.PerformanceVector = 0;
-                                ticker.LastCalculated = now;
+                                ticker.LastCalculated = now.UtcDateTime;
                                 ticker.LastCalculatedMillis = nowMillis;
                                 stocksContext.Tickers.Update(ticker);
                             }
@@ -318,7 +323,7 @@ namespace NumbersGoUp.Services
                                 DividendYield = bankTicker.DividendYield,
                                 EPS = bankTicker.EPS,
                                 PERatio = bankTicker.PERatio,
-                                LastCalculated = now,
+                                LastCalculated = now.UtcDateTime,
                                 LastCalculatedMillis = nowMillis
                             });
                         }

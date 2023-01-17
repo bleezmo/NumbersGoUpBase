@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using NumbersGoUp.JsonModels;
 using NumbersGoUp.Models;
 using NumbersGoUp.Utils;
 using System;
@@ -22,6 +23,10 @@ namespace NumbersGoUp.Services
         private readonly IStocksContextFactory _contextFactory;
         private readonly double _encouragementMultiplier;
         private readonly double _peratioCutoff;
+        private readonly TickerService _tickerService;
+        private Task _startTask;
+        private static readonly SemaphoreSlim _taskSem = new SemaphoreSlim(1, 1);
+        private double _buyCutoff = 100;
 
         public PredicterService(IAppCancellation appCancellation, ILogger<PredicterService> logger, IBrokerService brokerService, TickerService tickerService, IStocksContextFactory contextFactory, IConfiguration configuration)
         {
@@ -31,6 +36,31 @@ namespace NumbersGoUp.Services
             _contextFactory = contextFactory;
             _encouragementMultiplier = Math.Min(Math.Max(double.TryParse(configuration["EncouragementMultiplier"], out var encouragementMultiplier) ? encouragementMultiplier : 0, -1), 1);
             _peratioCutoff = tickerService.PERatioCutoff;
+            _tickerService = tickerService;
+        }
+        private async Task Init()
+        {
+            var tickers = await _tickerService.GetTickers();
+            _buyCutoff = tickers.Skip(4).Take(1).FirstOrDefault()?.PerformanceVector ?? _buyCutoff;
+        }
+        public async Task Ready()
+        {
+            if (_startTask == null)
+            {
+                await _taskSem.WaitAsync();
+                try
+                {
+                    if (_startTask == null)
+                    {
+                        _startTask = Task.Run(Init);
+                    }
+                }
+                finally
+                {
+                    _taskSem.Release();
+                }
+            }
+            await _startTask;
         }
         public Task<double?> BuyPredict(string symbol) => Predict(symbol, true);
         public Task<double> BuyPredict(BarMetric barMetric) => Predict(barMetric, true);
@@ -38,6 +68,7 @@ namespace NumbersGoUp.Services
         public Task<double> SellPredict(BarMetric barMetric) => Predict(barMetric, false);
         private async Task<double?> Predict(string symbol, bool buy)
         {
+            await Ready();
             BarMetric[] barMetrics;
             Ticker ticker;
             try
@@ -78,6 +109,7 @@ namespace NumbersGoUp.Services
         }
         private async Task<double> Predict(BarMetric barMetric, bool buy)
         {
+            await Ready();
             var symbol = barMetric.Symbol;
             BarMetric[] barMetrics;
             Ticker ticker;
@@ -112,7 +144,7 @@ namespace NumbersGoUp.Services
                                           ((1 - barMetrics[0].AlmaSMA2.DoubleReduce(Math.Max(ticker.AlmaSma2Avg, 0), Math.Min(ticker.AlmaSma2Avg - (ticker.AlmaSma2StDev * 1.5), 0))) * 0.15) +
                                           ((1 - barMetrics[0].AlmaSMA1.DoubleReduce(Math.Max(ticker.AlmaSma1Avg, 0), Math.Min(ticker.AlmaSma1Avg - (ticker.AlmaSma1StDev * 1.5), 0))) * 0.15) +
                                           ((barMetrics.Average(b => b.AlmaSMA3) - barMetrics.Average(b => b.SMASMA)).DoubleReduce(ticker.AlmaSma3StDev, -ticker.AlmaSma3StDev) * 0.3);
-                    longPricePrediction *= ticker.PerformanceVector.DoubleReduce(75, 0).Curve4(2);
+                    longPricePrediction *= ticker.PerformanceVector.DoubleReduce(_buyCutoff, 0).Curve4(2);
                 }
                 else
                 {

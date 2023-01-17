@@ -11,6 +11,7 @@ namespace NumbersGoUp.Services
         public const double MAX_SECURITY_BUY = 0.03;
         public const double MAX_SECURITY_SELL = 0.02;
         public const double MAX_DAILY_BUY = 0.1;
+        public const double MAX_DAILY_SELL = 0.1;
         public const double MULTIPLIER_THRESHOLD = 0.33;
         public const double MAX_COOLDOWN_DAYS = 10;
         public const bool USE_MARGIN = false;
@@ -144,10 +145,19 @@ namespace NumbersGoUp.Services
                 }
             }
             var multiplierSum = 0.0;
+            var filteredBuys = new List<BuySellState>();
             foreach (var buy in buys.OrderByDescending(priorityOrdering))
             {
                 multiplierSum += buy.Multiplier * MAX_SECURITY_BUY;
-                if(multiplierSum > MAX_DAILY_BUY) { break; }
+                if (multiplierSum > MAX_DAILY_BUY) { break; }
+                else { filteredBuys.Add(buy); }
+            }
+            //foreach (var buy in filteredBuys)
+            //{
+            //    buy.Multiplier *= 1 - multiplierSum.DoubleReduce(MAX_DAILY_BUY, MAX_SECURITY_BUY).Curve2(_cashEquityRatio.DoubleReduce(0.2, 0, 8, 2), 1.2);
+            //}
+            foreach (var buy in filteredBuys)
+            {
                 var limit = buy.BarMetric.HistoryBar.ClosePrice;
                 await AddOrder(OrderSide.Buy, buy.BarMetric.Symbol, limit, buy.Multiplier);
                 _logger.LogInformation($"Added buy order for {buy.BarMetric.Symbol} with multiplier {buy.Multiplier} at price {limit:C2}");
@@ -209,7 +219,19 @@ namespace NumbersGoUp.Services
                     }
                 }
             }
-            foreach (var sell in sells.OrderBy(priorityOrdering).Take((int)Math.Ceiling(1 / Math.Max(_cashEquityRatio, 0.1))))
+            var multiplierSum = 0.0;
+            var filteredSells = new List<BuySellState>();
+            foreach (var sell in sells.OrderBy(priorityOrdering))
+            {
+                multiplierSum += sell.Multiplier * MAX_SECURITY_SELL;
+                if (multiplierSum > MAX_DAILY_SELL) { break; }
+                else { filteredSells.Add(sell); }
+            }
+            //foreach (var sell in filteredSells)
+            //{
+            //    sell.Multiplier *= 1 - multiplierSum.DoubleReduce(MAX_DAILY_SELL, MAX_SECURITY_SELL);
+            //}
+            foreach (var sell in filteredSells)
             {
                 var limit = sell.BarMetric.HistoryBar.ClosePrice;
                 await AddOrder(OrderSide.Sell, sell.BarMetric.Symbol, limit, sell.Multiplier);

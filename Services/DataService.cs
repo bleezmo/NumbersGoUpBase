@@ -26,7 +26,6 @@ namespace NumbersGoUp.Services
         private const int RSI_LENGTH = 20;
         private const int ALMA_LENGTH = 10;
         private static readonly int _barLength = new int[] { VOLEMA_LENGTH, ALMA_LENGTH, SMA2_LENGTH, RSI_LENGTH, SMA_LENGTH, SMA3_LENGTH }.Max();
-        private static readonly int _intradayBarLength = new int[] { VOLEMA_LENGTH, ALMA_LENGTH, SMA_LENGTH }.Max();
         private const long MILLIS_PER_HOUR = 60 * 60 * 1000;
         private const long MILLIS_PER_DAY = 24 * MILLIS_PER_HOUR;
         private static readonly double[] _gaussianWeights = GaussianWeights(100);
@@ -56,7 +55,6 @@ namespace NumbersGoUp.Services
             {
                 await _tickerService.LoadTickers();
                 _logger.LogInformation("Ticker collection complete");
-                //var financialsTask = _tickerBankService.UpdateFinancials(25);
                 var tickers = await _tickerService.GetFullTickerList();
                 await StartCollection(tickers);
                 _logger.LogInformation("Done collecting bar history");
@@ -68,8 +66,6 @@ namespace NumbersGoUp.Services
                 _logger.LogInformation($"Completed calculation of averages");
                 await _tickerService.CalculatePerformance();
                 _logger.LogInformation($"Completed performance calculation");
-                //await financialsTask;
-                //_logger.LogInformation($"Completed financials updates");
             }
             catch (Exception e)
             {
@@ -83,6 +79,9 @@ namespace NumbersGoUp.Services
         }
         public async Task CleanUp()
         {
+#if DEBUG
+            return;
+#endif
             var now = DateTime.Now;
             if (now.DayOfWeek == DayOfWeek.Tuesday || now.DayOfWeek == DayOfWeek.Friday) //don't need to check every day
             {
