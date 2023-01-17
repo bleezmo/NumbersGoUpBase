@@ -57,7 +57,8 @@ namespace NumbersGoUp.Utils
         public static double Curve4(this double x, double exp, double cutoff = 1) => 1 - Math.Pow(Math.Pow(x * cutoff.CurveCoeff(exp), exp) - 1, 4);
         public static double Curve6(this double x, double exp, double cutoff = 1) => 1 - Math.Pow(Math.Pow(x * cutoff.CurveCoeff(exp), exp) - 1, 6);
         private static double CurveCoeff(this double cutoff, double exp) => 1 / Math.Pow(cutoff, exp);
-        public static double WCurve(this double x) => (0.5 * Math.Cos(4 * Math.PI * x)) + 0.5;
+        public static double WCurve(this double x) => (-0.5 * Math.Cos(4 * Math.PI * x)) + 0.5;
+        public static double VTailCurve(this double x) => (-0.5 * Math.Cos(3 * Math.PI * x)) + 0.5;
         public static double CalculateVelocity<T>(this IEnumerable<T> barsDesc, Func<T, double> angleValueFn)
         {
             if (barsDesc.Count() < 2) { throw new Exception("Length does not meet minimum requirements to calculate velocity"); }
