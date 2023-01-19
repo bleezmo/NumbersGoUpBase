@@ -179,7 +179,7 @@ namespace NumbersGoUp.Services
                     ((barMetrics.Average(b => b.AlmaSMA3) - barMetrics.Average(b => b.PriceSMA3)).DoubleReduce(15, -15) * 0.1) +
                     ((barMetrics.Average(b => b.AlmaSMA2) - barMetrics.Average(b => b.PriceSMA2)).DoubleReduce(15, -15) * 0.1) +
                     ((barMetrics.Average(b => b.AlmaSMA1) - barMetrics.Average(b => b.PriceSMA1)).DoubleReduce(15, -15) * 0.1);
-                    pricePrediction += (1 - pricePrediction) * peRatio.DoubleReduce(_peratioCutoff * 1.5, _peratioCutoff);
+                    pricePrediction += (1 - pricePrediction) * pricePrediction * peRatio.DoubleReduce(_peratioCutoff * 1.5, _peratioCutoff);
                 }
 
                 var totalPrediction = (pricePrediction * alpha) + (longPricePrediction * (1 - alpha));
