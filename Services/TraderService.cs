@@ -277,13 +277,13 @@ namespace NumbersGoUp.Services
             {
                 var profitLossPerc = 0.0;
                 var dayOfWeek = brokerOrder.FilledAt.Value.DayOfWeek;
-                var daysToNextBuy = Math.Max((int)dayOfWeek, (int) Math.Round(order.Multiplier * MAX_COOLDOWN_DAYS)); var daysToNextSell = daysToNextBuy;
+                var daysToNextBuy = Math.Max((int)dayOfWeek, Math.Max((int) Math.Round(order.Multiplier * MAX_COOLDOWN_DAYS), 3)); var daysToNextSell = daysToNextBuy;
                 if (order != null && brokerOrder.OrderSide == OrderSide.Sell && order.AvgEntryPrice > 0)
                 {
                     profitLossPerc = (brokerOrder.AverageFillPrice.Value - order.AvgEntryPrice) * 100 / order.AvgEntryPrice;
                     if ((order.AvgEntryPrice * brokerOrder.FilledQuantity) > _account.Balance.LastEquity * 0.01 && profitLossPerc < -5 && DateTime.Now.Month > 10)
                     {
-                        daysToNextBuy = Math.Max(62 * (int)Math.Round(1 - order.Ticker.PerformanceVector.DoubleReduce(100, 25)), daysToNextBuy);
+                        daysToNextBuy = Math.Max(62 * (int)Math.Round(1 - order.Ticker.PerformanceVector.DoubleReduce(100, 50)), daysToNextBuy);
                     }
                 }
                 var historyOrder = new DbOrderHistory

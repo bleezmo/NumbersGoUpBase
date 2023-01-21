@@ -100,7 +100,7 @@ namespace NumbersGoUp.Services
                     var tickers = new List<BankTicker>();
                     foreach(var t in dbTickers)
                     {
-                        if(t.DebtEquityRatio > 0 && t.DebtEquityRatio < 1.5 && (t.CurrentRatio > 1.2 || t.DebtEquityRatio < 1) && 
+                        if(t.DebtEquityRatio > 0 && t.DebtEquityRatio < 1.5 && (t.CurrentRatio > (t.DebtEquityRatio * 1.1) || t.DebtEquityRatio < 1) && 
                             t.Earnings > 0 && t.PERatio < PERatioCutoff && t.PERatio > 1 && t.DividendYield > 0.005 && t.PriceChangeAvg > 0 && t.EPS > 0)
                         {
                             tickers.Add(t);
