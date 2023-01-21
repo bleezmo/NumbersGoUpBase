@@ -160,9 +160,9 @@ namespace NumbersGoUp.Services
                 if (buy)
                 {
                     var profitLossMin = ticker.ProfitLossAvg - (ticker.ProfitLossStDev * 1.5);
-                    pricePrediction = ((1 - (barMetrics[0].PriceSMA3.DoubleReduce(30, -90))).Curve4(defaultExp) * 0.15) +
-                                          ((1 - (barMetrics[0].PriceSMA2.DoubleReduce(60, -90))).Curve4(defaultExp) * 0.15) +
-                                          ((1 - (barMetrics[0].PriceSMA1.DoubleReduce(90, -90))).Curve4(defaultExp) * 0.15) +
+                    pricePrediction = ((1 - (barMetrics[0].PriceSMA3.DoubleReduce(30, -90))).Curve4((1 - barMetrics.CalculateAvgVelocity(b => b.PriceSMA3).DoubleReduce(15, -15)).DoubleReduce(1, 0, 5, 2)) * 0.15) +
+                                          ((1 - (barMetrics[0].PriceSMA2.DoubleReduce(60, -90))).Curve4((1 - barMetrics.CalculateAvgVelocity(b => b.PriceSMA2).DoubleReduce(15, -15)).DoubleReduce(1, 0, 5, 2)) * 0.15) +
+                                          ((1 - (barMetrics[0].PriceSMA1.DoubleReduce(90, -90))).Curve4((1 - barMetrics.CalculateAvgVelocity(b => b.PriceSMA1).DoubleReduce(15, -15)).DoubleReduce(1, 0, 5, 2)) * 0.15) +
                     ((1 - (barMetrics[0].ProfitLossPerc.DoubleReduce(ticker.ProfitLossAvg, profitLossMin))).Curve4(defaultExp) * 0.25) +
                     ((barMetrics.Average(b => b.PriceSMA3) - barMetrics.Average(b => b.AlmaSMA3)).DoubleReduce(15, -15) * 0.1) +
                     ((barMetrics.Average(b => b.PriceSMA2) - barMetrics.Average(b => b.AlmaSMA2)).DoubleReduce(15, -15) * 0.1) +
@@ -172,9 +172,9 @@ namespace NumbersGoUp.Services
                 else
                 {
                     var profitLossMax = ticker.ProfitLossAvg + (ticker.ProfitLossStDev * 1.5);
-                    pricePrediction = (barMetrics[0].PriceSMA3.DoubleReduce(90, 0).Curve4(defaultExp) * 0.15) +
-                                          (barMetrics[0].PriceSMA2.DoubleReduce(90, 15).Curve4(defaultExp) * 0.15) +
-                                          (barMetrics[0].PriceSMA1.DoubleReduce(90, 30).Curve4(defaultExp) * 0.15) +
+                    pricePrediction = (barMetrics[0].PriceSMA3.DoubleReduce(90, 0).Curve4(barMetrics.CalculateAvgVelocity(b => b.PriceSMA3).DoubleReduce(15, -15, 5, 2)) * 0.15) +
+                                          (barMetrics[0].PriceSMA2.DoubleReduce(90, 15).Curve4(barMetrics.CalculateAvgVelocity(b => b.PriceSMA2).DoubleReduce(15, -15, 5, 2)) * 0.15) +
+                                          (barMetrics[0].PriceSMA1.DoubleReduce(90, 30).Curve4(barMetrics.CalculateAvgVelocity(b => b.PriceSMA1).DoubleReduce(15, -15, 5, 2)) * 0.15) +
                     (barMetrics[0].ProfitLossPerc.DoubleReduce(profitLossMax, ticker.ProfitLossAvg).Curve4(defaultExp) * 0.25) +
                     ((barMetrics.Average(b => b.AlmaSMA3) - barMetrics.Average(b => b.PriceSMA3)).DoubleReduce(15, -15) * 0.1) +
                     ((barMetrics.Average(b => b.AlmaSMA2) - barMetrics.Average(b => b.PriceSMA2)).DoubleReduce(15, -15) * 0.1) +
