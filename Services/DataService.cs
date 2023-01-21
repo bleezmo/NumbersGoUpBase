@@ -306,8 +306,8 @@ namespace NumbersGoUp.Services
         {
             var sma = bars.Aggregate(0.0, (acc, bar) => acc + barFn(bar)) / bars.Length;
             var stdev = Math.Sqrt(bars.Aggregate(0.0, (acc, bar) => acc + Math.Pow(barFn(bar) - sma, 2)) / bars.Length);
-            var smaUpper = sma + (stdev * 2);
-            var smaLower = sma - (stdev * 2);
+            var smaUpper = sma + (stdev * 2.5);
+            var smaLower = sma - (stdev * 2.5);
             return (sma, smaUpper, smaLower);
         }
         private static double GetAngle(double num, double denom)
