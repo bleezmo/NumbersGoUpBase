@@ -162,11 +162,11 @@ namespace NumbersGoUp.Services
                     var profitLossMin = ticker.ProfitLossAvg - (ticker.ProfitLossStDev * 1.5);
                     pricePrediction = ((1 - (barMetrics[0].PriceSMA3.DoubleReduce(30, -90))).Curve4((1 - barMetrics.CalculateAvgVelocity(b => b.PriceSMA3).DoubleReduce(15, -15)).DoubleReduce(1, 0, 5, 2)) * 0.15) +
                                           ((1 - (barMetrics[0].PriceSMA2.DoubleReduce(60, -90))).Curve4((1 - barMetrics.CalculateAvgVelocity(b => b.PriceSMA2).DoubleReduce(15, -15)).DoubleReduce(1, 0, 5, 2)) * 0.15) +
-                                          ((1 - (barMetrics[0].PriceSMA1.DoubleReduce(90, -90))).Curve4((1 - barMetrics.CalculateAvgVelocity(b => b.PriceSMA1).DoubleReduce(15, -15)).DoubleReduce(1, 0, 5, 2)) * 0.15) +
+                                          (barMetrics[0].PriceSMA1.ZeroReduceSlow(90, -90).Curve4((1 - barMetrics.CalculateAvgVelocity(b => b.PriceSMA1).DoubleReduce(15, -15)).DoubleReduce(1, 0, 5, 2)) * 0.15) +
                     ((1 - (barMetrics[0].ProfitLossPerc.DoubleReduce(ticker.ProfitLossAvg, profitLossMin))).Curve4(defaultExp) * 0.25) +
-                    ((barMetrics.Average(b => b.PriceSMA3) - barMetrics.Average(b => b.AlmaSMA3)).DoubleReduce(15, -15) * 0.1) +
-                    ((barMetrics.Average(b => b.PriceSMA2) - barMetrics.Average(b => b.AlmaSMA2)).DoubleReduce(15, -15) * 0.1) +
-                    ((barMetrics.Average(b => b.PriceSMA1) - barMetrics.Average(b => b.AlmaSMA1)).DoubleReduce(15, -15) * 0.1);
+                    ((barMetrics.Average(b => b.PriceSMA3) - barMetrics.Average(b => b.AlmaSMA3)).DoubleReduce(20, -20) * 0.1) +
+                    ((barMetrics.Average(b => b.PriceSMA2) - barMetrics.Average(b => b.AlmaSMA2)).DoubleReduce(20, -20) * 0.1) +
+                    ((barMetrics.Average(b => b.PriceSMA1) - barMetrics.Average(b => b.AlmaSMA1)).DoubleReduce(20, -20) * 0.1);
                     pricePrediction *= Math.Pow(barMetrics[0].ProfitLossPerc.DoubleReduce(profitLossMin, profitLossMin - 20), 2);
                 }
                 else
@@ -174,11 +174,11 @@ namespace NumbersGoUp.Services
                     var profitLossMax = ticker.ProfitLossAvg + (ticker.ProfitLossStDev * 1.5);
                     pricePrediction = (barMetrics[0].PriceSMA3.DoubleReduce(90, 0).Curve4(barMetrics.CalculateAvgVelocity(b => b.PriceSMA3).DoubleReduce(15, -15, 5, 2)) * 0.15) +
                                           (barMetrics[0].PriceSMA2.DoubleReduce(90, 15).Curve4(barMetrics.CalculateAvgVelocity(b => b.PriceSMA2).DoubleReduce(15, -15, 5, 2)) * 0.15) +
-                                          (barMetrics[0].PriceSMA1.DoubleReduce(90, 30).Curve4(barMetrics.CalculateAvgVelocity(b => b.PriceSMA1).DoubleReduce(15, -15, 5, 2)) * 0.15) +
+                                          (barMetrics[0].PriceSMA1.ZeroReduceSlow(90, 30).Curve4(barMetrics.CalculateAvgVelocity(b => b.PriceSMA1).DoubleReduce(15, -15, 5, 2)) * 0.15) +
                     (barMetrics[0].ProfitLossPerc.DoubleReduce(profitLossMax, ticker.ProfitLossAvg).Curve4(defaultExp) * 0.25) +
-                    ((barMetrics.Average(b => b.AlmaSMA3) - barMetrics.Average(b => b.PriceSMA3)).DoubleReduce(15, -15) * 0.1) +
-                    ((barMetrics.Average(b => b.AlmaSMA2) - barMetrics.Average(b => b.PriceSMA2)).DoubleReduce(15, -15) * 0.1) +
-                    ((barMetrics.Average(b => b.AlmaSMA1) - barMetrics.Average(b => b.PriceSMA1)).DoubleReduce(15, -15) * 0.1);
+                    ((barMetrics.Average(b => b.AlmaSMA3) - barMetrics.Average(b => b.PriceSMA3)).DoubleReduce(20, -20) * 0.1) +
+                    ((barMetrics.Average(b => b.AlmaSMA2) - barMetrics.Average(b => b.PriceSMA2)).DoubleReduce(20, -20) * 0.1) +
+                    ((barMetrics.Average(b => b.AlmaSMA1) - barMetrics.Average(b => b.PriceSMA1)).DoubleReduce(20, -20) * 0.1);
                     pricePrediction += (1 - pricePrediction) * pricePrediction * peRatio.DoubleReduce(_peratioCutoff * 1.5, _peratioCutoff);
                 }
 
@@ -201,5 +201,22 @@ namespace NumbersGoUp.Services
             }
             return 0.0;
         }
+#if DEBUG
+        private List<double> avg1 = new List<double>();
+        private List<double> avg2 = new List<double>();
+        private List<double> avg3 = new List<double>();
+        private async Task DoAvgs(params double[] values)
+        {
+            await _taskSem.WaitAsync();
+            try
+            {
+
+            }
+            finally
+            {
+                _taskSem.Release();
+            }
+        }
+#endif
     }
 }
