@@ -134,15 +134,15 @@ namespace NumbersGoUp.Services
             if (barMetrics.Length == FEATURE_HISTORY_DAY)
             {
                 double peRatio = ticker.EPS > 0 ? (barMetrics[0].HistoryBar.Price() / ticker.EPS) : _peratioCutoff;
-                const double alpha = 0.2;
+                const double alpha = 0.3;
                 const double defaultExp = 4;
                 double pricePrediction; double longPricePrediction;
                 if (buy)
                 {
-                    longPricePrediction = ((1 - barMetrics[0].SMASMA.ZeroReduceFast(Math.Min(ticker.SMASMAAvg + (ticker.SMASMAStDev * 1.5), 90), Math.Min(ticker.SMASMAAvg - (ticker.SMASMAStDev * 1.5), 0))) * 0.25) +
-                                          ((1 - barMetrics[0].AlmaSMA3.ZeroReduceFast(Math.Min(ticker.AlmaSma3Avg + (ticker.AlmaSma3StDev * 1.5), 90), Math.Min(ticker.AlmaSma3Avg - (ticker.AlmaSma3StDev * 1.5), 0))) * 0.15) +
-                                          ((1 - barMetrics[0].AlmaSMA2.ZeroReduceFast(Math.Min(ticker.AlmaSma2Avg + (ticker.AlmaSma2StDev * 1.5), 90), Math.Min(ticker.AlmaSma2Avg - (ticker.AlmaSma2StDev * 1.5), 0))) * 0.15) +
-                                          ((1 - barMetrics[0].AlmaSMA1.DoubleReduce(Math.Max(ticker.AlmaSma1Avg, 0), Math.Min(ticker.AlmaSma1Avg - (ticker.AlmaSma1StDev * 1.5), 0))) * 0.15) +
+                    longPricePrediction = ((1 - barMetrics[0].SMASMA.ZeroReduceFast(Math.Min(ticker.SMASMAAvg + (ticker.SMASMAStDev * 1.5), 90), Math.Min(ticker.SMASMAAvg - (ticker.SMASMAStDev * 1.5), 0))).WCurve() * 0.25) +
+                                          ((1 - barMetrics[0].AlmaSMA3.ZeroReduceFast(Math.Min(ticker.AlmaSma3Avg + (ticker.AlmaSma3StDev * 1.5), 90), Math.Min(ticker.AlmaSma3Avg - (ticker.AlmaSma3StDev * 1.5), 0))).WCurve() * 0.15) +
+                                          ((1 - barMetrics[0].AlmaSMA2.ZeroReduceFast(Math.Min(ticker.AlmaSma2Avg + (ticker.AlmaSma2StDev * 1.5), 90), Math.Min(ticker.AlmaSma2Avg - (ticker.AlmaSma2StDev * 1.5), 0))).WCurve() * 0.15) +
+                                          ((1 - barMetrics[0].AlmaSMA1.DoubleReduce(Math.Max(ticker.AlmaSma1Avg, 0), Math.Min(ticker.AlmaSma1Avg - (ticker.AlmaSma1StDev * 1.5), 0))).WCurve() * 0.15) +
                                           ((barMetrics.Average(b => b.AlmaSMA3) - barMetrics.Average(b => b.SMASMA)).DoubleReduce(ticker.AlmaSma3StDev, -ticker.AlmaSma3StDev) * 0.3);
                     longPricePrediction *= ticker.PerformanceVector.DoubleReduce(_buyCutoff, 0).Curve4(2);
                 }
@@ -160,19 +160,19 @@ namespace NumbersGoUp.Services
                 if (buy)
                 {
                     var profitLossMin = ticker.ProfitLossAvg - (ticker.ProfitLossStDev * 1.5);
-                    pricePrediction = ((1 - (barMetrics[0].ProfitLossPerc.DoubleReduce(ticker.ProfitLossAvg, profitLossMin))).Curve4(defaultExp) * 0.4) +
-                                      ((barMetrics.Average(b => b.PriceSMA3) - barMetrics.Average(b => b.AlmaSMA3)).DoubleReduce(20, -20) * 0.2) +
-                                      ((barMetrics.Average(b => b.PriceSMA2) - barMetrics.Average(b => b.AlmaSMA2)).DoubleReduce(20, -20) * 0.2) +
-                                      ((barMetrics.Average(b => b.PriceSMA1) - barMetrics.Average(b => b.AlmaSMA1)).DoubleReduce(20, -20) * 0.2);
+                    pricePrediction = ((1 - (barMetrics[0].ProfitLossPerc.DoubleReduce(ticker.ProfitLossAvg, profitLossMin))).Curve4(defaultExp) * 0.7) +
+                                      ((barMetrics.Average(b => b.PriceSMA3) - barMetrics.Average(b => b.AlmaSMA3)).DoubleReduce(20, -20) * 0.1) +
+                                      ((barMetrics.Average(b => b.PriceSMA2) - barMetrics.Average(b => b.AlmaSMA2)).DoubleReduce(20, -20) * 0.1) +
+                                      ((barMetrics.Average(b => b.PriceSMA1) - barMetrics.Average(b => b.AlmaSMA1)).DoubleReduce(20, -20) * 0.1);
                     pricePrediction *= Math.Pow(barMetrics[0].ProfitLossPerc.DoubleReduce(profitLossMin, profitLossMin - 20), 2);
                 }
                 else
                 {
                     var profitLossMax = ticker.ProfitLossAvg + (ticker.ProfitLossStDev * 1.5);
-                    pricePrediction = (barMetrics[0].ProfitLossPerc.DoubleReduce(profitLossMax, ticker.ProfitLossAvg).Curve4(defaultExp) * 0.4) +
-                                      ((barMetrics.Average(b => b.AlmaSMA3) - barMetrics.Average(b => b.PriceSMA3)).DoubleReduce(20, -20) * 0.2) +
-                                      ((barMetrics.Average(b => b.AlmaSMA2) - barMetrics.Average(b => b.PriceSMA2)).DoubleReduce(20, -20) * 0.2) +
-                                      ((barMetrics.Average(b => b.AlmaSMA1) - barMetrics.Average(b => b.PriceSMA1)).DoubleReduce(20, -20) * 0.2);
+                    pricePrediction = (barMetrics[0].ProfitLossPerc.DoubleReduce(profitLossMax, ticker.ProfitLossAvg).Curve4(defaultExp) * 0.7) +
+                                      ((barMetrics.Average(b => b.AlmaSMA3) - barMetrics.Average(b => b.PriceSMA3)).DoubleReduce(20, -20) * 0.1) +
+                                      ((barMetrics.Average(b => b.AlmaSMA2) - barMetrics.Average(b => b.PriceSMA2)).DoubleReduce(20, -20) * 0.1) +
+                                      ((barMetrics.Average(b => b.AlmaSMA1) - barMetrics.Average(b => b.PriceSMA1)).DoubleReduce(20, -20) * 0.1);
                     pricePrediction += (1 - pricePrediction) * pricePrediction * peRatio.DoubleReduce(_peratioCutoff * 1.5, _peratioCutoff);
                 }
 
