@@ -159,7 +159,7 @@ namespace NumbersGoUp.Services
 
                     var coeff = barMetrics.Average(b => b.SMASMA).DoubleReduce(1, -1);
                     pricePrediction = (coeff * ((0.9 * bullPricePrediction) + (0.1 * shortPricePrediction))) + ((1 - coeff) * ((0.7 * bearPricePrediction) + (0.3 * shortPricePrediction)));
-                    pricePrediction *= ticker.PerformanceVector.DoubleReduce(_buyCutoff, 0).Curve4(2);
+                    pricePrediction *= ticker.PerformanceVector.DoubleReduce(_buyCutoff, 0).Curve4(2) * (1 - peRatio.DoubleReduce(_peratioCutoff, _peratioCutoff * 0.5));
                     pricePrediction += (1 - pricePrediction) * pricePrediction * ticker.PerformanceVector.DoubleReduce(_buyCutoff * 1.5, _buyCutoff);
                 }
                 else
@@ -190,21 +190,18 @@ namespace NumbersGoUp.Services
                     pricePrediction += (1 - pricePrediction) * pricePrediction * Math.Max((1 - ticker.PerformanceVector.DoubleReduce(TickerService.PERFORMANCE_CUTOFF, 0)), peRatio.DoubleReduce(_peratioCutoff * 1.5, _peratioCutoff));
                 }
 
-
-                var totalPrediction = pricePrediction;
-
                 if (buy)
                 {
-                    totalPrediction *= (1 - peRatio.DoubleReduce(_peratioCutoff, _peratioCutoff * 0.5)) * _encouragementMultiplier.DoubleReduce(0, -1);
-                    totalPrediction += (1 - totalPrediction) * _encouragementMultiplier.DoubleReduce(1, 0);
+                    pricePrediction *= _encouragementMultiplier.DoubleReduce(0, -1);
+                    pricePrediction += (1 - pricePrediction) * _encouragementMultiplier.DoubleReduce(1, 0);
                 }
                 else
                 {
-                    totalPrediction *= 1 - _encouragementMultiplier.DoubleReduce(1, 0);
-                    totalPrediction += (1 - totalPrediction) * (1 - _encouragementMultiplier.DoubleReduce(0, -1));
+                    pricePrediction *= 1 - _encouragementMultiplier.DoubleReduce(1, 0);
+                    pricePrediction += (1 - pricePrediction) * (1 - _encouragementMultiplier.DoubleReduce(0, -1));
                 }
 
-                return totalPrediction;
+                return pricePrediction;
             }
             return 0.0;
         }
