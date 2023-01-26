@@ -225,7 +225,7 @@ namespace NumbersGoUp.Services
                     //var nowTestMillis = new DateTimeOffset(now.AddYears(-5)).ToUnixTimeMilliseconds();
                     foreach (var ticker in tickersToUpdate)
                     {
-                        var bars = await stocksContext.BarMetrics.Where(b => b.Symbol == ticker.Symbol && b.BarDayMilliseconds > lookback).ToArrayAsync();
+                        var bars = await stocksContext.BarMetrics.Where(b => b.Symbol == ticker.Symbol && b.BarDayMilliseconds > lookback).OrderByDescending(b => b.BarDayMilliseconds).ToArrayAsync();
                         if (bars.Any())
                         {
                             ticker.SMASMAAvg = bars.Average(b => b.SMASMA);
@@ -242,6 +242,9 @@ namespace NumbersGoUp.Services
 
                             ticker.ProfitLossAvg = bars.Average(b => b.ProfitLossPerc);
                             ticker.ProfitLossStDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.ProfitLossPerc - ticker.ProfitLossAvg, 2)) / bars.Length);
+
+                            ticker.AlmaVelStDev = (bars.CalculateVelocityStDev(b => b.AlmaSMA1) + bars.CalculateVelocityStDev(b => b.AlmaSMA2) + bars.CalculateVelocityStDev(b => b.AlmaSMA3)) / 3;
+                            ticker.SMAVelStDev = bars.CalculateVelocityStDev(b => b.SMASMA);
 
                             ticker.LastCalculatedAvgs = now.UtcDateTime;
                             ticker.LastCalculatedAvgsMillis = nowMillis;

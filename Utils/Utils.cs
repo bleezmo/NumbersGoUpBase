@@ -58,6 +58,7 @@ namespace NumbersGoUp.Utils
         public static double Curve6(this double x, double exp, double cutoff = 1) => 1 - Math.Pow(Math.Pow(x * cutoff.CurveCoeff(exp), exp) - 1, 6);
         private static double CurveCoeff(this double cutoff, double exp) => 1 / Math.Pow(cutoff, exp);
         public static double WCurve(this double x) => (-0.5 * Math.Cos(4 * Math.PI * x)) + 0.5;
+        public static double WExpCurve(this double x) => ((-0.5 * Math.Cos(4 * Math.PI * x)) + 0.5)*x;
         public static double VTailCurve(this double x) => (-0.5 * Math.Cos(3 * Math.PI * x)) + 0.5;
         public static double CalculateVelocity<T>(this IEnumerable<T> barsDesc, Func<T, double> angleValueFn)
         {
@@ -73,6 +74,22 @@ namespace NumbersGoUp.Utils
                 sum += angleValueFn(barsDesc[i]) - angleValueFn(barsDesc[i + 1]);
             }
             return sum / (barsDesc.Length - 1);
+        }
+        public static double CalculateVelocityStDev<T>(this T[] barsDesc, Func<T, double> angleValueFn)
+        {
+            if (barsDesc.Length < 2) { throw new Exception("Length does not meet minimum requirements to calculate velocity"); }
+            double sum = 0;
+            for (var i = 0; i < (barsDesc.Length - 1); i++)
+            {
+                sum += angleValueFn(barsDesc[i]) - angleValueFn(barsDesc[i + 1]);
+            }
+            var avg = sum / (barsDesc.Length - 1); 
+            sum = 0;
+            for (var i = 0; i < (barsDesc.Length - 1); i++)
+            {
+                sum += Math.Pow(angleValueFn(barsDesc[i]) - angleValueFn(barsDesc[i + 1]) - avg, 2);
+            }
+            return Math.Sqrt(sum / (barsDesc.Length - 1));
         }
         public static double CalculateAcceleration<T>(this IEnumerable<T> barsDesc, Func<T, double> angleValueFn)
         {
