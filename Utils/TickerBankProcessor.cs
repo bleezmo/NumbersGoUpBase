@@ -56,7 +56,7 @@ namespace NumbersGoUp.Utils
                      * Debt to Equity Ratio (MRQ),Dividend Yield Forward,EBITDA (TTM),Enterprise Value/EBITDA (TTM),EPS Diluted (TTM)
                      */
                     int? tickerIndex = null, sectorIndex = null, marketCapIndex = null, peRatioIndex = null, currentRatioIndex = null, debtEquityRatioIndex = null,
-                         dividendIndex = null, ebitdaIndex = null, evebitdaIndex = null, epsIndex = null, incomeIndex = null, priceIndex = null;
+                         dividendIndex = null, ebitdaIndex = null, evebitdaIndex = null, epsIndex = null, incomeIndex = null, priceIndex = null, currentEPSIndex = null, futureEPSIndex = null;
                     using (var csv = new CsvReader(sr, CultureInfo.InvariantCulture))
                     {
                         string[] headers = null;
@@ -77,9 +77,12 @@ namespace NumbersGoUp.Utils
                                     if (headers[i].StartsWith("Dividend")) { dividendIndex = i; }
                                     if (headers[i].StartsWith("EBITDA")) { ebitdaIndex = i; }
                                     if (headers[i].StartsWith("Enterprise Value/EBITDA")) { evebitdaIndex = i; }
-                                    if (headers[i].StartsWith("EPS")) { epsIndex = i; }
+                                    if (headers[i] == "EPS Diluted (TTM)") { epsIndex = i; }
                                     if (headers[i].StartsWith("Net Income")) { incomeIndex = i; }
                                     if (headers[i].StartsWith("Price")) { priceIndex = i; }
+                                    if (headers[i].StartsWith("Price")) { priceIndex = i; }
+                                    if (headers[i] == "EPS Diluted (MRQ)") { currentEPSIndex = i; }
+                                    if (headers[i] == "EPS Forecast (FQ)") { futureEPSIndex = i; }
                                 }
                             }
                             else
@@ -160,7 +163,17 @@ namespace NumbersGoUp.Utils
                                 }
                                 if (epsIndex.HasValue && double.TryParse(csv[epsIndex.Value], out var eps))
                                 {
-                                    ticker.EPS = eps;
+                                    if(currentEPSIndex.HasValue && double.TryParse(csv[currentEPSIndex.Value], out var currentEPS) &&
+                                        futureEPSIndex.HasValue && double.TryParse(csv[futureEPSIndex.Value], out var futureEPS))
+                                    {
+                                        var avg = (futureEPS + currentEPS) / 2;
+                                        var changePerc = (avg - currentEPS) / currentEPS;
+                                        ticker.EPS = (changePerc * eps) + eps;
+                                    }
+                                    else
+                                    {
+                                        ticker.EPS = eps;
+                                    }
                                 }
                                 else
                                 {
