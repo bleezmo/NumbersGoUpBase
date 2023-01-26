@@ -187,7 +187,7 @@ namespace NumbersGoUp.Services
                     var coeff = barMetrics.Average(b => b.SMASMA).DoubleReduce(1, -1);
                     pricePrediction = (coeff * ((0.9 * bullPricePrediction) + (0.1 * shortPricePrediction))) + ((1 - coeff) * ((0.7 * bearPricePrediction) + (0.3 * shortPricePrediction)));
                     pricePrediction *= (1 - ticker.PerformanceVector.DoubleReduce(150, TickerService.PERFORMANCE_CUTOFF));
-                    pricePrediction += (1 - pricePrediction) * pricePrediction * (1 - ticker.PerformanceVector.DoubleReduce(TickerService.PERFORMANCE_CUTOFF, 0));
+                    pricePrediction += (1 - pricePrediction) * pricePrediction * Math.Max((1 - ticker.PerformanceVector.DoubleReduce(TickerService.PERFORMANCE_CUTOFF, 0)), peRatio.DoubleReduce(_peratioCutoff * 1.5, _peratioCutoff));
                 }
 
 

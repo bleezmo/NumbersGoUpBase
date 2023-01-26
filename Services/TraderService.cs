@@ -127,7 +127,7 @@ namespace NumbersGoUp.Services
                                                                                                                                           (currentPrice - tickerPosition.Position.CostBasis) * 100 / tickerPosition.Position.CostBasis) : 0.0;
                         if (tickerPosition.Position != null)
                         {
-                            var maxTickerEquityPerc = (0.5 * percProfit.DoubleReduce(ticker.ProfitLossAvg, ticker.ProfitLossAvg - (ticker.ProfitLossStDev * 1.5))) + (0.5 * ticker.PerformanceVector.DoubleReduce(100, 0) * ticker.DividendYield.DoubleReduce(0.04, 0));
+                            var maxTickerEquityPerc = (0.5 * lastBarMetric.ProfitLossPerc.DoubleReduce(ticker.ProfitLossAvg, ticker.ProfitLossAvg - (ticker.ProfitLossStDev * 1.5))) + (0.5 * ticker.PerformanceVector.DoubleReduce(100, 0) * ticker.DividendYield.DoubleReduce(0.04, 0));
                             buyMultiplier *= 1 - ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * maxTickerEquityPerc)).DoubleReduce(1, 0.25);
                         }
                         buyMultiplier = buyMultiplier > MULTIPLIER_THRESHOLD ? FinalBuyMultiplier(buyMultiplier) : 0;
@@ -205,9 +205,12 @@ namespace NumbersGoUp.Services
                     var lastBarMetric = await _dataService.GetLastMetric(position.Symbol);
                     var currentPrice = position.AssetLastPrice.HasValue ? position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(position.Symbol)).Price;
                     var percProfit = position.UnrealizedProfitLossPercent.HasValue ? position.UnrealizedProfitLossPercent.Value * 100 : ((currentPrice - position.CostBasis) * 100 / position.CostBasis);
-                    if((currentPrice / ticker.EPS) < (_tickerService.PERatioCutoff * 2)) //if pe is to high, just try to sell it any given chance
+                    if (percProfit < -5 && lastBarMetric.BarDay.Month == 12 && lastBarMetric.BarDay.Day > 10) //tax loss harvest
                     {
-                        sellMultiplier *= (0.5 * percProfit.DoubleReduce(ticker.ProfitLossAvg + ticker.ProfitLossStDev, ticker.ProfitLossAvg - (ticker.ProfitLossStDev * 3)).VTailCurve()) + (0.5 * (1 - _cashEquityRatio.DoubleReduce(0.3, 0)));
+                        sellMultiplier += (1 - sellMultiplier) * sellMultiplier;
+                    }
+                    if ((currentPrice / ticker.EPS) < (_tickerService.PERatioCutoff * 2)) //if pe is to high, just try to sell it any given chance
+                    {
                         sellMultiplier = sellMultiplier > MULTIPLIER_THRESHOLD ? FinalSellMultiplier(sellMultiplier) : 0.0;
                     }
                     if (sellMultiplier > MULTIPLIER_THRESHOLD)
@@ -242,8 +245,8 @@ namespace NumbersGoUp.Services
             }
         }
         private double priorityOrdering(BuySellState bss) => bss.TickerPosition.Ticker.PerformanceVector * bss.ProfitLossPerc.ZeroReduce(bss.TickerPosition.Ticker.ProfitLossAvg + bss.TickerPosition.Ticker.ProfitLossStDev, (bss.TickerPosition.Ticker.ProfitLossAvg + bss.TickerPosition.Ticker.ProfitLossStDev) * -1);
-        private double FinalSellMultiplier(double sellMultiplier) => sellMultiplier.Curve1(_cashEquityRatio.DoubleReduce(1, 0, 5, 0.5));
-        private double FinalBuyMultiplier(double buyMultiplier) => buyMultiplier.Curve3((1 - _cashEquityRatio).DoubleReduce(1, 0, 4, 2));
+        private double FinalSellMultiplier(double sellMultiplier) => sellMultiplier.Curve1(_cashEquityRatio.DoubleReduce(0.3, 0, 5, 1));
+        private double FinalBuyMultiplier(double buyMultiplier) => buyMultiplier.Curve3((1 - _cashEquityRatio).DoubleReduce(1, 0.7, 4, 2));
         private async Task AddOrder(OrderSide orderSide, string symbol, double targetPrice, double multiplier)
         {
             var now = DateTime.UtcNow;
@@ -283,7 +286,7 @@ namespace NumbersGoUp.Services
                     profitLossPerc = (brokerOrder.AverageFillPrice.Value - order.AvgEntryPrice) * 100 / order.AvgEntryPrice;
                     if ((order.AvgEntryPrice * brokerOrder.FilledQuantity) > _account.Balance.LastEquity * 0.01 && profitLossPerc < -5 && DateTime.Now.Month > 10)
                     {
-                        daysToNextBuy = Math.Max(62 * (int)Math.Round(1 - order.Ticker.PerformanceVector.DoubleReduce(100, 50)), daysToNextBuy);
+                        daysToNextBuy = 62;
                     }
                 }
                 var historyOrder = new DbOrderHistory
@@ -294,8 +297,8 @@ namespace NumbersGoUp.Services
                     FillQty = brokerOrder.FilledQuantity,
                     TimeLocal = brokerOrder.FilledAt.Value.ToUniversalTime(),
                     TimeLocalMilliseconds = new DateTimeOffset(brokerOrder.FilledAt.Value).ToUnixTimeMilliseconds(),
-                    NextBuy = brokerOrder.OrderSide == OrderSide.Buy ? brokerOrder.FilledAt.Value.AddDays(daysToNextBuy).ToUniversalTime() : null,
-                    NextSell = brokerOrder.OrderSide == OrderSide.Sell ? brokerOrder.FilledAt.Value.AddDays(daysToNextSell).ToUniversalTime() : null,
+                    NextBuy = brokerOrder.FilledAt.Value.AddDays(daysToNextBuy).ToUniversalTime(),
+                    NextSell = brokerOrder.FilledAt.Value.AddDays(daysToNextSell).ToUniversalTime(),
                     ProfitLossPerc = profitLossPerc,
                     Account = order.Account
                 };

@@ -17,7 +17,7 @@ namespace NumbersGoUp.Services
 {
     public class DataService
     {
-        public const int LOOKBACK_YEARS = 30;
+        public const int LOOKBACK_YEARS = 7;
 
         private const int VOLEMA_LENGTH = 8;
         private const int SMA_LENGTH = 40;
