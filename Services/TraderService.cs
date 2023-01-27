@@ -295,7 +295,7 @@ namespace NumbersGoUp.Services
                 {
                     daysToNextBuy = Math.Max((int)Math.Ceiling(lastBuyOrder.NextBuy.Value.Subtract(brokerOrder.FilledAt.Value).TotalDays), daysToNextBuy);
                 }
-                if (lastSellOrder != null && brokerOrder.FilledAt.Value.CompareTo(lastSellOrder.NextBuy.Value) < 0)
+                if (lastSellOrder != null && brokerOrder.FilledAt.Value.CompareTo(lastSellOrder.NextSell.Value) < 0)
                 {
                     daysToNextSell = Math.Max((int)Math.Ceiling(lastSellOrder.NextSell.Value.Subtract(brokerOrder.FilledAt.Value).TotalDays), daysToNextSell);
                 }
