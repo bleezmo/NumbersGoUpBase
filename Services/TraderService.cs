@@ -284,10 +284,20 @@ namespace NumbersGoUp.Services
                 if (order != null && brokerOrder.OrderSide == OrderSide.Sell && order.AvgEntryPrice > 0)
                 {
                     profitLossPerc = (brokerOrder.AverageFillPrice.Value - order.AvgEntryPrice) * 100 / order.AvgEntryPrice;
-                    if ((order.AvgEntryPrice * brokerOrder.FilledQuantity) > _account.Balance.LastEquity * 0.01 && profitLossPerc < -5 && DateTime.Now.Month > 10)
+                    if (profitLossPerc < -5 && DateTime.Now.Month > 10)
                     {
                         daysToNextBuy = 62;
                     }
+                }
+                var lastBuyOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == order.Symbol && o.NextBuy != null).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
+                var lastSellOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == order.Symbol && o.NextSell != null).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
+                if(lastBuyOrder != null && brokerOrder.FilledAt.Value.CompareTo(lastBuyOrder.NextBuy.Value) < 0)
+                {
+                    daysToNextBuy = Math.Max((int)Math.Ceiling(lastBuyOrder.NextBuy.Value.Subtract(brokerOrder.FilledAt.Value).TotalDays), daysToNextBuy);
+                }
+                if (lastSellOrder != null && brokerOrder.FilledAt.Value.CompareTo(lastSellOrder.NextBuy.Value) < 0)
+                {
+                    daysToNextSell = Math.Max((int)Math.Ceiling(lastSellOrder.NextSell.Value.Subtract(brokerOrder.FilledAt.Value).TotalDays), daysToNextSell);
                 }
                 var historyOrder = new DbOrderHistory
                 {
