@@ -284,7 +284,7 @@ namespace NumbersGoUp.Services
                 if (order != null && brokerOrder.OrderSide == OrderSide.Sell && order.AvgEntryPrice > 0)
                 {
                     profitLossPerc = (brokerOrder.AverageFillPrice.Value - order.AvgEntryPrice) * 100 / order.AvgEntryPrice;
-                    if (profitLossPerc < -5 && DateTime.Now.Month > 10)
+                    if (profitLossPerc < -5)
                     {
                         daysToNextBuy = 62;
                     }
