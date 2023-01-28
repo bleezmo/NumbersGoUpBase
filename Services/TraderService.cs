@@ -130,7 +130,7 @@ namespace NumbersGoUp.Services
                             var maxTickerEquityPerc = (0.5 * lastBarMetric.ProfitLossPerc.DoubleReduce(ticker.ProfitLossAvg, ticker.ProfitLossAvg - (ticker.ProfitLossStDev * 1.5))) + (0.5 * ticker.PerformanceVector.DoubleReduce(100, 0) * ticker.DividendYield.DoubleReduce(0.04, 0));
                             buyMultiplier *= 1 - ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * maxTickerEquityPerc)).DoubleReduce(1, 0.25);
                         }
-                        buyMultiplier = buyMultiplier > MULTIPLIER_THRESHOLD ? FinalBuyMultiplier(buyMultiplier) : 0;
+                        buyMultiplier = FinalBuyMultiplier(buyMultiplier);
                         if(buyMultiplier > MULTIPLIER_THRESHOLD)
                         {
                             buys.Add(new BuySellState
@@ -211,7 +211,7 @@ namespace NumbersGoUp.Services
                     }
                     if ((currentPrice / ticker.EPS) < (_tickerService.PERatioCutoff * 2)) //if pe is to high, just try to sell it any given chance
                     {
-                        sellMultiplier = sellMultiplier > MULTIPLIER_THRESHOLD ? FinalSellMultiplier(sellMultiplier) : 0.0;
+                        sellMultiplier = FinalSellMultiplier(sellMultiplier);
                     }
                     if (sellMultiplier > MULTIPLIER_THRESHOLD)
                     {
