@@ -12,7 +12,8 @@ namespace NumbersGoUp.Services
         public const double MAX_SECURITY_SELL = MAX_SECURITY_BUY * 2 / 3;
         public const double MAX_DAILY_BUY = 0.1;
         public const double MAX_DAILY_SELL = 0.1;
-        public const double MULTIPLIER_THRESHOLD = 0.33;
+        public const double MULTIPLIER_BUY_THRESHOLD = 0.4;
+        public const double MULTIPLIER_SELL_THRESHOLD = 0.4;
         public const double MAX_COOLDOWN_DAYS = 10;
         public const bool USE_MARGIN = false;
         public const bool FRACTIONAL = false;
@@ -127,11 +128,10 @@ namespace NumbersGoUp.Services
                                                                                                                                           (currentPrice - tickerPosition.Position.CostBasis) * 100 / tickerPosition.Position.CostBasis) : 0.0;
                         if (tickerPosition.Position != null)
                         {
-                            var maxTickerEquityPerc = (0.5 * lastBarMetric.ProfitLossPerc.DoubleReduce(ticker.ProfitLossAvg, ticker.ProfitLossAvg - (ticker.ProfitLossStDev * 1.5))) + (0.5 * ticker.PerformanceVector.DoubleReduce(100, 0) * ticker.DividendYield.DoubleReduce(0.04, 0));
-                            buyMultiplier *= 1 - ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * maxTickerEquityPerc)).DoubleReduce(1, 0.25);
+                            buyMultiplier *= 1 - ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * MaxTickerEquityPerc(ticker, lastBarMetric))).DoubleReduce(1, 0.25);
                         }
                         buyMultiplier = FinalBuyMultiplier(buyMultiplier);
-                        if(buyMultiplier > MULTIPLIER_THRESHOLD)
+                        if(buyMultiplier > MULTIPLIER_BUY_THRESHOLD)
                         {
                             buys.Add(new BuySellState
                             {
@@ -209,11 +209,13 @@ namespace NumbersGoUp.Services
                     {
                         sellMultiplier += (1 - sellMultiplier) * sellMultiplier;
                     }
+                    sellMultiplier += (1 - sellMultiplier) * ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * MaxTickerEquityPerc(ticker, lastBarMetric))).DoubleReduce(1.5, 0.5);
+
                     if ((currentPrice / ticker.EPS) < (_tickerService.PERatioCutoff * 2)) //if pe is to high, just try to sell it any given chance
                     {
                         sellMultiplier = FinalSellMultiplier(sellMultiplier);
                     }
-                    if (sellMultiplier > MULTIPLIER_THRESHOLD)
+                    if (sellMultiplier > MULTIPLIER_SELL_THRESHOLD)
                     {
                         sells.Add(new BuySellState
                         {
@@ -247,6 +249,8 @@ namespace NumbersGoUp.Services
         private double priorityOrdering(BuySellState bss) => bss.TickerPosition.Ticker.PerformanceVector * bss.ProfitLossPerc.ZeroReduce(bss.TickerPosition.Ticker.ProfitLossAvg + bss.TickerPosition.Ticker.ProfitLossStDev, (bss.TickerPosition.Ticker.ProfitLossAvg + bss.TickerPosition.Ticker.ProfitLossStDev) * -1);
         private double FinalSellMultiplier(double sellMultiplier) => sellMultiplier.Curve1(_cashEquityRatio.DoubleReduce(0.3, 0, 5, 1));
         private double FinalBuyMultiplier(double buyMultiplier) => buyMultiplier.Curve3((1 - _cashEquityRatio).DoubleReduce(1, 0.7, 4, 2));
+        private double MaxTickerEquityPerc(Ticker ticker, BarMetric lastBarMetric) => (0.5 * lastBarMetric.ProfitLossPerc.DoubleReduce(ticker.ProfitLossAvg, ticker.ProfitLossAvg - (ticker.ProfitLossStDev* 1.5))) + (0.5 * ticker.PerformanceVector.DoubleReduce(100, 0) * ticker.DividendYield.DoubleReduce(0.04, 0));
+
         private async Task AddOrder(OrderSide orderSide, string symbol, double targetPrice, double multiplier)
         {
             var now = DateTime.UtcNow;

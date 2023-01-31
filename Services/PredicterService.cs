@@ -13,7 +13,7 @@ namespace NumbersGoUp.Services
 {
     public class PredicterService
     {
-        public const int FEATURE_HISTORY_DAY = 4;
+        public const int FEATURE_HISTORY_DAY = 5;
         public const int LOOKAHEAD_DAYS = 1;
         public const int LOOKAHEAD_DAYS_LONG = 15;
         public const int FEATURE_HISTORY_INTRADAY = 10;
@@ -158,7 +158,7 @@ namespace NumbersGoUp.Services
                                           ((barMetrics.Average(b => b.PriceSMA1) - barMetrics.Average(b => b.AlmaSMA1)).DoubleReduce(20, -20) * 0.12) +
                                           (barMetrics.CalculateAvgVelocity(b => b.PriceSMA1).DoubleReduce(15, 0) * 0.12);
 
-                    var coeff = barMetrics.Average(b => b.SMASMA).DoubleReduce(ticker.SMASMAAvg + ticker.SMASMAStDev, ticker.SMASMAAvg - ticker.SMASMAStDev);
+                    var coeff = barMetrics.Average(b => b.SMASMA).DoubleReduce(ticker.SMASMAAvg, ticker.SMASMAAvg - ticker.SMASMAStDev);
                     pricePrediction = (coeff * ((0.9 * bullPricePrediction) + (0.1 * shortPricePrediction))) + ((1 - coeff) * ((0.7 * bearPricePrediction) + (0.3 * shortPricePrediction)));
                     pricePrediction *= ticker.PerformanceVector.DoubleReduce(_buyCutoff, 0).Curve4(2) * (1 - peRatio.DoubleReduce(_peratioCutoff, _peratioCutoff * 0.5));
                     //pricePrediction += (1 - pricePrediction) * pricePrediction * ticker.PerformanceVector.DoubleReduce(_buyCutoff * 1.5, _buyCutoff);
@@ -186,7 +186,7 @@ namespace NumbersGoUp.Services
                                           ((barMetrics.Average(b => b.AlmaSMA1) - barMetrics.Average(b => b.PriceSMA1)).DoubleReduce(20, -20) * 0.12) +
                                           ((1 - barMetrics.CalculateAvgVelocity(b => b.PriceSMA1).DoubleReduce(0, -15)) * 0.12);
 
-                    var coeff = barMetrics.Average(b => b.SMASMA).DoubleReduce(ticker.SMASMAAvg + ticker.SMASMAStDev, ticker.SMASMAAvg - ticker.SMASMAStDev);
+                    var coeff = barMetrics.Average(b => b.SMASMA).DoubleReduce(ticker.SMASMAAvg + ticker.SMASMAStDev, ticker.SMASMAAvg);
                     pricePrediction = (coeff * ((0.9 * bullPricePrediction) + (0.1 * shortPricePrediction))) + ((1 - coeff) * ((0.7 * bearPricePrediction) + (0.3 * shortPricePrediction)));
                     pricePrediction *= (1 - ticker.PerformanceVector.DoubleReduce(150, TickerService.PERFORMANCE_CUTOFF));
                     pricePrediction += (1 - pricePrediction) * pricePrediction * Math.Max((1 - ticker.PerformanceVector.DoubleReduce(TickerService.PERFORMANCE_CUTOFF, 0)), peRatio.DoubleReduce(_peratioCutoff * 1.5, _peratioCutoff));
