@@ -70,17 +70,16 @@ namespace NumbersGoUp.Utils
                                 {
                                     if (headers[i] == "Ticker") { tickerIndex = i; }
                                     if (headers[i] == "Sector") { sectorIndex = i; }
-                                    if (headers[i].StartsWith("Market Capitalization")) { marketCapIndex = i; }
-                                    if (headers[i].StartsWith("Price to Earnings Ratio")) { peRatioIndex = i; }
-                                    if (headers[i].StartsWith("Current Ratio")) { currentRatioIndex = i; }
-                                    if (headers[i].StartsWith("Debt to Equity Ratio")) { debtEquityRatioIndex = i; }
-                                    if (headers[i].StartsWith("Dividend")) { dividendIndex = i; }
-                                    if (headers[i].StartsWith("EBITDA")) { ebitdaIndex = i; }
-                                    if (headers[i].StartsWith("Enterprise Value/EBITDA")) { evebitdaIndex = i; }
+                                    if (headers[i] == "Market Capitalization") { marketCapIndex = i; }
+                                    if (headers[i] == "Price to Earnings Ratio (TTM)") { peRatioIndex = i; }
+                                    if (headers[i] == "Current Ratio (MRQ)") { currentRatioIndex = i; }
+                                    if (headers[i] == "Debt to Equity Ratio (MRQ)") { debtEquityRatioIndex = i; }
+                                    if (headers[i] == "Dividend Yield Forward") { dividendIndex = i; }
+                                    if (headers[i] == "EBITDA (TTM)") { ebitdaIndex = i; }
+                                    if (headers[i] == "Enterprise Value/EBITDA (TTM)") { evebitdaIndex = i; }
                                     if (headers[i] == "EPS Diluted (TTM)") { epsIndex = i; }
-                                    if (headers[i].StartsWith("Net Income")) { incomeIndex = i; }
-                                    if (headers[i].StartsWith("Price")) { priceIndex = i; }
-                                    if (headers[i].StartsWith("Price")) { priceIndex = i; }
+                                    if (headers[i] == "Net Income (FY)") { incomeIndex = i; }
+                                    if (headers[i] == "Price") { priceIndex = i; }
                                     if (headers[i] == "EPS Diluted (MRQ)") { currentEPSIndex = i; }
                                     if (headers[i] == "EPS Forecast (FQ)") { futureEPSIndex = i; }
                                 }
