@@ -109,39 +109,46 @@ namespace NumbersGoUp.Services
             var buys = new List<BuySellState>();
             foreach (var tickerPosition in tickerPositions.Where(tp => !currentOrders.Any(o => o.Symbol == tp.Ticker.Symbol)))
             {
-                var ticker = tickerPosition.Ticker;
-                if (_appCancellation.IsCancellationRequested) break;
-                using (var stocksContext = _contextFactory.CreateDbContext())
+                try
                 {
-                    var lastBuyOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == ticker.Symbol && o.NextBuy != null).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
-                    if (lastBuyOrder != null && lastBuyOrder.NextBuy.Value.Date.CompareTo(now) > 0) continue;
-                }
-                var prediction = await _predicterService.BuyPredict(ticker.Symbol);
-                if (prediction.HasValue)
-                {
-                    var lastBarMetric = await _dataService.GetLastMetric(ticker.Symbol);
-                    if (lastBarMetric != null)
+                    var ticker = tickerPosition.Ticker;
+                    if (_appCancellation.IsCancellationRequested) break;
+                    using (var stocksContext = _contextFactory.CreateDbContext())
                     {
-                        var buyMultiplier = prediction.Value;
-                        var currentPrice = tickerPosition.Position?.AssetLastPrice != null ? tickerPosition.Position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(ticker.Symbol)).Price;
-                        var percProfit = tickerPosition.Position != null ? (tickerPosition.Position.UnrealizedProfitLossPercent != null ? tickerPosition.Position.UnrealizedProfitLossPercent.Value * 100 :
-                                                                                                                                          (currentPrice - tickerPosition.Position.CostBasis) * 100 / tickerPosition.Position.CostBasis) : 0.0;
-                        if (tickerPosition.Position != null)
+                        var lastBuyOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == ticker.Symbol && o.NextBuy != null).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
+                        if (lastBuyOrder != null && lastBuyOrder.NextBuy.Value.Date.CompareTo(now) > 0) continue;
+                    }
+                    var prediction = await _predicterService.BuyPredict(ticker.Symbol);
+                    if (prediction.HasValue)
+                    {
+                        var lastBarMetric = await _dataService.GetLastMetric(ticker.Symbol);
+                        if (lastBarMetric != null)
                         {
-                            buyMultiplier *= 1 - ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * MaxTickerEquityPerc(ticker, lastBarMetric))).DoubleReduce(1, 0.25);
-                        }
-                        buyMultiplier = FinalBuyMultiplier(buyMultiplier);
-                        if(buyMultiplier > MULTIPLIER_BUY_THRESHOLD)
-                        {
-                            buys.Add(new BuySellState
+                            var buyMultiplier = prediction.Value;
+                            var currentPrice = tickerPosition.Position?.AssetLastPrice != null ? tickerPosition.Position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(ticker.Symbol)).Price;
+                            var percProfit = tickerPosition.Position != null ? (tickerPosition.Position.UnrealizedProfitLossPercent != null ? tickerPosition.Position.UnrealizedProfitLossPercent.Value * 100 :
+                                                                                                                                              (currentPrice - tickerPosition.Position.CostBasis) * 100 / tickerPosition.Position.CostBasis) : 0.0;
+                            if (tickerPosition.Position != null)
                             {
-                                BarMetric = lastBarMetric,
-                                Multiplier = buyMultiplier,
-                                TickerPosition = tickerPosition,
-                                ProfitLossPerc = percProfit
-                            });
+                                buyMultiplier *= 1 - ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * MaxTickerEquityPerc(ticker, lastBarMetric))).DoubleReduce(1, 0.25);
+                            }
+                            buyMultiplier = FinalBuyMultiplier(buyMultiplier);
+                            if (buyMultiplier > MULTIPLIER_BUY_THRESHOLD)
+                            {
+                                buys.Add(new BuySellState
+                                {
+                                    BarMetric = lastBarMetric,
+                                    Multiplier = buyMultiplier,
+                                    TickerPosition = tickerPosition,
+                                    ProfitLossPerc = percProfit
+                                });
+                            }
                         }
                     }
+                }
+                catch(Exception e)
+                {
+                    _logger.LogError(e, $"Error when processing buy for {tickerPosition.Ticker.Symbol}");
                 }
             }
             var multiplierSum = 0.0;
@@ -185,46 +192,53 @@ namespace NumbersGoUp.Services
             var sells = new List<BuySellState>();
             foreach (var tickerPosition in tickerPositionsNP.Where(tp => tp.Ticker != null))
             {
-                var position = tickerPosition.Position;
-                var ticker = tickerPosition.Ticker;
-                using (var stocksContext = _contextFactory.CreateDbContext())
+                try
                 {
-                    var lastSellOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == position.Symbol && o.NextSell != null).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
-                    if (lastSellOrder != null && lastSellOrder.NextSell.Value.Date.CompareTo(now) > 0) continue;
-                }
-                var avgEntryPrice = position.AverageEntryPrice;
-                var predictionSell = await _predicterService.SellPredict(position.Symbol);
-                if (!predictionSell.HasValue) // if null comes back, means there's no info for symbol
-                {
-                    _logger.LogWarning($"Invalid metrics for {position.Symbol}. Closing position.");
-                    await _brokerService.ClosePositionAtMarket(position.Symbol);
-                }
-                else if (predictionSell.Value > 0)
-                {
-                    var sellMultiplier = predictionSell.Value;
-                    var lastBarMetric = await _dataService.GetLastMetric(position.Symbol);
-                    var currentPrice = position.AssetLastPrice.HasValue ? position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(position.Symbol)).Price;
-                    var percProfit = position.UnrealizedProfitLossPercent.HasValue ? position.UnrealizedProfitLossPercent.Value * 100 : ((currentPrice - position.CostBasis) * 100 / position.CostBasis);
-                    if (percProfit < -5 && lastBarMetric.BarDay.Month == 12 && lastBarMetric.BarDay.Day > 10) //tax loss harvest
+                    var position = tickerPosition.Position;
+                    var ticker = tickerPosition.Ticker;
+                    using (var stocksContext = _contextFactory.CreateDbContext())
                     {
-                        sellMultiplier += (1 - sellMultiplier) * sellMultiplier;
+                        var lastSellOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == position.Symbol && o.NextSell != null).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
+                        if (lastSellOrder != null && lastSellOrder.NextSell.Value.Date.CompareTo(now) > 0) continue;
                     }
-                    sellMultiplier += (1 - sellMultiplier) * ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * MaxTickerEquityPerc(ticker, lastBarMetric))).DoubleReduce(1.5, 0.5);
-
-                    if ((currentPrice / ticker.EPS) < (_tickerService.PERatioCutoff * 2)) //if pe is to high, just try to sell it any given chance
+                    var avgEntryPrice = position.AverageEntryPrice;
+                    var predictionSell = await _predicterService.SellPredict(position.Symbol);
+                    if (!predictionSell.HasValue) // if null comes back, means there's no info for symbol
                     {
-                        sellMultiplier = FinalSellMultiplier(sellMultiplier);
+                        _logger.LogWarning($"Invalid metrics for {position.Symbol}. Closing position.");
+                        await _brokerService.ClosePositionAtMarket(position.Symbol);
                     }
-                    if (sellMultiplier > MULTIPLIER_SELL_THRESHOLD)
+                    else if (predictionSell.Value > 0)
                     {
-                        sells.Add(new BuySellState
+                        var sellMultiplier = predictionSell.Value;
+                        var lastBarMetric = await _dataService.GetLastMetric(position.Symbol);
+                        var currentPrice = position.AssetLastPrice.HasValue ? position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(position.Symbol)).Price;
+                        var percProfit = position.UnrealizedProfitLossPercent.HasValue ? position.UnrealizedProfitLossPercent.Value * 100 : ((currentPrice - position.CostBasis) * 100 / position.CostBasis);
+                        if (percProfit < -5 && lastBarMetric.BarDay.Month == 12 && lastBarMetric.BarDay.Day > 10) //tax loss harvest
                         {
-                            BarMetric = lastBarMetric,
-                            Multiplier = sellMultiplier,
-                            TickerPosition = tickerPosition,
-                            ProfitLossPerc = percProfit
-                        });
+                            sellMultiplier += (1 - sellMultiplier) * sellMultiplier;
+                        }
+                        sellMultiplier += (1 - sellMultiplier) * ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * MaxTickerEquityPerc(ticker, lastBarMetric))).DoubleReduce(1.5, 0.5);
+
+                        if ((currentPrice / ticker.EPS) < (_tickerService.PERatioCutoff * 2)) //if pe is to high, just try to sell it any given chance
+                        {
+                            sellMultiplier = FinalSellMultiplier(sellMultiplier);
+                        }
+                        if (sellMultiplier > MULTIPLIER_SELL_THRESHOLD)
+                        {
+                            sells.Add(new BuySellState
+                            {
+                                BarMetric = lastBarMetric,
+                                Multiplier = sellMultiplier,
+                                TickerPosition = tickerPosition,
+                                ProfitLossPerc = percProfit
+                            });
+                        }
                     }
+                }
+                catch(Exception e)
+                {
+                    _logger.LogError(e, $"Error when processing sell for {tickerPosition.Ticker.Symbol}");
                 }
             }
             var multiplierSum = 0.0;

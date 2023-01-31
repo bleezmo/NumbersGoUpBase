@@ -66,14 +66,22 @@ namespace NumbersGoUp.Services
                     List<BankTicker> toUpdate = new List<BankTicker>(), toAdd = new List<BankTicker>();
                     foreach (var bankTicker in tickers)
                     {
-                        var bars = await stocksContext.HistoryBars.Where(b => b.Symbol == bankTicker.Symbol).ToArrayAsync();
-                        bankTicker.PriceChangeAvg = CalculatePriceChangeAvg(bars.Length > 0 ? bars : (await _brokerService.GetBarHistoryDay(bankTicker.Symbol, _lookbackDate)).ToArray());
-                        var dbTicker = dbTickers.FirstOrDefault(dbt => dbt.Symbol == bankTicker.Symbol);
-                        if (dbTicker != null) {
-                            _tickerProcessor.UpdateBankTicker(dbTicker, bankTicker);
-                            toUpdate.Add(dbTicker);
+                        try
+                        {
+                            var bars = await stocksContext.HistoryBars.Where(b => b.Symbol == bankTicker.Symbol).ToArrayAsync(_appCancellation.Token);
+                            bankTicker.PriceChangeAvg = CalculatePriceChangeAvg(bars.Length > 0 ? bars : (await _brokerService.GetBarHistoryDay(bankTicker.Symbol, _lookbackDate)).ToArray());
+                            var dbTicker = dbTickers.FirstOrDefault(dbt => dbt.Symbol == bankTicker.Symbol);
+                            if (dbTicker != null)
+                            {
+                                _tickerProcessor.UpdateBankTicker(dbTicker, bankTicker);
+                                toUpdate.Add(dbTicker);
+                            }
+                            else { toAdd.Add(bankTicker); }
                         }
-                        else { toAdd.Add(bankTicker); }
+                        catch(Exception e)
+                        {
+                            _logger.LogError(e, $"Error loading info for bank ticker {bankTicker.Symbol}");
+                        }
                     }
                     stocksContext.TickerBank.UpdateRange(toUpdate);
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
@@ -100,9 +108,23 @@ namespace NumbersGoUp.Services
                     var tickers = new List<BankTicker>();
                     foreach(var t in dbTickers)
                     {
-                        if(t.DebtEquityRatio > 0 && t.DebtEquityRatio < 1.5 && (t.CurrentRatio > (t.DebtEquityRatio * 1.1) || t.DebtEquityRatio < 1) && 
-                            t.Earnings > 0 && t.PERatio < PERatioCutoff && t.PERatio > 1 && t.DividendYield > 0.005 && t.PriceChangeAvg > 0 && t.EPS > 0)
+                        double peRatio = t.PERatio;
+                        try
                         {
+                            if(t.EPS > 0.01)
+                            {
+                                var price = (await _brokerService.GetLastTrade(t.Symbol)).Price;
+                                peRatio = price / t.EPS;
+                            }
+                        }
+                        catch(Exception e)
+                        {
+                            _logger.LogError(e, $"Error retrieving latest price info for bank ticker {t.Symbol}");
+                        }
+                        if(t.DebtEquityRatio > 0 && t.DebtEquityRatio < 1.5 && (t.CurrentRatio > (t.DebtEquityRatio * 1.1) || t.DebtEquityRatio < 1) && 
+                            t.Earnings > 0 && peRatio < PERatioCutoff && peRatio > 1 && t.DividendYield > 0.005 && t.PriceChangeAvg > 0 && t.EPS > 0.01)
+                        {
+                            t.PERatio = peRatio;
                             tickers.Add(t);
                         }
                         else

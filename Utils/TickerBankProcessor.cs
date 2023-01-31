@@ -163,16 +163,16 @@ namespace NumbersGoUp.Utils
                                 }
                                 if (epsIndex.HasValue && double.TryParse(csv[epsIndex.Value], out var eps))
                                 {
-                                    if(currentEPSIndex.HasValue && double.TryParse(csv[currentEPSIndex.Value], out var currentEPS) &&
+                                    if(eps > 0 && currentEPSIndex.HasValue && double.TryParse(csv[currentEPSIndex.Value], out var currentEPS) &&
                                         futureEPSIndex.HasValue && double.TryParse(csv[futureEPSIndex.Value], out var futureEPS))
                                     {
                                         var avg = (futureEPS + currentEPS) / 2;
-                                        var changePerc = (avg - currentEPS) / currentEPS;
+                                        var changePerc = currentEPS > 0 ? ((avg - currentEPS) / currentEPS) : ((0.01 - eps) / eps);
                                         ticker.EPS = (changePerc * eps) + eps;
                                     }
                                     else
                                     {
-                                        ticker.EPS = eps;
+                                        ticker.EPS = eps > 0 ? eps : 0.01;
                                     }
                                 }
                                 else
@@ -181,7 +181,7 @@ namespace NumbersGoUp.Utils
                                 }
                                 if (priceIndex.HasValue && double.TryParse(csv[priceIndex.Value], out var price))
                                 {
-                                    ticker.PERatio = ticker.EPS > 0 ? price / ticker.EPS : ticker.PERatio;
+                                    ticker.PERatio = ticker.EPS > 0 ? (price / ticker.EPS) : ticker.PERatio;
                                 }
                                 else
                                 {
