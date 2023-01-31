@@ -218,7 +218,7 @@ namespace NumbersGoUp.Services
                         {
                             sellMultiplier += (1 - sellMultiplier) * sellMultiplier;
                         }
-                        sellMultiplier += (1 - sellMultiplier) * ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * MaxTickerEquityPerc(ticker, lastBarMetric))).DoubleReduce(1.5, 0.5);
+                        sellMultiplier += (1 - sellMultiplier) * sellMultiplier * ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * MaxTickerEquityPerc(ticker, lastBarMetric))).DoubleReduce(1.5, 0.5);
 
                         if ((currentPrice / ticker.EPS) < (_tickerService.PERatioCutoff * 2)) //if pe is to high, just try to sell it any given chance
                         {
