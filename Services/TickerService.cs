@@ -289,7 +289,7 @@ namespace NumbersGoUp.Services
                                 ticker.LastCalculatedMillis = nowMillis;
                                 stocksContext.Tickers.Update(ticker);
                             }
-                            else if(bankTickers.Length < 150 && ticker.PerformanceVector > 25) //keep some tickers if the bank size is to small
+                            else if(bankTickers.Length < 100 && ticker.PerformanceVector > 50) //keep some tickers if the bank size is to small
                             {
                                 ticker.LastCalculated = now.UtcDateTime;
                                 ticker.LastCalculatedMillis = nowMillis;
