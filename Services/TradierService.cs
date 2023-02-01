@@ -183,7 +183,7 @@ namespace NumbersGoUp.Services
                 _logger.LogWarning($"Attempted to buy {symbol} with qty < 1");
                 return null;
             }
-            var postOrder = TradierPostOrder.Buy(symbol, roundedQty, limit);
+            var postOrder = TradierPostOrder.Buy(symbol.Replace('.','/'), roundedQty, limit);
             try
             {
                 var response = await PostOrder(OrdersPath, postOrder);
@@ -219,7 +219,7 @@ namespace NumbersGoUp.Services
                 _logger.LogWarning("Attempted to sell with qty < 1");
                 return null;
             }
-            var postOrder = TradierPostOrder.Sell(symbol, roundedQty, limit);
+            var postOrder = TradierPostOrder.Sell(symbol.Replace('.', '/'), roundedQty, limit);
             try
             {
                 var response = await PostOrder(OrdersPath, postOrder);
@@ -280,7 +280,7 @@ namespace NumbersGoUp.Services
         {
             await Ready();
             await _rateLimiter.LimitTradierRate();
-            var jsonBars = await GetResponse<JsonModels.TradierHistoryBars>(string.Format(HistoryBarPath, symbol, from.ToString("yyyy-MM-dd"), _lastMarketDay.TradingTimeClose.ToString("yyyy-MM-dd")));
+            var jsonBars = await GetResponse<JsonModels.TradierHistoryBars>(string.Format(HistoryBarPath, symbol.Replace('.', '/'), from.ToString("yyyy-MM-dd"), _lastMarketDay.TradingTimeClose.ToString("yyyy-MM-dd")));
             return jsonBars?.History?.Quotes?.Where(b => b.Close > 0 && b.Open > 0 && b.Low > 0 && b.High > 0).Select(b => new HistoryBar
             {
                 Symbol = symbol,
@@ -312,7 +312,7 @@ namespace NumbersGoUp.Services
                 FilledAt = o.TransactionDate,
                 FilledQuantity = o.Quantity,
                 OrderSide = o.OrderSide == JsonModels.TradierOrder.BUY_ORDERSIDE ? OrderSide.Buy : (o.OrderSide == JsonModels.TradierOrder.SELL_ORDERSIDE ? OrderSide.Sell : throw new Exception("Unknown order side")),
-                Symbol = o.Symbol,
+                Symbol = o.Symbol.Replace('/','.'),
                 OrderStatus = OrderStatus.FILLED
             }).ToArray() ?? Enumerable.Empty<BrokerOrder>();
         }
@@ -330,7 +330,7 @@ namespace NumbersGoUp.Services
                     BrokerOrderId = order.Id.ToString(),
                     ClientOrderId = order.Tag,
                     OrderSide = order.OrderSide == JsonModels.TradierOrder.BUY_ORDERSIDE ? OrderSide.Buy : (order.OrderSide == JsonModels.TradierOrder.SELL_ORDERSIDE ? OrderSide.Sell : throw new Exception("Unknown order side")),
-                    Symbol = order.Symbol
+                    Symbol = order.Symbol.Replace('/', '.')
                 };
                 if (order.OrderStatus == JsonModels.TradierOrder.FILLED_ORDERSTATUS || order.OrderStatus == JsonModels.TradierOrder.PARTIALLYFILLED_ORDERSTATUS)
                 {
@@ -355,7 +355,7 @@ namespace NumbersGoUp.Services
                 BrokerOrderId = o.Id.ToString(),
                 ClientOrderId = o.Tag,
                 OrderSide = o.OrderSide == JsonModels.TradierOrder.BUY_ORDERSIDE ? OrderSide.Buy : (o.OrderSide == JsonModels.TradierOrder.SELL_ORDERSIDE ? OrderSide.Sell : throw new Exception("Unknown order side")),
-                Symbol = o.Symbol
+                Symbol = o.Symbol.Replace('/', '.')
             }).ToArray() ?? Enumerable.Empty<BrokerOrder>();
         }
 
@@ -370,7 +370,7 @@ namespace NumbersGoUp.Services
         {
             await Ready();
             await _rateLimiter.LimitTradierRate();
-            var response = await GetResponse<JsonModels.TradierQuotesWrapper>(string.Format(QuotesPath, symbol));
+            var response = await GetResponse<JsonModels.TradierQuotesWrapper>(string.Format(QuotesPath, symbol.Replace('.', '/')));
             var quote = response?.TradierQuotes?.Quotes?.FirstOrDefault();
             if(quote == null)
             {
@@ -380,7 +380,7 @@ namespace NumbersGoUp.Services
             {
                 Price = quote.Price,
                 Size = quote.Size,
-                Symbol = quote.Symbol,
+                Symbol = symbol,
                 TradeTime = quote.TradeTime,
                 TradeTimeMilliseconds = quote.TradeTimeMilliseconds
             };
@@ -389,7 +389,7 @@ namespace NumbersGoUp.Services
         {
             await Ready();
             await _rateLimiter.LimitTradierRate();
-            var response = await GetResponse<JsonModels.TradierQuotesWrapper>(string.Format(QuotesPath, string.Join(',', symbols)));
+            var response = await GetResponse<JsonModels.TradierQuotesWrapper>(string.Format(QuotesPath, string.Join(',', symbols.Select(s => s.Replace('.', '/')))));
             var quotes = response?.TradierQuotes?.Quotes;
             if (quotes == null)
             {
@@ -399,7 +399,7 @@ namespace NumbersGoUp.Services
             {
                 Price = quote.Price,
                 Size = quote.Size,
-                Symbol = quote.Symbol,
+                Symbol = quote.Symbol.Replace('/', '.'),
                 TradeTime = quote.TradeTime,
                 TradeTimeMilliseconds = quote.TradeTimeMilliseconds
             }).ToArray();
@@ -462,8 +462,11 @@ namespace NumbersGoUp.Services
             if(jmodelPositions != null && jmodelPositions.Length > 0)
             {
                 var positions = new List<Position>();
-                var symbols = jmodelPositions.Select(p => p.Symbol).ToArray();
-                var quotes = await GetLastTrades(symbols);
+                foreach(var jposition in jmodelPositions)
+                {
+                    jposition.Symbol = jposition.Symbol.Replace('/', '.');
+                }
+                var quotes = await GetLastTrades(jmodelPositions.Select(p => p.Symbol).ToArray());
                 foreach(var jposition in jmodelPositions)
                 {
                     var quote = quotes.FirstOrDefault(q => q.Symbol == jposition.Symbol);
@@ -494,10 +497,11 @@ namespace NumbersGoUp.Services
             await _rateLimiter.LimitTradierRate();
             try
             {
-                var securities = (await GetResponse<JsonModels.TradierSecuritiesWrapper>(string.Format(LookupPath, symbol)))?.TradierSecurities?.Securities;
+                var tradierSymbol = symbol.Replace('.', '/');
+                var securities = (await GetResponse<JsonModels.TradierSecuritiesWrapper>(string.Format(LookupPath, tradierSymbol)))?.TradierSecurities?.Securities;
                 if (securities != null && securities.Any())
                 {
-                    var security = securities.FirstOrDefault(s => s.Symbol == symbol);
+                    var security = securities.FirstOrDefault(s => s.Symbol == tradierSymbol);
                     if (security != null)
                     {
                         return new TickerInfo
@@ -529,7 +533,7 @@ namespace NumbersGoUp.Services
                 var jsonStr = await GetFinancialsTest(symbol);
                 var json = JsonConvert.DeserializeObject<JToken>(jsonStr);
 #else
-                var json = await GetResponse<JToken>(string.Format(FinancialsPath, symbol));
+                var json = await GetResponse<JToken>(string.Format(FinancialsPath, symbol.Replace('.', '/')));
 #endif
                 return new Financials
                 {
@@ -553,7 +557,7 @@ namespace NumbersGoUp.Services
                 client.BaseAddress = new Uri($"https://{PRODUCTION_URL}");
                 client.DefaultRequestHeaders.Add("Accept", "application/json");
                 client.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
-                using var response = await client.GetAsync(string.Format(FinancialsPath, symbol), _appCancellation.Token);
+                using var response = await client.GetAsync(string.Format(FinancialsPath, symbol.Replace('.', '/')), _appCancellation.Token);
                 response.EnsureSuccessStatusCode();
                 var json = await response.Content.ReadAsStringAsync(_appCancellation.Token);
                 return json;
