@@ -16,7 +16,6 @@ namespace NumbersGoUp.Services
         public const double MULTIPLIER_SELL_THRESHOLD = 0.4;
         public const double MAX_COOLDOWN_DAYS = 10;
         public const bool USE_MARGIN = false;
-        public const bool FRACTIONAL = false;
 
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<TraderService> _logger;
@@ -165,7 +164,8 @@ namespace NumbersGoUp.Services
             //}
             foreach (var buy in filteredBuys)
             {
-                var limit = buy.BarMetric.HistoryBar.ClosePrice;
+                var limitCoeff = 1 - buy.Multiplier.Curve3(3);
+                var limit = (limitCoeff * Math.Min(buy.BarMetric.HistoryBar.ClosePrice, buy.BarMetric.HistoryBar.Price())) + ((1 - limitCoeff) * buy.BarMetric.HistoryBar.ClosePrice);
                 await AddOrder(OrderSide.Buy, buy.BarMetric.Symbol, limit, buy.Multiplier);
                 _logger.LogInformation($"Added buy order for {buy.BarMetric.Symbol} with multiplier {buy.Multiplier} at price {limit:C2}");
             }
@@ -255,7 +255,8 @@ namespace NumbersGoUp.Services
             //}
             foreach (var sell in filteredSells)
             {
-                var limit = sell.BarMetric.HistoryBar.ClosePrice;
+                var limitCoeff = 1 - sell.Multiplier.Curve3(3);
+                var limit = (limitCoeff * Math.Max(sell.BarMetric.HistoryBar.ClosePrice, sell.BarMetric.HistoryBar.Price())) + ((1 - limitCoeff) * sell.BarMetric.HistoryBar.ClosePrice);
                 await AddOrder(OrderSide.Sell, sell.BarMetric.Symbol, limit, sell.Multiplier);
                 _logger.LogInformation($"Added sell order for {sell.BarMetric.Symbol} with multiplier {sell.Multiplier} at price {limit:C2}");
             }
@@ -417,35 +418,15 @@ namespace NumbersGoUp.Services
                 }
                 var lastBarMetric = await _dataService.GetLastMetric(order.Symbol);
                 var currentPrice = position.AssetLastPrice.HasValue ? position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(order.Symbol)).Price;
-                if (FRACTIONAL && currentPrice < order.TargetPrice) { continue; }
                 var sellAmt = equity * MAX_SECURITY_SELL * order.Multiplier;
-                var qty = FRACTIONAL ? sellAmt / currentPrice : Math.Floor(sellAmt / order.TargetPrice);
+                var qty = Math.Floor(sellAmt / order.TargetPrice);
                 var currentQty = position.Quantity;
                 if (qty > currentQty)
                 {
                     qty = currentQty;
                 }
-                if (FRACTIONAL)
-                {
-                    if ((qty * currentPrice) < 5) //only sell if sell value is greater than or equal to $5
-                    {
-                        qty = 5 / currentPrice;
-                    }
-                    if (((currentQty - qty) * currentPrice) < 5) //check to make sure the remaining value is greater than $5
-                    {
-                        qty = currentQty;
-                    }
-                }
                 _logger.LogInformation($"Selling {qty} shares of {order.Symbol} with multiplier {order.Multiplier}");
-                BrokerOrder brokerOrder = null;
-                if (FRACTIONAL)
-                {
-                    brokerOrder = qty == currentQty ? await _brokerService.ClosePositionAtMarket(order.Symbol) : await _brokerService.Sell(order.Symbol, qty);
-                }
-                else
-                {
-                    brokerOrder = await _brokerService.Sell(order.Symbol, qty, order.TargetPrice);
-                }
+                BrokerOrder brokerOrder = await _brokerService.Sell(order.Symbol, qty, order.TargetPrice);
                 if (brokerOrder != null)
                 {
                     order.AppliedAmt += (qty * order.TargetPrice);
@@ -477,42 +458,27 @@ namespace NumbersGoUp.Services
                 var position = positions.FirstOrDefault(p => p.Symbol == order.Symbol);
                 var buy = equity * MAX_SECURITY_BUY * order.Multiplier;
                 var currentPrice = position?.AssetLastPrice != null ? position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(order.Symbol)).Price;
-                if (FRACTIONAL && currentPrice > order.TargetPrice) { continue; }
                 if (remainingBuyAmount < buy) { buy = remainingBuyAmount; }
-                if (buy > 5 || !FRACTIONAL)
+                var qty = Math.Floor(buy / order.TargetPrice);
+                buy = qty * order.TargetPrice;
+                _logger.LogInformation($"Buying {qty} shares of {order.Symbol} with multiplier {order.Multiplier}");
+                var brokerOrder = await _brokerService.Buy(order.Symbol, qty, order.TargetPrice);
+                if (brokerOrder != null)
                 {
-                    var qty = 0.0;
-                    BrokerOrder brokerOrder;
-                    if (FRACTIONAL)
+                    //just approximate here. it's probably fine
+                    remainingBuyAmount -= buy;
+                    _logger.LogInformation($"Submitted buy order for {order.Symbol} at price {order.TargetPrice:C2}. Remaining amount for buys {remainingBuyAmount:C2}");
+                    order.AppliedAmt += buy;
+                    order.BrokerOrderId = brokerOrder.BrokerOrderId;
+                    using (var stocksContext = _contextFactory.CreateDbContext())
                     {
-                        qty = buy / currentPrice;
-                        _logger.LogInformation($"Buying {qty} shares of {order.Symbol} with multiplier {order.Multiplier}");
-                        brokerOrder = await _brokerService.Buy(order.Symbol, qty);
+                        stocksContext.Orders.Update(order);
+                        await stocksContext.SaveChangesAsync(_appCancellation.Token);
                     }
-                    else
-                    {
-                        qty = Math.Floor(buy / order.TargetPrice);
-                        buy = qty * order.TargetPrice;
-                        _logger.LogInformation($"Buying {qty} shares of {order.Symbol} with multiplier {order.Multiplier}");
-                        brokerOrder = await _brokerService.Buy(order.Symbol, qty, order.TargetPrice);
-                    }
-                    if (brokerOrder != null)
-                    {
-                        //just approximate here. it's probably fine
-                        remainingBuyAmount -= buy;
-                        _logger.LogInformation($"Submitted buy order for {order.Symbol} at price {order.TargetPrice:C2}. Remaining amount for buys {remainingBuyAmount:C2}");
-                        order.AppliedAmt += buy;
-                        order.BrokerOrderId = brokerOrder.BrokerOrderId;
-                        using (var stocksContext = _contextFactory.CreateDbContext())
-                        {
-                            stocksContext.Orders.Update(order);
-                            await stocksContext.SaveChangesAsync(_appCancellation.Token);
-                        }
-                    }
-                    else if(qty > 0)
-                    {
-                        _logger.LogError($"Failed to execute buy order for {order.Symbol}");
-                    }
+                }
+                else if (qty > 0)
+                {
+                    _logger.LogError($"Failed to execute buy order for {order.Symbol}");
                 }
             }
         }
