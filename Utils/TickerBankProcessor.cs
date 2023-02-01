@@ -81,7 +81,7 @@ namespace NumbersGoUp.Utils
                                     if (headers[i] == "Net Income (FY)") { incomeIndex = i; }
                                     if (headers[i] == "Price") { priceIndex = i; }
                                     if (headers[i] == "EPS Diluted (MRQ)") { currentEPSIndex = i; }
-                                    if (headers[i] == "EPS Forecast (FQ)") { futureEPSIndex = i; }
+                                    if (headers[i] == "EPS Forecast (MRQ)") { futureEPSIndex = i; }
                                 }
                             }
                             else
@@ -165,13 +165,13 @@ namespace NumbersGoUp.Utils
                                     if(eps > 0 && currentEPSIndex.HasValue && double.TryParse(csv[currentEPSIndex.Value], out var currentEPS) &&
                                         futureEPSIndex.HasValue && double.TryParse(csv[futureEPSIndex.Value], out var futureEPS))
                                     {
-                                        var avg = (futureEPS + currentEPS) / 2;
-                                        var changePerc = currentEPS > 0 ? ((avg - currentEPS) / currentEPS) : ((0.01 - eps) / eps);
-                                        ticker.EPS = (changePerc * eps) + eps;
+                                        var changePerc = currentEPS > 0 ? (futureEPS / currentEPS) : 0;
+                                        ticker.EPS = Math.Min(changePerc, 1.2) * eps;
                                     }
                                     else
                                     {
-                                        ticker.EPS = eps > 0 ? eps : 0.01;
+                                        _logger.LogWarning($"Current and/or future eps not found. Using default eps for {ticker.Symbol}");
+                                        ticker.EPS = eps;
                                     }
                                 }
                                 else
