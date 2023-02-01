@@ -165,7 +165,7 @@ namespace NumbersGoUp.Utils
                                     if(eps > 0 && currentEPSIndex.HasValue && double.TryParse(csv[currentEPSIndex.Value], out var currentEPS) &&
                                         futureEPSIndex.HasValue && double.TryParse(csv[futureEPSIndex.Value], out var futureEPS))
                                     {
-                                        var changePerc = currentEPS > 0 ? (futureEPS / currentEPS) : 0;
+                                        var changePerc = currentEPS > 0 ? ((futureEPS * 0.75 / currentEPS) + 0.25): 0;
                                         ticker.EPS = Math.Min(changePerc, 1.2) * eps;
                                     }
                                     else

@@ -111,7 +111,7 @@ namespace NumbersGoUp.Services
                         double peRatio = t.PERatio;
                         try
                         {
-                            if(t.EPS > 0.01)
+                            if(t.EPS > 0)
                             {
                                 var price = (await _brokerService.GetLastTrade(t.Symbol)).Price;
                                 peRatio = price / t.EPS;
@@ -122,7 +122,7 @@ namespace NumbersGoUp.Services
                             _logger.LogError(e, $"Error retrieving latest price info for bank ticker {t.Symbol}");
                         }
                         if(t.DebtEquityRatio > 0 && t.DebtEquityRatio < 1.5 && (t.CurrentRatio > (t.DebtEquityRatio * 1.1) || t.DebtEquityRatio < 1) && 
-                            t.Earnings > 0 && peRatio < PERatioCutoff && peRatio > 1 && t.DividendYield > 0.005 && t.PriceChangeAvg > 0 && t.EPS > 0.01)
+                            t.Earnings > 0 && peRatio < PERatioCutoff && peRatio > 1 && t.DividendYield > 0.005 && t.PriceChangeAvg > 0 && t.EPS > 0)
                         {
                             t.PERatio = peRatio;
                             tickers.Add(t);

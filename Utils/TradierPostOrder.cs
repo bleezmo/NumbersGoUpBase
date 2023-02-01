@@ -42,8 +42,8 @@ namespace NumbersGoUp.Utils
         public int Quantity { get => int.Parse(_orderParams[QUANTITY]); set => _orderParams[QUANTITY] = value.ToString(); }
         public string OrderType { get => _orderParams[ORDERTYPE]; set => _orderParams[ORDERTYPE] = value; }
         public string Duration { get => _orderParams[DURATION]; set => _orderParams[DURATION] = value; }
-        public double Price { get => Convert.ToDouble(_orderParams[PRICE]); set => _orderParams[PRICE] = value.ToString(); }
-        public double Stop { get => Convert.ToDouble(_orderParams[STOP]); set => _orderParams[STOP] = value.ToString(); }
+        public double Price { get => Convert.ToDouble(_orderParams[PRICE]); set => _orderParams[PRICE] = Math.Round(value, 2, MidpointRounding.AwayFromZero).ToString("0.00"); }
+        public double Stop { get => Convert.ToDouble(_orderParams[STOP]); set => _orderParams[STOP] = Math.Round(value, 2, MidpointRounding.AwayFromZero).ToString("0.00"); }
         public string Tag { get => _orderParams[TAG]; set => _orderParams[TAG] = value; }
 
         public override string ToString() => string.Join('&', _orderParams.Select(kv => $"{kv.Key}={kv.Value}"));
