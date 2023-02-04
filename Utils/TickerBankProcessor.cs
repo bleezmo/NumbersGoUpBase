@@ -55,8 +55,8 @@ namespace NumbersGoUp.Utils
                      * Ticker,Description,Volume,Market Capitalization,Price to Earnings Ratio (TTM),Sector,Current Ratio (MRQ),
                      * Debt to Equity Ratio (MRQ),Dividend Yield Forward,EBITDA (TTM),Enterprise Value/EBITDA (TTM),EPS Diluted (TTM)
                      */
-                    int? tickerIndex = null, sectorIndex = null, marketCapIndex = null, peRatioIndex = null, currentRatioIndex = null, debtEquityRatioIndex = null,
-                         dividendIndex = null, ebitdaIndex = null, evebitdaIndex = null, epsIndex = null, incomeIndex = null, priceIndex = null, currentEPSIndex = null, futureEPSIndex = null;
+                    int? tickerIndex = null, sectorIndex = null, marketCapIndex = null, peRatioIndex = null, currentRatioIndex = null, debtEquityRatioIndex = null, dividendIndex = null, 
+                         ebitdaIndex = null, evebitdaIndex = null, epsIndex = null, priceIndex = null, currentEPSIndex = null, futureEPSIndex = null, sharesIndex = null;
                     using (var csv = new CsvReader(sr, CultureInfo.InvariantCulture))
                     {
                         string[] headers = null;
@@ -78,10 +78,10 @@ namespace NumbersGoUp.Utils
                                     if (headers[i] == "EBITDA (TTM)") { ebitdaIndex = i; }
                                     if (headers[i] == "Enterprise Value/EBITDA (TTM)") { evebitdaIndex = i; }
                                     if (headers[i] == "EPS Diluted (TTM)") { epsIndex = i; }
-                                    if (headers[i] == "Net Income (FY)") { incomeIndex = i; }
                                     if (headers[i] == "Price") { priceIndex = i; }
                                     if (headers[i] == "EPS Diluted (MRQ)") { currentEPSIndex = i; }
                                     if (headers[i] == "EPS Forecast (MRQ)") { futureEPSIndex = i; }
+                                    if (headers[i] == "Total Shares Outstanding") { sharesIndex = i; }
                                 }
                             }
                             else
@@ -144,14 +144,6 @@ namespace NumbersGoUp.Utils
                                 {
                                     _logger.LogWarning($"Dividend not found for {ticker.Symbol}");
                                 }
-                                if (incomeIndex.HasValue && double.TryParse(csv[incomeIndex.Value], out var income))
-                                {
-                                    ticker.Earnings = income;
-                                }
-                                else
-                                {
-                                    _logger.LogWarning($"Income not found for {ticker.Symbol}");
-                                }
                                 if (evebitdaIndex.HasValue && double.TryParse(csv[evebitdaIndex.Value], out var evebitda))
                                 {
                                     ticker.EVEBITDA = evebitda;
@@ -172,6 +164,14 @@ namespace NumbersGoUp.Utils
                                     {
                                         _logger.LogWarning($"Current and/or future eps not found. Using default eps for {ticker.Symbol}");
                                         ticker.EPS = eps;
+                                    }
+                                    if(sharesIndex.HasValue && double.TryParse(csv[sharesIndex.Value], out var shares))
+                                    {
+                                        ticker.Earnings = ticker.EPS * shares;
+                                    }
+                                    else
+                                    {
+                                        _logger.LogWarning($"No shares outstanding for {ticker.Symbol} to calculate earnings.");
                                     }
                                 }
                                 else

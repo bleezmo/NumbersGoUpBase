@@ -56,6 +56,7 @@ namespace NumbersGoUp.Services
             {
                 var tickers = await _tickerProcessor.DownloadTickers(_runtimeSettings.ForceDataCollection);
                 if (tickers.Count == 0) { return; }
+                tickers = tickers.Where(t => BasicCutoff(t)).ToList();
                 _logger.LogInformation($"Loading {tickers.Count} tickers into ticker bank");
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
@@ -94,6 +95,9 @@ namespace NumbersGoUp.Services
                 _logger.LogError(e, "Error occurred when loading ticker bank data");
             }
         }
+        private bool BasicCutoff(BankTicker ticker) => ticker.DebtEquityRatio > 0 && ticker.DebtEquityRatio < 1.5 && 
+                                                       (ticker.CurrentRatio > (ticker.DebtEquityRatio * 1.1) || ticker.DebtEquityRatio < 0.9) && 
+                                                       ticker.Earnings > 0 && ticker.DividendYield > 0.005 && ticker.EPS > 0;
         public async Task CalculatePerformance()
         {
             var now = DateTime.UtcNow;
@@ -121,8 +125,7 @@ namespace NumbersGoUp.Services
                         {
                             _logger.LogError(e, $"Error retrieving latest price info for bank ticker {t.Symbol}");
                         }
-                        if(t.DebtEquityRatio > 0 && t.DebtEquityRatio < 1.5 && (t.CurrentRatio > (t.DebtEquityRatio * 1.1) || t.DebtEquityRatio < 1) && 
-                            t.Earnings > 0 && peRatio < PERatioCutoff && peRatio > 1 && t.DividendYield > 0.005 && t.PriceChangeAvg > 0 && t.EPS > 0)
+                        if(BasicCutoff(t) && peRatio < PERatioCutoff && peRatio > 1 && t.PriceChangeAvg > 0)
                         {
                             t.PERatio = peRatio;
                             tickers.Add(t);
