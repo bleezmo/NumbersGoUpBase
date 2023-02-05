@@ -266,7 +266,7 @@ namespace NumbersGoUp.Services
             var cutoff = new DateTimeOffset(lookback.Year, lookback.Month, lookback.Day, 0, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds();
             var currentBarMetric = await stocksContext.BarMetrics.Where(t => t.Symbol == symbol).OrderByDescending(t => t.BarDayMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
             cutoff = currentBarMetric != null ? currentBarMetric.BarDayMilliseconds - (_barLength * 2 * MILLIS_PER_DAY) : cutoff; //give buffer to cutoff
-            var barsAll = await stocksContext.HistoryBars.Where(t => t.Symbol == symbol && t.BarDayMilliseconds > cutoff).Include(b => b.BarMetric).OrderBy(t => t.BarDayMilliseconds).ToArrayAsync();
+            var barsAll = await stocksContext.HistoryBars.Where(t => t.Symbol == symbol && t.BarDayMilliseconds > cutoff).Include(b => b.BarMetric).OrderBy(t => t.BarDayMilliseconds).ToArrayAsync(_appCancellation.Token);
             for (var skip = 0; skip + _barLength <= barsAll.Length; skip++)
             {
                 var bars = barsAll.Skip(skip).Take(_barLength).Reverse().ToArray();
@@ -301,6 +301,60 @@ namespace NumbersGoUp.Services
             }
             await stocksContext.SaveChangesAsync(_appCancellation.Token);
         }
+        //private async Task GenerateSectorMetrics(IEnumerable<Ticker> allTickers)
+        //{
+        //    using var stocksContext = _contextFactory.CreateDbContext();
+        //    var now = DateTime.Now.Date;
+        //    var sectorDict = new Dictionary<string, List<Ticker>>();
+        //    foreach(var ticker in allTickers)
+        //    {
+        //        if(sectorDict.TryGetValue(ticker.Sector, out var sectorTickers))
+        //        {
+        //            sectorTickers.Add(ticker);
+        //        }
+        //        else
+        //        {
+        //            sectorDict.Add(ticker.Sector, new List<Ticker>(new[] { ticker }));
+        //        }
+        //    }
+        //    foreach(var (sector, tickers) in sectorDict.Select(kv => (kv.Key, kv.Value)))
+        //    {
+        //        if(tickers.Count > 2)
+        //        {
+        //            var symbols = tickers.Select(t => t.Symbol).ToArray();
+        //            var lookback = DateTime.Now.AddYears(0 - LOOKBACK_YEARS);
+        //            var cutoff = new DateTime(lookback.Year, lookback.Month, lookback.Day, 0, 0, 0);
+        //            var currentSectorMetric = await stocksContext.SectorMetrics.Where(t => t.Sector == sector).OrderByDescending(t => t.BarDayMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
+        //            cutoff = currentSectorMetric?.BarDay ?? cutoff; //give buffer to cutoff
+        //            var cutoffMillis = new DateTimeOffset(cutoff).ToUnixTimeMilliseconds();
+        //            var barsAll = await stocksContext.BarMetrics.Where(t => symbols.Contains(t.Symbol) && t.BarDayMilliseconds > cutoffMillis).OrderBy(t => t.BarDayMilliseconds).ToArrayAsync(_appCancellation.Token);
+        //            for (var dayIndex = cutoff; dayIndex.CompareTo(now) < 0; dayIndex = dayIndex.AddDays(1))
+        //            {
+        //                var bars = barsAll.Where(b => b.BarDay.Date.CompareTo(dayIndex) == 0).ToArray();
+        //                if (bars.Length < 2)
+        //                {
+        //                    continue;
+        //                }
+        //                var sectorMetric = new SectorMetric
+        //                {
+        //                    Sector = sector,
+        //                    BarDay = bars[0].BarDay,
+        //                    BarDayMilliseconds = bars[0].BarDayMilliseconds,
+        //                };
+        //                sectorMetric.AlmaSMA1 = bars.Average(b => b.AlmaSMA1);
+        //                sectorMetric.AlmaSMA2 = bars.Average(b => b.AlmaSMA2);
+        //                sectorMetric.AlmaSMA3 = bars.Average(b => b.AlmaSMA3);
+        //                sectorMetric.PriceSMA1 = bars.Average(b => b.PriceSMA1);
+        //                sectorMetric.PriceSMA2 = bars.Average(b => b.PriceSMA2);
+        //                sectorMetric.PriceSMA3 = bars.Average(b => b.PriceSMA3);
+        //                sectorMetric.SMASMA = bars.Average(b => b.SMASMA);
+        //                sectorMetric.ProfitLossPerc = bars.Average(b => b.ProfitLossPerc);
+        //                stocksContext.SectorMetrics.Add(sectorMetric);
+        //            }
+        //            await stocksContext.SaveChangesAsync(_appCancellation.Token);
+        //        }
+        //    }
+        //}
         private static double DefaultBarFn(HistoryBar bar) => bar.Price(); 
         private static (double sma, double smaUpper, double smaLower) BollingerBands(HistoryBar[] bars, Func<HistoryBar,double> barFn)
         {

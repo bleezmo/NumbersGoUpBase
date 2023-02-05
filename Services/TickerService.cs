@@ -285,6 +285,7 @@ namespace NumbersGoUp.Services
                             var bankTicker = bankTickers.FirstOrDefault(t => ticker.Symbol == t.Symbol);
                             if (bankTicker != null)
                             {
+                                ticker.Sector = bankTicker.Sector;
                                 ticker.PERatio = bankTicker.PERatio;
                                 ticker.EPS = bankTicker.EPS;
                                 ticker.EBIT = bankTicker.Earnings;

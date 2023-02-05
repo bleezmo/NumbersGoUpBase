@@ -198,6 +198,7 @@ namespace NumbersGoUp.Utils
         
         public void UpdateBankTicker(BankTicker dest, BankTicker src)
         {
+            dest.Sector = src.Sector;
             dest.MarketCap = src.MarketCap;
             dest.CurrentRatio = src.CurrentRatio;
             dest.DebtEquityRatio = src.DebtEquityRatio;
