@@ -141,9 +141,9 @@ namespace NumbersGoUp.Services
                                             (barMetrics.CalculateAvgVelocity(b => b.AlmaSMA1).DoubleReduce(ticker.AlmaVelStDev * 0.75, -ticker.AlmaVelStDev) *
                                                 (1 - barMetrics[0].AlmaSMA1.DoubleReduce(ticker.AlmaSma1Avg + (ticker.AlmaSma1StDev * 1.5), ticker.AlmaSma1Avg - (ticker.AlmaSma1StDev * 1.5))).Curve4(2) * 0.25) +
                                             (barMetrics.CalculateAvgVelocity(b => b.AlmaSMA2).DoubleReduce(ticker.AlmaVelStDev * 0.75, -ticker.AlmaVelStDev) *
-                                                (1 - barMetrics[0].AlmaSMA2.DoubleReduce(ticker.AlmaSma2Avg + (ticker.AlmaSma2StDev * 1.5), ticker.AlmaSma2Avg - (ticker.AlmaSma2StDev * 1.5))).Curve4(2) * 0.25) +
+                                                (1 - barMetrics[0].AlmaSMA2.DoubleReduce(ticker.AlmaSma2Avg + ticker.AlmaSma2StDev, ticker.AlmaSma2Avg - (ticker.AlmaSma2StDev * 1.5))).Curve4(2) * 0.25) +
                                             (barMetrics.CalculateAvgVelocity(b => b.AlmaSMA3).DoubleReduce(ticker.AlmaVelStDev * 0.75, -ticker.AlmaVelStDev) *
-                                                (1 - barMetrics[0].AlmaSMA3.DoubleReduce(ticker.AlmaSma3Avg + (ticker.AlmaSma3StDev * 1.5), ticker.AlmaSma3Avg - (ticker.AlmaSma3StDev * 1.5))).Curve4(2) * 0.25) +
+                                                (1 - barMetrics[0].AlmaSMA3.DoubleReduce(ticker.AlmaSma3Avg, ticker.AlmaSma3Avg - (ticker.AlmaSma3StDev * 1.5))).Curve4(2) * 0.25) +
                                             ((1 - barMetrics[0].ProfitLossPerc.ZeroReduceFast(ticker.ProfitLossAvg + ticker.ProfitLossStDev, ticker.ProfitLossAvg - ticker.ProfitLossStDev)) * 0.25)
                                           ) * barMetrics.CalculateAvgVelocity(b => b.SMASMA).DoubleReduce(0, -ticker.SMAVelStDev);
 
