@@ -214,16 +214,19 @@ namespace NumbersGoUp.Services
                         var lastBarMetric = await _dataService.GetLastMetric(position.Symbol);
                         var currentPrice = position.AssetLastPrice.HasValue ? position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(position.Symbol)).Price;
                         var percProfit = position.UnrealizedProfitLossPercent.HasValue ? position.UnrealizedProfitLossPercent.Value * 100 : ((currentPrice - position.CostBasis) * 100 / position.CostBasis);
-                        if (percProfit < -5 && lastBarMetric.BarDay.Month == 12 && lastBarMetric.BarDay.Day > 10) //tax loss harvest
+
+                        sellMultiplier += (1 - sellMultiplier) * sellMultiplier * ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * MaxTickerEquityPerc(ticker, lastBarMetric))).DoubleReduce(1.5, 0.5);
+
+
+                        if (percProfit < -1 && lastBarMetric.BarDay.Month == 12 && lastBarMetric.BarDay.Day > 10) //tax loss harvest
                         {
                             sellMultiplier += (1 - sellMultiplier) * sellMultiplier;
                         }
-                        sellMultiplier += (1 - sellMultiplier) * sellMultiplier * ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * MaxTickerEquityPerc(ticker, lastBarMetric))).DoubleReduce(1.5, 0.5);
-
-                        if ((currentPrice / ticker.EPS) < (_tickerService.PERatioCutoff * 2)) //if pe is to high, just try to sell it any given chance
+                        else
                         {
-                            sellMultiplier = FinalSellMultiplier(sellMultiplier);
+                            sellMultiplier *= (0.5 * percProfit.DoubleReduce(ticker.ProfitLossAvg + ticker.ProfitLossStDev, ticker.ProfitLossAvg - (ticker.ProfitLossStDev * 3)).VTailCurve()) + (0.5 * (1 - _cashEquityRatio.DoubleReduce(0.3, 0)));
                         }
+                        sellMultiplier = FinalSellMultiplier(sellMultiplier);
                         if (sellMultiplier > MULTIPLIER_SELL_THRESHOLD)
                         {
                             sells.Add(new BuySellState

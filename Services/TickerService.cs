@@ -113,7 +113,7 @@ namespace NumbersGoUp.Services
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
                     var nowMillis = now.ToUnixTimeMilliseconds();
-                    var cutoff = now.AddDays(-15).ToUnixTimeMilliseconds();
+                    var cutoff = now.AddDays(-20).ToUnixTimeMilliseconds();
                     var lookback = now.AddYears(-DataService.LOOKBACK_YEARS).ToUnixTimeMilliseconds();
                     var tickersToUpdate = _runtimeSettings.ForceDataCollection ? await stocksContext.Tickers.ToListAsync(_appCancellation.Token) : await stocksContext.Tickers.Where(t => t.LastCalculatedPerformanceMillis == null || t.LastCalculatedPerformanceMillis < cutoff).ToListAsync(_appCancellation.Token);
                     if (tickersToUpdate.Any())
@@ -222,7 +222,7 @@ namespace NumbersGoUp.Services
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
                     var nowMillis = now.ToUnixTimeMilliseconds();
-                    var cutoff = now.AddDays(-15).ToUnixTimeMilliseconds();
+                    var cutoff = now.AddDays(-20).ToUnixTimeMilliseconds();
                     var lookback = now.AddYears(-DataService.LOOKBACK_YEARS).ToUnixTimeMilliseconds();
                     var tickersToUpdate = _runtimeSettings.ForceDataCollection ? await stocksContext.Tickers.ToListAsync(_appCancellation.Token) : await stocksContext.Tickers.Where(t => t.LastCalculatedAvgsMillis == null || t.LastCalculatedAvgsMillis < cutoff).ToListAsync(_appCancellation.Token);
                     var updatedTickers = new List<Ticker>();
