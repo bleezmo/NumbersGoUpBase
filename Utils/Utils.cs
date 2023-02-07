@@ -60,6 +60,32 @@ namespace NumbersGoUp.Utils
         public static double WCurve(this double x) => (-0.5 * Math.Cos(4 * Math.PI * x)) + 0.5;
         public static double WExpCurve(this double x) => ((-0.5 * Math.Cos(4 * Math.PI * x)) + 0.5)*x;
         public static double VTailCurve(this double x) => (-0.5 * Math.Cos(3 * Math.PI * x)) + 0.5;
+        public static double ApplyAlma<T>(this T[] objs, Func<T, double> objFn, double[] gaussianWeights = null)
+        {
+            if(gaussianWeights == null)
+            {
+                gaussianWeights = GaussianWeights(objs.Length);
+            }
+            double WtdSum = 0, WtdNorm = 0;
+            for (int i = 0; i < objs.Length; i++)
+            {
+                WtdSum = WtdSum + (gaussianWeights[i] * objFn(objs[i]));
+                WtdNorm = WtdNorm + gaussianWeights[i];
+            }
+            return WtdSum / WtdNorm;
+        }
+        public static double[] GaussianWeights(int size)
+        {
+            double sigma = 6;
+            double offset = 0.85;
+            var weights = new double[size];
+            for (int i = 0; i < size; i++)
+            {
+                double eq = -1 * (Math.Pow((i + 1) - offset, 2) / Math.Pow(sigma, 2));
+                weights[i] = Math.Exp(eq);
+            }
+            return weights;
+        }
         public static double CalculateVelocity<T>(this IEnumerable<T> barsDesc, Func<T, double> angleValueFn)
         {
             if (barsDesc.Count() < 2) { throw new Exception("Length does not meet minimum requirements to calculate velocity"); }

@@ -397,7 +397,7 @@ namespace NumbersGoUp.Services
             var sellOrders = currentOrders.Where(o => o.Side == OrderSide.Sell).ToArray();
 
             //var avgBuyMultiplier = buyOrders.Any() ? buyOrders.Select(o => o.Multiplier).Average() : 0.0;
-            var remainingBuyAmount = Math.Min(_account.Balance.LastEquity * MAX_DAILY_BUY * _cashEquityRatio.DoubleReduce(0.3,0).Curve4(1), balance);
+            var remainingBuyAmount = Math.Min(_account.Balance.LastEquity * MAX_DAILY_BUY * _cashEquityRatio.DoubleReduce(0.2,0).Curve2(1), balance);
 
             remainingBuyAmount -= currentOrders.Select(o => o.Side == OrderSide.Buy ? o.AppliedAmt : 0).Sum();
             _logger.LogInformation($"Starting balance {balance:C2} and remaining buy amount {remainingBuyAmount:C2}");
