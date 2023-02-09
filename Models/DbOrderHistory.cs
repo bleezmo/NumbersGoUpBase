@@ -23,5 +23,6 @@ namespace NumbersGoUp.Models
         public DateTime? NextSell { get; set; }
         public double ProfitLossPerc { get; set; }
         public string Account { get; set; }
+        public string BrokerOrderId { get; set; }
     }
 }

@@ -357,7 +357,7 @@ namespace NumbersGoUp.Services
                 foreach (var ticker in tickersToUpdate)
                 {
                     var bars = await stocksContext.BarMetrics.Where(b => b.Symbol == ticker.Symbol && b.BarDayMilliseconds > lookbackMillis && b.BarDayMilliseconds < nowMillis).OrderByDescending(b => b.BarDayMilliseconds).ToArrayAsync(_appCancellation.Token);
-                    if (bars.Any())
+                    if (bars.Length > 2)
                     {
                         ticker.SMASMAAvg = bars.Average(b => b.SMASMA);
                         ticker.SMASMAStDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.SMASMA - ticker.SMASMAAvg, 2)) / bars.Length);
@@ -415,6 +415,27 @@ namespace NumbersGoUp.Services
                                     consecutiveLosses = avgMonth > 0 ? 0 : (consecutiveLosses + 1);
                                     maxMonthConsecutiveLosses = consecutiveLosses > maxMonthConsecutiveLosses ? consecutiveLosses : maxMonthConsecutiveLosses;
                                 }
+                                //var initialPrice = bars[0].Price();
+                                //double x = 0.0, y = 0.0, xsqr = 0.0, xy = 0.0;
+                                //for (var i = 0; i < bars.Length; i++)
+                                //{
+                                //    if (i % monthPeriod == 0)
+                                //    {
+                                //        var monthEnd = i + monthPeriod < bars.Length ? monthPeriod + i : bars.Length;
+                                //        var monthBegin = bars.Skip(i).First().Price();
+                                //        var avgMonth = ((bars.Skip(monthEnd - 1).First().Price() - monthBegin) * 100) / monthBegin;
+                                //        slopes.Add(avgMonth);
+                                //        consecutiveLosses = avgMonth > 0 ? 0 : (consecutiveLosses + 1);
+                                //        maxMonthConsecutiveLosses = consecutiveLosses > maxMonthConsecutiveLosses ? consecutiveLosses : maxMonthConsecutiveLosses;
+                                //    }
+                                //    var perc = (bars[i].Price() - initialPrice) * 100 / initialPrice;
+                                //    y += perc;
+                                //    x += i;
+                                //    xsqr += Math.Pow(i, 2);
+                                //    xy += perc * i;
+                                //}
+                                //var regressionDenom = xsqr - Math.Pow(x, 2);
+                                //ticker.RegressionSlope = regressionDenom != 0 ? (xy - (x * y)) / regressionDenom : 0.0;
                                 if (slopes.Count > 0)
                                 {
                                     ticker.AvgMonthPerc = slopes.Average();

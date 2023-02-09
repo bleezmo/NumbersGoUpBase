@@ -218,7 +218,7 @@ namespace NumbersGoUp.Services
                         sellMultiplier += (1 - sellMultiplier) * sellMultiplier * ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * MaxTickerEquityPerc(ticker, lastBarMetric))).DoubleReduce(1.5, 0.5);
 
 
-                        if (percProfit < -1 && lastBarMetric.BarDay.Month == 12 && lastBarMetric.BarDay.Day > 10) //tax loss harvest
+                        if (percProfit < -5 && lastBarMetric.BarDay.Month == 12 && lastBarMetric.BarDay.Day > 10) //tax loss harvest
                         {
                             sellMultiplier += (1 - sellMultiplier) * sellMultiplier;
                         }
@@ -332,7 +332,8 @@ namespace NumbersGoUp.Services
                     NextBuy = brokerOrder.FilledAt.Value.AddDays(daysToNextBuy).ToUniversalTime(),
                     NextSell = brokerOrder.FilledAt.Value.AddDays(daysToNextSell).ToUniversalTime(),
                     ProfitLossPerc = profitLossPerc,
-                    Account = order.Account
+                    Account = order.Account,
+                    BrokerOrderId = order.BrokerOrderId
                 };
                 stocksContext.OrderHistories.Add(historyOrder);
             }
