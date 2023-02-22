@@ -165,7 +165,7 @@ namespace NumbersGoUp.Services
             foreach (var buy in filteredBuys)
             {
                 var limitCoeff = 1 - buy.Multiplier.Curve3(3);
-                var limit = (limitCoeff * Math.Min(buy.BarMetric.HistoryBar.ClosePrice, buy.BarMetric.HistoryBar.Price())) + ((1 - limitCoeff) * buy.BarMetric.HistoryBar.ClosePrice);
+                var limit = (limitCoeff * buy.BarMetric.HistoryBar.LowPrice) + ((1 - limitCoeff) * buy.BarMetric.HistoryBar.ClosePrice);
                 await AddOrder(OrderSide.Buy, buy.BarMetric.Symbol, limit, buy.Multiplier);
                 _logger.LogInformation($"Added buy order for {buy.BarMetric.Symbol} with multiplier {buy.Multiplier} at price {limit:C2}");
             }
@@ -222,10 +222,6 @@ namespace NumbersGoUp.Services
                         {
                             sellMultiplier += (1 - sellMultiplier) * sellMultiplier;
                         }
-                        else
-                        {
-                            sellMultiplier *= (0.5 * percProfit.DoubleReduce(ticker.ProfitLossAvg + ticker.ProfitLossStDev, ticker.ProfitLossAvg - (ticker.ProfitLossStDev * 3)).VTailCurve()) + (0.5 * (1 - _cashEquityRatio.DoubleReduce(0.3, 0)));
-                        }
                         sellMultiplier = FinalSellMultiplier(sellMultiplier);
                         if (sellMultiplier > MULTIPLIER_SELL_THRESHOLD)
                         {
@@ -259,7 +255,7 @@ namespace NumbersGoUp.Services
             foreach (var sell in filteredSells)
             {
                 var limitCoeff = 1 - sell.Multiplier.Curve3(3);
-                var limit = (limitCoeff * Math.Max(sell.BarMetric.HistoryBar.ClosePrice, sell.BarMetric.HistoryBar.Price())) + ((1 - limitCoeff) * sell.BarMetric.HistoryBar.ClosePrice);
+                var limit = (limitCoeff * sell.BarMetric.HistoryBar.HighPrice) + ((1 - limitCoeff) * sell.BarMetric.HistoryBar.ClosePrice);
                 await AddOrder(OrderSide.Sell, sell.BarMetric.Symbol, limit, sell.Multiplier);
                 _logger.LogInformation($"Added sell order for {sell.BarMetric.Symbol} with multiplier {sell.Multiplier} at price {limit:C2}");
             }
@@ -302,7 +298,7 @@ namespace NumbersGoUp.Services
             {
                 var profitLossPerc = 0.0;
                 var dayOfWeek = brokerOrder.FilledAt.Value.DayOfWeek;
-                var daysToNextBuy = Math.Max((int)dayOfWeek, Math.Max((int) Math.Round(order.Multiplier * MAX_COOLDOWN_DAYS), 3)); var daysToNextSell = daysToNextBuy;
+                var daysToNextBuy = (1 - _cashEquityRatio.DoubleReduce(1, 0.2)) * MAX_COOLDOWN_DAYS; var daysToNextSell = _cashEquityRatio.DoubleReduce(0.2, 0) * MAX_COOLDOWN_DAYS;
                 if (order != null && brokerOrder.OrderSide == OrderSide.Sell && order.AvgEntryPrice > 0)
                 {
                     profitLossPerc = (brokerOrder.AverageFillPrice.Value - order.AvgEntryPrice) * 100 / order.AvgEntryPrice;

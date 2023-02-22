@@ -45,7 +45,7 @@ namespace NumbersGoUp.Models
         public double DividendYield { get; set; }
         public double AlmaVelStDev { get; set; }
         public double SMAVelStDev { get; set; }
-        //public double RegressionSlope { get; set; }
+        public double RegressionAngle { get; set; }
 
         public List<HistoryBar> HistoryBars { get; set; }
         public List<DbOrder> Orders { get; set; }

@@ -58,7 +58,7 @@ namespace NumbersGoUp.Utils
         public static double Curve6(this double x, double exp, double cutoff = 1) => 1 - Math.Pow(Math.Pow(x * cutoff.CurveCoeff(exp), exp) - 1, 6);
         private static double CurveCoeff(this double cutoff, double exp) => 1 / Math.Pow(cutoff, exp);
         public static double WCurve(this double x) => (-0.5 * Math.Cos(4 * Math.PI * x)) + 0.5;
-        public static double WExpCurve(this double x) => ((-0.5 * Math.Cos(4 * Math.PI * x)) + 0.5)*x;
+        public static double WExpCurve(this double x, int peaks = 2) => ((-0.5 * Math.Cos(peaks * 2 * Math.PI * x)) + 0.5)*x;
         public static double VTailCurve(this double x) => (-0.5 * Math.Cos(3 * Math.PI * x)) + 0.5;
         public static double ApplyAlma<T>(this T[] objs, Func<T, double> objFn, double[] gaussianWeights = null)
         {
@@ -85,6 +85,12 @@ namespace NumbersGoUp.Utils
                 weights[i] = Math.Exp(eq);
             }
             return weights;
+        }
+        public static double GetAngle(double num, double denom)
+        {
+            if (denom == 0) { return 0.0; }
+            var perc = num / denom;
+            return Math.Asin(perc > 1 ? 1 : (perc < -1 ? -1 : perc)) * (180 / Math.PI);
         }
         public static double CalculateVelocity<T>(this IEnumerable<T> barsDesc, Func<T, double> angleValueFn)
         {
