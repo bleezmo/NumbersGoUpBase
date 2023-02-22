@@ -169,14 +169,6 @@ namespace NumbersGoUp.Services
                                         ticker.MaxMonthConsecutiveLosses = maxMonthConsecutiveLosses;
                                         ticker.PERatio = ticker.EPS > 0 ? bars.Last().Price() / ticker.EPS : 1000;
                                     }
-                                    if (slopes.Count > 0)
-                                    {
-                                        ticker.AvgMonthPerc = slopes.Average();
-                                        ticker.MonthPercVariance = slopes.Sum(s => Math.Pow(s - ticker.AvgMonthPerc, 2)) / slopes.Count;
-                                        ticker.MaxMonthConsecutiveLosses = maxMonthConsecutiveLosses;
-                                        //ticker.AvgMonthPerc = slopes.OrderBy(s => s).Skip((int)(Convert.ToDouble(slopes.Count) / 2)).Take(1).First();
-                                        ticker.PERatio = ticker.EPS > 0 ? bars.Last().Price() / ticker.EPS : 1000;
-                                    }
                                 }
                             }
                             stocksContext.Tickers.Update(ticker);
