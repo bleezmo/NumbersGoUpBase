@@ -12,7 +12,7 @@ namespace NumbersGoUp.Services
         public const double MAX_SECURITY_SELL = MAX_SECURITY_BUY * 2 / 3;
         public const double MAX_DAILY_BUY = 0.1;
         public const double MAX_DAILY_SELL = 0.1;
-        public const double MULTIPLIER_BUY_THRESHOLD = 0.4;
+        public const double MULTIPLIER_BUY_THRESHOLD = 0.2;
         public const double MULTIPLIER_SELL_THRESHOLD = 0.4;
         public const double MAX_COOLDOWN_DAYS = 10;
         public const bool USE_MARGIN = false;

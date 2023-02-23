@@ -150,8 +150,8 @@ namespace NumbersGoUp.Services
                                         xsqr += Math.Pow(i, 2);
                                         xy += perc * i;
                                     }
-                                    var regressionDenom = xsqr - Math.Pow(x, 2);
-                                    var regressionSlope = regressionDenom != 0 ? (xy - (x * y)) / regressionDenom : 0.0;
+                                    var regressionDenom = (bars.Length * xsqr) - Math.Pow(x, 2);
+                                    var regressionSlope = regressionDenom != 0 ? ((bars.Length * xy) - (x * y)) / regressionDenom : 0.0;
                                     var yintercept = (y - (regressionSlope * x)) / bars.Length;
                                     var regressionStDev = Math.Sqrt(bars.Select((bar, i) =>
                                     {
@@ -162,7 +162,7 @@ namespace NumbersGoUp.Services
                                     var currentRegression = (regressionSlope * (bars.Length - 1)) + yintercept;
                                     var currentPerc = (bars[bars.Length - 1].Price() - initialPrice) * 100 / initialPrice;
                                     ticker.RegressionAngle = Utils.Utils.GetAngle(currentPerc - currentRegression, regressionStDev);
-                                    if (slopes.Count > 0)
+                                    if (slopes.Count > 0 && regressionSlope > 0)
                                     {
                                         ticker.AvgMonthPerc = slopes.Average();
                                         ticker.MonthPercVariance = slopes.Sum(s => Math.Pow(s - ticker.AvgMonthPerc, 2)) / slopes.Count;
@@ -194,7 +194,7 @@ namespace NumbersGoUp.Services
                         Func<Ticker, double> performanceFn1 = (t) => t.MonthPercVariance > 0 ? t.AvgMonthPerc * (1 - t.MaxMonthConsecutiveLosses.DoubleReduce(12, 1)) / Math.Sqrt(t.MonthPercVariance) : 0.0;
                         Func<Ticker, double> performanceFn2 = (t) => t.ProfitLossStDev > 0 ? t.ProfitLossAvg / t.ProfitLossStDev : 0.0;
                         Func<Ticker, double> performanceFn3 = (t) => t.SMASMAStDev > 0 ? t.SMASMAAvg / t.SMASMAStDev : 0.0;
-                        Func<Ticker, double> performanceFn4 = (t) => t.RegressionAngle.ZeroReduceSlow(90, -90);
+                        Func<Ticker, double> performanceFn4 = (t) => t.RegressionAngle.ZeroReduce(90, -90);
                         Func<Ticker, double> performanceFnEarnings = (t) => Math.Sqrt(t.EBIT) * 2;
                         Func<Ticker, double> performanceFnPE = (t) => 1 - t.PERatio.DoubleReduce(PERatioCutoff, 0);
                         var minmax1 = new MinMaxStore<Ticker>(performanceFn1);
@@ -367,7 +367,7 @@ namespace NumbersGoUp.Services
         }
 #if DEBUG
 
-        public async Task TestAveragesAndPerformance(DateTime? cutoff = null)
+        public async Task TestAveragesAndPerformance(DateTime? cutoff = null, string[] symbols = null)
         {
             var now = cutoff.HasValue ? new DateTimeOffset(cutoff.Value) : DateTimeOffset.UtcNow;
             var nowMillis = now.ToUnixTimeMilliseconds();
@@ -377,6 +377,10 @@ namespace NumbersGoUp.Services
             using (var stocksContext = _contextFactory.CreateDbContext())
             {
                 var tickersToUpdate = await stocksContext.Tickers.ToListAsync(_appCancellation.Token);
+                if(symbols != null && symbols.Any())
+                {
+                    tickersToUpdate = tickersToUpdate.Where(t => symbols.Contains(t.Symbol)).ToList();
+                }
                 var updatedTickers = new List<Ticker>();
                 //var nowTestMillis = new DateTimeOffset(now.AddYears(-5)).ToUnixTimeMilliseconds();
                 foreach (var ticker in tickersToUpdate)
@@ -416,6 +420,10 @@ namespace NumbersGoUp.Services
             using (var stocksContext = _contextFactory.CreateDbContext())
             {
                 var tickersToUpdate = await stocksContext.Tickers.ToListAsync(_appCancellation.Token);
+                if (symbols != null && symbols.Any())
+                {
+                    tickersToUpdate = tickersToUpdate.Where(t => symbols.Contains(t.Symbol)).ToList();
+                }
                 if (tickersToUpdate.Any())
                 {
                     foreach (var ticker in tickersToUpdate) //filter any positions we currently hold in case we find we want to remove them
@@ -450,8 +458,8 @@ namespace NumbersGoUp.Services
                                     xsqr += Math.Pow(i, 2);
                                     xy += perc * i;
                                 }
-                                var regressionDenom = xsqr - Math.Pow(x, 2);
-                                var regressionSlope = regressionDenom != 0 ? (xy - (x * y)) / regressionDenom : 0.0;
+                                var regressionDenom = (bars.Length * xsqr) - Math.Pow(x, 2);
+                                var regressionSlope = regressionDenom != 0 ? ((bars.Length * xy) - (x * y)) / regressionDenom : 0.0;
                                 var yintercept = (y - (regressionSlope * x)) / bars.Length;
                                 var regressionStDev = Math.Sqrt(bars.Select((bar, i) =>
                                 {
@@ -462,7 +470,7 @@ namespace NumbersGoUp.Services
                                 var currentRegression = (regressionSlope * (bars.Length - 1)) + yintercept;
                                 var currentPerc = (bars[bars.Length - 1].Price() - initialPrice) * 100 / initialPrice;
                                 ticker.RegressionAngle = Utils.Utils.GetAngle(currentPerc - currentRegression, regressionStDev);
-                                if (slopes.Count > 0)
+                                if (slopes.Count > 0 && regressionSlope > 0)
                                 {
                                     ticker.AvgMonthPerc = slopes.Average();
                                     ticker.MonthPercVariance = slopes.Sum(s => Math.Pow(s - ticker.AvgMonthPerc, 2)) / slopes.Count;
@@ -476,6 +484,10 @@ namespace NumbersGoUp.Services
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
                     var toUpdate = new List<Ticker>();
                     var tickers = await stocksContext.Tickers.ToArrayAsync(_appCancellation.Token);
+                    if (symbols != null && symbols.Any())
+                    {
+                        tickers = tickers.Where(t => symbols.Contains(t.Symbol)).ToArray();
+                    }
                     foreach (var ticker in tickers)
                     {
                         if (ticker.AvgMonthPerc > -1000 && ticker.PERatio > 0 && ticker.PERatio < PERatioCutoff)
@@ -491,10 +503,11 @@ namespace NumbersGoUp.Services
                         }
                     }
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
+
                     Func<Ticker, double> performanceFn1 = (t) => t.MonthPercVariance > 0 ? t.AvgMonthPerc * (1 - t.MaxMonthConsecutiveLosses.DoubleReduce(12, 1)) / Math.Sqrt(t.MonthPercVariance) : 0.0;
                     Func<Ticker, double> performanceFn2 = (t) => t.ProfitLossStDev > 0 ? t.ProfitLossAvg / t.ProfitLossStDev : 0.0;
                     Func<Ticker, double> performanceFn3 = (t) => t.SMASMAStDev > 0 ? t.SMASMAAvg / t.SMASMAStDev : 0.0;
-                    Func<Ticker, double> performanceFn4 = (t) => t.RegressionAngle.ZeroReduceSlow(90, -90);
+                    Func<Ticker, double> performanceFn4 = (t) => t.RegressionAngle.ZeroReduce(90, -90);
                     Func<Ticker, double> performanceFnEarnings = (t) => Math.Sqrt(t.EBIT) * 2;
                     Func<Ticker, double> performanceFnPE = (t) => 1 - t.PERatio.DoubleReduce(PERatioCutoff, 0);
                     var minmax1 = new MinMaxStore<Ticker>(performanceFn1);
@@ -503,6 +516,18 @@ namespace NumbersGoUp.Services
                     var minmax4 = new MinMaxStore<Ticker>(performanceFn4);
                     var minmaxEarnings = new MinMaxStore<Ticker>(performanceFnEarnings);
                     var minmaxPE = new MinMaxStore<Ticker>(performanceFnPE);
+                    if(toUpdate.Count == 1)
+                    {
+                        foreach (var ticker in toUpdate)
+                        {
+                            ticker.LastCalculatedPerformance = now.UtcDateTime;
+                            ticker.LastCalculatedPerformanceMillis = nowMillis;
+                            ticker.PerformanceVector = 50;
+                            stocksContext.Tickers.Update(ticker);
+                        }
+                        await stocksContext.SaveChangesAsync(_appCancellation.Token);
+                        return;
+                    }
                     foreach (var ticker in toUpdate)
                     {
                         minmax1.Run(ticker);
