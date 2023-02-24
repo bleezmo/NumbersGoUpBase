@@ -66,6 +66,7 @@ namespace NumbersGoUp.Services
                             _logger.LogError("Negative cash balance!");
                         }
                         _cashEquityRatio = Math.Max(cash / equity, 0);
+                        _logger.LogInformation($"Total Account Equity: {equity:C2}");
                         _logger.LogInformation($"Using Cash-Equity Ratio: {_cashEquityRatio}");
                         _logger.LogInformation("Running buy orders");
                         await Buy();
