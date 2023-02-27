@@ -223,6 +223,10 @@ namespace NumbersGoUp.Services
                         {
                             sellMultiplier += (1 - sellMultiplier) * sellMultiplier;
                         }
+                        else
+                        {
+                            sellMultiplier *= (1 - _cashEquityRatio.DoubleReduce(0.3, 0)).Curve4((1 - percProfit.DoubleReduce(0, -2 * ticker.ProfitLossStDev).VTailCurve()).DoubleReduce(1, 0, 4, 1));
+                        }
                         sellMultiplier = FinalSellMultiplier(sellMultiplier);
                         if (sellMultiplier > MULTIPLIER_SELL_THRESHOLD)
                         {
