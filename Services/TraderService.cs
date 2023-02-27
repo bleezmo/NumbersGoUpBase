@@ -293,13 +293,14 @@ namespace NumbersGoUp.Services
 
         private async Task PreviousDayTradeMetrics()
         {
-            using var stocksContext = _contextFactory.CreateDbContext();
             var orders = await GetPreviousTradingDayFilledOrders();
+            using var stocksContext = _contextFactory.CreateDbContext();
             foreach (var (order, brokerOrder) in orders)
             {
                 var profitLossPerc = 0.0;
                 var dayOfWeek = brokerOrder.FilledAt.Value.DayOfWeek;
-                var daysToNextBuy = (1 - _cashEquityRatio.DoubleReduce(1, 0.2)) * MAX_COOLDOWN_DAYS; var daysToNextSell = _cashEquityRatio.DoubleReduce(0.2, 0) * MAX_COOLDOWN_DAYS;
+                var daysToNextBuy = brokerOrder.OrderSide == OrderSide.Buy ? (1 - _cashEquityRatio.DoubleReduce(2, 0.2)) * MAX_COOLDOWN_DAYS : MAX_COOLDOWN_DAYS; 
+                var daysToNextSell = brokerOrder.OrderSide == OrderSide.Sell ? _cashEquityRatio.DoubleReduce(0.2, -0.2) * MAX_COOLDOWN_DAYS : MAX_COOLDOWN_DAYS;
                 if (order != null && brokerOrder.OrderSide == OrderSide.Sell && order.AvgEntryPrice > 0)
                 {
                     profitLossPerc = (brokerOrder.AverageFillPrice.Value - order.AvgEntryPrice) * 100 / order.AvgEntryPrice;
