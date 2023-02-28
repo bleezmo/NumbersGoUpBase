@@ -178,7 +178,7 @@ namespace NumbersGoUp.Services
                     var bearPricePrediction = (barMetrics[0].AlmaSMA3.DoubleReduce(Math.Min(ticker.AlmaSma3Avg + (ticker.AlmaSma3StDev * 1.5), 90), Math.Max(ticker.AlmaSma3Avg, 0)) * 0.2) +
                                           (barMetrics[0].AlmaSMA2.DoubleReduce(Math.Min(ticker.AlmaSma2Avg + (ticker.AlmaSma2StDev * 1.5), 90), Math.Max(ticker.AlmaSma2Avg, 0)) * 0.2) +
                                           (barMetrics[0].AlmaSMA1.DoubleReduce(Math.Min(ticker.AlmaSma1Avg + (ticker.AlmaSma1StDev * 1.5), 90), Math.Max(ticker.AlmaSma1Avg, 0)) * 0.2) +
-                                          (barMetrics[0].ProfitLossPerc.DoubleReduce(ticker.ProfitLossAvg + (ticker.ProfitLossStDev * 1.5), ticker.ProfitLossAvg).WExpCurve(2) * 0.4);
+                                          (barMetrics[0].ProfitLossPerc.DoubleReduce(ticker.ProfitLossAvg + (ticker.ProfitLossStDev * 1.5), ticker.ProfitLossAvg).WExpCurve(4) * 0.4);
 
                     var shortPricePrediction = ((barMetrics.Average(b => b.SMASMA) - barMetrics.Average(b => b.AlmaSMA3)).DoubleReduce(ticker.AlmaSma3StDev, -ticker.AlmaSma3StDev) * 0.52) +
                                           ((barMetrics.Average(b => b.AlmaSMA3) - barMetrics.Average(b => b.PriceSMA3)).DoubleReduce(20, -20) * 0.12) +
