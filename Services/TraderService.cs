@@ -51,30 +51,29 @@ namespace NumbersGoUp.Services
                 if (DateTime.Now.CompareTo(marketOpen.AddHours(-4)) > 0)
                 {
                     _account = await _brokerService.GetAccount();
-                    _logger.LogInformation("Running previous-day metrics");
-                    await PreviousDayTradeMetrics();
                     var equity = _account.Balance.LastEquity;
-                    var cash = _account.Balance.TradableCash;
+                    _logger.LogInformation($"Total Account Equity: {equity:C2}");
                     if (equity == 0)
                     {
-                        _logger.LogError("Error retrieving equity value!");
+                        _logger.LogError("Error retrieving equity value! Shutting down");
+                        return;
                     }
-                    else
+                    var cash = _account.Balance.TradableCash;
+                    _cashEquityRatio = Math.Max(cash / equity, 0);
+                    _logger.LogInformation($"Using Cash-Equity Ratio: {_cashEquityRatio}");
+
+                    _logger.LogInformation("Running previous-day metrics");
+                    await PreviousDayTradeMetrics();
+                    if (cash < 0)
                     {
-                        if (cash < 0)
-                        {
-                            _logger.LogError("Negative cash balance!");
-                        }
-                        _cashEquityRatio = Math.Max(cash / equity, 0);
-                        _logger.LogInformation($"Total Account Equity: {equity:C2}");
-                        _logger.LogInformation($"Using Cash-Equity Ratio: {_cashEquityRatio}");
-                        _logger.LogInformation("Running buy orders");
-                        await Buy();
-                        _logger.LogInformation("Running sell orders");
-                        await Sell();
-                        _logger.LogInformation("Running order executions");
-                        await ExecuteOrders();
+                        _logger.LogError("Negative cash balance!");
                     }
+                    _logger.LogInformation("Running buy orders");
+                    await Buy();
+                    _logger.LogInformation("Running sell orders");
+                    await Sell();
+                    _logger.LogInformation("Running order executions");
+                    await ExecuteOrders();
                     _logger.LogInformation("Cleaning up");
                     await CleanUp();
                 }
