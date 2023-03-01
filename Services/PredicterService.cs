@@ -21,12 +21,13 @@ namespace NumbersGoUp.Services
         private readonly IAppCancellation _appCancellation;
         private readonly IBrokerService _brokerService;
         private readonly IStocksContextFactory _contextFactory;
-        private readonly double _encouragementMultiplier;
         private readonly double _peratioCutoff;
         private readonly TickerService _tickerService;
         private Task _startTask;
         private static readonly SemaphoreSlim _taskSem = new SemaphoreSlim(1, 1);
         private double _buyCutoff = 100;
+
+        public double EncouragementMultiplier { get; }
 
         public PredicterService(IAppCancellation appCancellation, ILogger<PredicterService> logger, IBrokerService brokerService, TickerService tickerService, IStocksContextFactory contextFactory, IConfiguration configuration)
         {
@@ -34,7 +35,7 @@ namespace NumbersGoUp.Services
             _appCancellation = appCancellation;
             _brokerService = brokerService;
             _contextFactory = contextFactory;
-            _encouragementMultiplier = Math.Min(Math.Max(double.TryParse(configuration["EncouragementMultiplier"], out var encouragementMultiplier) ? encouragementMultiplier : 0, -1), 1);
+            EncouragementMultiplier = Math.Min(Math.Max(double.TryParse(configuration["EncouragementMultiplier"], out var encouragementMultiplier) ? encouragementMultiplier : 0, -1), 1);
             _peratioCutoff = tickerService.PERatioCutoff;
             _tickerService = tickerService;
         }
@@ -194,13 +195,13 @@ namespace NumbersGoUp.Services
 
                 if (buy)
                 {
-                    pricePrediction *= _encouragementMultiplier.DoubleReduce(0, -1);
-                    pricePrediction += (1 - pricePrediction) * _encouragementMultiplier.DoubleReduce(1, 0);
+                    pricePrediction *= EncouragementMultiplier.DoubleReduce(0, -1);
+                    pricePrediction += (1 - pricePrediction) * EncouragementMultiplier.DoubleReduce(1, 0);
                 }
                 else
                 {
-                    pricePrediction *= 1 - _encouragementMultiplier.DoubleReduce(1, 0);
-                    pricePrediction += (1 - pricePrediction) * (1 - _encouragementMultiplier.DoubleReduce(0, -1));
+                    pricePrediction *= 1 - EncouragementMultiplier.DoubleReduce(1, 0);
+                    pricePrediction += (1 - pricePrediction) * (1 - EncouragementMultiplier.DoubleReduce(0, -1));
                 }
 
                 return pricePrediction;
