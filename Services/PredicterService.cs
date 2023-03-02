@@ -133,6 +133,7 @@ namespace NumbersGoUp.Services
             if (barMetrics.Length == FEATURE_HISTORY_DAY)
             {
                 await Ready();
+                const double sellCutoff = 50 / 3;
                 double peRatio = ticker.EPS > 0 ? (barMetrics[0].HistoryBar.Price() / ticker.EPS) : _peratioCutoff;
                 double pricePrediction;
 
@@ -161,7 +162,7 @@ namespace NumbersGoUp.Services
 
                     var coeff = barMetrics.Average(b => b.SMASMA).DoubleReduce(ticker.SMASMAAvg, ticker.SMASMAAvg - ticker.SMASMAStDev);
                     pricePrediction = (coeff * ((0.9 * bullPricePrediction) + (0.1 * shortPricePrediction))) + ((1 - coeff) * ((0.7 * bearPricePrediction) + (0.3 * shortPricePrediction)));
-                    pricePrediction = pricePrediction.Curve1(3 - ticker.PerformanceVector.DoubleReduce(50, 0, 2, 1));
+                    pricePrediction = pricePrediction.Curve1(3 - ticker.PerformanceVector.DoubleReduce(60, 0, 2, 1));
                     pricePrediction *= (1 - peRatio.DoubleReduce(_peratioCutoff, _peratioCutoff / 3));
                 }
                 else
@@ -189,7 +190,7 @@ namespace NumbersGoUp.Services
 
                     var coeff = barMetrics.Average(b => b.SMASMA).DoubleReduce(ticker.SMASMAAvg + ticker.SMASMAStDev, ticker.SMASMAAvg - ticker.SMASMAStDev);
                     pricePrediction = (coeff * ((0.9 * bullPricePrediction) + (0.1 * shortPricePrediction))) + ((1 - coeff) * ((0.7 * bearPricePrediction) + (0.3 * shortPricePrediction)));
-                    pricePrediction = pricePrediction.Curve1(ticker.PerformanceVector.DoubleReduce(100, 50, 2, 1));
+                    pricePrediction = pricePrediction.Curve1(ticker.PerformanceVector.DoubleReduce(100, sellCutoff, 2, 0.5));
                     pricePrediction += (1 - pricePrediction) * peRatio.DoubleReduce(_peratioCutoff * 2, _peratioCutoff);
                 }
 
