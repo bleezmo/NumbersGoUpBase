@@ -41,11 +41,12 @@ namespace NumbersGoUp.Models
         public double AlmaSma3StDev { get; set; }
         public double ProfitLossAvg { get; set; }
         public double ProfitLossStDev { get; set; }
-        public double EBIT { get; set; }
+        public double Earnings { get; set; }
         public double DividendYield { get; set; }
         public double AlmaVelStDev { get; set; }
         public double SMAVelStDev { get; set; }
         public double RegressionAngle { get; set; }
+        public double EVEarnings { get; set; }
 
         public List<HistoryBar> HistoryBars { get; set; }
         public List<DbOrder> Orders { get; set; }

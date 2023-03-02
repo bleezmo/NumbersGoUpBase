@@ -56,7 +56,7 @@ namespace NumbersGoUp.Utils
                      * Debt to Equity Ratio (MRQ),Dividend Yield Forward,EBITDA (TTM),Enterprise Value/EBITDA (TTM),EPS Diluted (TTM)
                      */
                     int? tickerIndex = null, sectorIndex = null, marketCapIndex = null, peRatioIndex = null, currentRatioIndex = null, debtEquityRatioIndex = null, dividendIndex = null, 
-                         ebitdaIndex = null, evebitdaIndex = null, epsIndex = null, priceIndex = null, currentEPSIndex = null, futureEPSIndex = null, sharesIndex = null;
+                         ebitdaIndex = null, evebitdaIndex = null, epsIndex = null, priceIndex = null, currentEPSIndex = null, futureEPSIndex = null, sharesIndex = null, evIndex = null;
                     using (var csv = new CsvReader(sr, CultureInfo.InvariantCulture))
                     {
                         string[] headers = null;
@@ -82,6 +82,7 @@ namespace NumbersGoUp.Utils
                                     if (headers[i] == "EPS Diluted (MRQ)") { currentEPSIndex = i; }
                                     if (headers[i] == "EPS Forecast (MRQ)") { futureEPSIndex = i; }
                                     if (headers[i] == "Total Shares Outstanding") { sharesIndex = i; }
+                                    if (headers[i] == "Enterprise Value (MRQ)") { evIndex = i; }
                                 }
                             }
                             else
@@ -144,14 +145,6 @@ namespace NumbersGoUp.Utils
                                 {
                                     _logger.LogWarning($"Dividend not found for {ticker.Symbol}");
                                 }
-                                if (evebitdaIndex.HasValue && double.TryParse(csv[evebitdaIndex.Value], out var evebitda))
-                                {
-                                    ticker.EVEBITDA = evebitda;
-                                }
-                                else
-                                {
-                                    //_logger.LogWarning($"EV EBITDA ratio not found for {ticker.Symbol}");
-                                }
                                 if (epsIndex.HasValue && double.TryParse(csv[epsIndex.Value], out var eps))
                                 {
                                     if(eps > 0 && currentEPSIndex.HasValue && double.TryParse(csv[currentEPSIndex.Value], out var currentEPS) &&
@@ -177,6 +170,27 @@ namespace NumbersGoUp.Utils
                                 else
                                 {
                                     _logger.LogWarning($"EPS not found for {ticker.Symbol}");
+                                }
+                                if (ticker.Earnings > 0)
+                                {
+                                    if (evIndex.HasValue && double.TryParse(csv[evIndex.Value], out var ev))
+                                    {
+                                        ticker.EVEarnings = ev / ticker.Earnings;
+                                    }
+                                    else if (evebitdaIndex.HasValue && double.TryParse(csv[evebitdaIndex.Value], out var evebitda) &&
+                                             ebitdaIndex.HasValue && double.TryParse(csv[ebitdaIndex.Value], out var ebitda))
+                                    {
+                                        ev = evebitda * ebitda;
+                                        ticker.EVEarnings = ev / ticker.Earnings;
+                                    }
+                                    else
+                                    {
+                                        _logger.LogWarning($"EV EBITDA ratio unavailable for {ticker.Symbol}. Could not calculate EV.");
+                                    }
+                                }
+                                else
+                                {
+                                    _logger.LogWarning($"EV EBITDA ratio unavailable for {ticker.Symbol}. Earnings not found.");
                                 }
                                 if (priceIndex.HasValue && double.TryParse(csv[priceIndex.Value], out var price))
                                 {
@@ -206,7 +220,7 @@ namespace NumbersGoUp.Utils
             dest.Earnings = src.Earnings;
             dest.EPS = src.EPS;
             dest.PERatio = src.PERatio;
-            dest.EVEBITDA = src.EVEBITDA;
+            dest.EVEarnings = src.EVEarnings;
             dest.PriceChangeAvg = src.PriceChangeAvg;
         }
     }

@@ -20,7 +20,7 @@ namespace NumbersGoUp.Models
         public double Earnings { get; set; }
         public double EPS { get; set; }
         public double PERatio { get; set; }
-        public double EVEBITDA { get; set; }
+        public double EVEarnings { get; set; }
         public double CurrentRatio { get; set; }
         public double DebtEquityRatio { get; set; }
         public double DividendYield { get; set; }

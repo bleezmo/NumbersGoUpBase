@@ -195,13 +195,15 @@ namespace NumbersGoUp.Services
                         Func<Ticker, double> performanceFn2 = (t) => t.ProfitLossStDev > 0 ? t.ProfitLossAvg / t.ProfitLossStDev : 0.0;
                         Func<Ticker, double> performanceFn3 = (t) => t.SMASMAStDev > 0 ? t.SMASMAAvg / t.SMASMAStDev : 0.0;
                         Func<Ticker, double> performanceFn4 = (t) => t.RegressionAngle.ZeroReduce(90, -90);
-                        Func<Ticker, double> performanceFnEarnings = (t) => Math.Sqrt(t.EBIT) * 2;
+                        Func<Ticker, double> performanceFnEarnings = (t) => Math.Sqrt(t.Earnings) * 2;
+                        Func<Ticker, double> performanceFnEVEarnings = (t) => 1 - t.EVEarnings.DoubleReduce(_tickerBankService.EVEarningsCutoff, 0);
                         Func<Ticker, double> performanceFnPE = (t) => 1 - t.PERatio.DoubleReduce(PERatioCutoff, 0);
                         var minmax1 = new MinMaxStore<Ticker>(performanceFn1);
                         var minmax2 = new MinMaxStore<Ticker>(performanceFn2);
                         var minmax3 = new MinMaxStore<Ticker>(performanceFn3);
                         var minmax4 = new MinMaxStore<Ticker>(performanceFn4);
                         var minmaxEarnings = new MinMaxStore<Ticker>(performanceFnEarnings);
+                        var minmaxEVEarnings = new MinMaxStore<Ticker>(performanceFnEVEarnings);
                         var minmaxPE = new MinMaxStore<Ticker>(performanceFnPE);
                         foreach (var ticker in toUpdate)
                         {
@@ -210,13 +212,15 @@ namespace NumbersGoUp.Services
                             minmax3.Run(ticker);
                             minmax4.Run(ticker);
                             minmaxEarnings.Run(ticker);
+                            minmaxEVEarnings.Run(ticker);
                             minmaxPE.Run(ticker);
                         }
-                        Func<Ticker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 25) +
-                                                                      (performanceFnEarnings(t).DoubleReduce(minmaxEarnings.Max, minmaxEarnings.Min) * 30) +
-                                                                      (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 20) +
+                        Func<Ticker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 20) +
+                                                                      (performanceFnEarnings(t).DoubleReduce(minmaxEarnings.Max, minmaxEarnings.Min) * 25) +
+                                                                      (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 15) +
                                                                       (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 5) +
                                                                       (performanceFn4(t).DoubleReduce(minmax4.Max, minmax4.Min) * 15) +
+                                                                      (performanceFnEVEarnings(t).DoubleReduce(minmaxEVEarnings.Max, minmaxEVEarnings.Min) * 15) +
                                                                       (performanceFnPE(t).DoubleReduce(minmaxPE.Max, minmaxPE.Min) * 5);
                         var minmaxTotal = new MinMaxStore<Ticker>(performanceFnTotal);
                         var perfAvg = 0.0;
@@ -309,7 +313,8 @@ namespace NumbersGoUp.Services
                             ticker.Sector = bankTicker.Sector;
                             ticker.PERatio = bankTicker.PERatio;
                             ticker.EPS = bankTicker.EPS;
-                            ticker.EBIT = bankTicker.Earnings;
+                            ticker.Earnings = bankTicker.Earnings;
+                            ticker.EVEarnings = bankTicker.EVEarnings;
                             ticker.DividendYield = bankTicker.DividendYield;
                             ticker.LastCalculated = now.UtcDateTime;
                             ticker.LastCalculatedMillis = nowMillis;
@@ -325,8 +330,9 @@ namespace NumbersGoUp.Services
                         {
                             _logger.LogWarning($"Could not remove {ticker.Symbol}. Position exists. Modifying properties to encourage selling.");
                             ticker.PERatio = 1000;
+                            ticker.EVEarnings = 1000;
                             ticker.EPS = 0.01;
-                            ticker.EBIT = 1;
+                            ticker.Earnings = 1;
                             ticker.PerformanceVector = 0;
                             ticker.LastCalculated = now.UtcDateTime;
                             ticker.LastCalculatedMillis = nowMillis;
@@ -347,7 +353,8 @@ namespace NumbersGoUp.Services
                             {
                                 Symbol = bankTicker.Symbol,
                                 Sector = bankTicker.Sector,
-                                EBIT = bankTicker.Earnings,
+                                Earnings = bankTicker.Earnings,
+                                EVEarnings = bankTicker.EVEarnings,
                                 DividendYield = bankTicker.DividendYield,
                                 EPS = bankTicker.EPS,
                                 PERatio = bankTicker.PERatio,
@@ -503,15 +510,17 @@ namespace NumbersGoUp.Services
                     Func<Ticker, double> performanceFn2 = (t) => t.ProfitLossStDev > 0 ? t.ProfitLossAvg / t.ProfitLossStDev : 0.0;
                     Func<Ticker, double> performanceFn3 = (t) => t.SMASMAStDev > 0 ? t.SMASMAAvg / t.SMASMAStDev : 0.0;
                     Func<Ticker, double> performanceFn4 = (t) => t.RegressionAngle.ZeroReduce(90, -90);
-                    Func<Ticker, double> performanceFnEarnings = (t) => Math.Sqrt(t.EBIT) * 2;
+                    Func<Ticker, double> performanceFnEarnings = (t) => Math.Sqrt(t.Earnings) * 2;
+                    Func<Ticker, double> performanceFnEVEarnings = (t) => 1 - t.EVEarnings.DoubleReduce(_tickerBankService.EVEarningsCutoff, 0);
                     Func<Ticker, double> performanceFnPE = (t) => 1 - t.PERatio.DoubleReduce(PERatioCutoff, 0);
                     var minmax1 = new MinMaxStore<Ticker>(performanceFn1);
                     var minmax2 = new MinMaxStore<Ticker>(performanceFn2);
                     var minmax3 = new MinMaxStore<Ticker>(performanceFn3);
                     var minmax4 = new MinMaxStore<Ticker>(performanceFn4);
                     var minmaxEarnings = new MinMaxStore<Ticker>(performanceFnEarnings);
+                    var minmaxEVEarnings = new MinMaxStore<Ticker>(performanceFnEVEarnings);
                     var minmaxPE = new MinMaxStore<Ticker>(performanceFnPE);
-                    if(toUpdate.Count == 1)
+                    if (toUpdate.Count == 1)
                     {
                         foreach (var ticker in toUpdate)
                         {
@@ -530,13 +539,15 @@ namespace NumbersGoUp.Services
                         minmax3.Run(ticker);
                         minmax4.Run(ticker);
                         minmaxEarnings.Run(ticker);
+                        minmaxEVEarnings.Run(ticker);
                         minmaxPE.Run(ticker);
                     }
-                    Func<Ticker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 25) +
-                                                                  (performanceFnEarnings(t).DoubleReduce(minmaxEarnings.Max, minmaxEarnings.Min) * 30) +
-                                                                  (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 20) +
+                    Func<Ticker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 20) +
+                                                                  (performanceFnEarnings(t).DoubleReduce(minmaxEarnings.Max, minmaxEarnings.Min) * 25) +
+                                                                  (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 15) +
                                                                   (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 5) +
                                                                   (performanceFn4(t).DoubleReduce(minmax4.Max, minmax4.Min) * 15) +
+                                                                  (performanceFnEVEarnings(t).DoubleReduce(minmaxEVEarnings.Max, minmaxEVEarnings.Min) * 15) +
                                                                   (performanceFnPE(t).DoubleReduce(minmaxPE.Max, minmaxPE.Min) * 5);
                     var minmaxTotal = new MinMaxStore<Ticker>(performanceFnTotal);
                     var perfAvg = 0.0;

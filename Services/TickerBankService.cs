@@ -32,6 +32,7 @@ namespace NumbersGoUp.Services
         private readonly IRuntimeSettings _runtimeSettings;
         private readonly DateTime _lookbackDate = DateTime.Now.AddYears(-DataService.LOOKBACK_YEARS);
         public double PERatioCutoff { get; }
+        public double EVEarningsCutoff { get => PERatioCutoff * 1.5; }
 
         private readonly IBrokerService _brokerService;
 
@@ -97,7 +98,7 @@ namespace NumbersGoUp.Services
         }
         private bool BasicCutoff(BankTicker ticker) => ticker.DebtEquityRatio > 0 && ticker.DebtEquityRatio < 1.5 && 
                                                        (ticker.CurrentRatio > (ticker.DebtEquityRatio * 1.1) || ticker.DebtEquityRatio < 0.9) && 
-                                                       ticker.Earnings > 0 && ticker.DividendYield > 0.005 && ticker.EPS > 0;
+                                                       ticker.Earnings > 0 && ticker.DividendYield > 0.005 && ticker.EPS > 0 && ticker.EVEarnings > 0 && ticker.EVEarnings < EVEarningsCutoff;
         public async Task CalculatePerformance()
         {
             var now = DateTime.UtcNow;
@@ -142,7 +143,7 @@ namespace NumbersGoUp.Services
                     Func<BankTicker, double> performanceFn1 = (t) => Math.Sqrt(t.Earnings) * 2;
                     Func<BankTicker, double> performanceFn2 = (t) => t.PriceChangeAvg;
                     Func<BankTicker, double> performanceFn3 = (t) => Math.Min(t.DividendYield, 0.06);
-                    Func<BankTicker, double> performanceFn4 = (t) => 1 - t.DebtEquityRatio.DoubleReduce(1.5, 0);
+                    Func<BankTicker, double> performanceFn4 = (t) => 1 - t.EVEarnings.DoubleReduce(EVEarningsCutoff, 0);
                     //slope here is based on a graph where x-axis is MedianMonthPercVariance and y-axis is MedianMonthPerc
                     var minmax1 = new MinMaxStore<BankTicker>(performanceFn1);
                     var minmax2 = new MinMaxStore<BankTicker>(performanceFn2);
@@ -155,10 +156,10 @@ namespace NumbersGoUp.Services
                         minmax3.Run(ticker);
                         minmax4.Run(ticker);
                     }
-                    Func<BankTicker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 55) +
+                    Func<BankTicker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 35) +
                                                                          (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 25) +
                                                                          (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 10) +
-                                                                         (performanceFn4(t).DoubleReduce(minmax4.Max, minmax4.Min) * 10);
+                                                                         (performanceFn4(t).DoubleReduce(minmax4.Max, minmax4.Min) * 30);
                     var minmaxTotal = new MinMaxStore<BankTicker>(performanceFnTotal);
                     foreach (var ticker in tickers)
                     {
