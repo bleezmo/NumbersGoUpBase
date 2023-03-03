@@ -56,7 +56,7 @@ namespace NumbersGoUp.Utils
                      * Debt to Equity Ratio (MRQ),Dividend Yield Forward,EBITDA (TTM),Enterprise Value/EBITDA (TTM),EPS Diluted (TTM)
                      */
                     int? tickerIndex = null, sectorIndex = null, marketCapIndex = null, peRatioIndex = null, currentRatioIndex = null, debtEquityRatioIndex = null, dividendIndex = null, 
-                         ebitdaIndex = null, evebitdaIndex = null, epsIndex = null, priceIndex = null, currentEPSIndex = null, futureEPSIndex = null, sharesIndex = null, evIndex = null;
+                         ebitdaIndex = null, evebitdaIndex = null, epsIndex = null, priceIndex = null, currentEPSIndex = null, futureEPSIndex = null, sharesIndex = null, evIndex = null, epsGrowthIndex = null;
                     using (var csv = new CsvReader(sr, CultureInfo.InvariantCulture))
                     {
                         string[] headers = null;
@@ -83,6 +83,7 @@ namespace NumbersGoUp.Utils
                                     if (headers[i] == "EPS Forecast (MRQ)") { futureEPSIndex = i; }
                                     if (headers[i] == "Total Shares Outstanding") { sharesIndex = i; }
                                     if (headers[i] == "Enterprise Value (MRQ)") { evIndex = i; }
+                                    if (headers[i] == "EPS Diluted (TTM YoY Growth)") { epsGrowthIndex = i; }
                                 }
                             }
                             else
@@ -150,8 +151,19 @@ namespace NumbersGoUp.Utils
                                     if(eps > 0 && currentEPSIndex.HasValue && double.TryParse(csv[currentEPSIndex.Value], out var currentEPS) &&
                                         futureEPSIndex.HasValue && double.TryParse(csv[futureEPSIndex.Value], out var futureEPS))
                                     {
-                                        var changePerc = currentEPS > 0 ? (futureEPS / currentEPS): 0;
-                                        ticker.EPS = Math.Min(changePerc, 1.2) * eps;
+
+                                        var changePerc = currentEPS > 0 ? ((futureEPS - currentEPS) / currentEPS).DoubleReduce(1, -1, 1, -1): -1;
+                                        if (epsGrowthIndex.HasValue && double.TryParse(csv[epsGrowthIndex.Value], out var epsGrowthPerc))
+                                        {
+                                            epsGrowthPerc = (epsGrowthPerc / 100).DoubleReduce(1, -1, 1, -1);
+                                            var coeff = epsGrowthPerc.ZeroReduce(0, -1);
+                                            changePerc = (coeff * epsGrowthPerc) + ((1 - coeff) * changePerc);
+                                        }
+                                        else
+                                        {
+                                            changePerc = Math.Min(changePerc, 0.1);
+                                        }
+                                        ticker.EPS = eps + (eps * changePerc);
                                     }
                                     else
                                     {
@@ -169,7 +181,7 @@ namespace NumbersGoUp.Utils
                                 }
                                 else
                                 {
-                                    _logger.LogWarning($"EPS not found for {ticker.Symbol}");
+                                    _logger.LogError($"EPS not found for {ticker.Symbol}");
                                 }
                                 if (ticker.Earnings > 0)
                                 {
@@ -190,7 +202,7 @@ namespace NumbersGoUp.Utils
                                 }
                                 else
                                 {
-                                    _logger.LogWarning($"EV EBITDA ratio unavailable for {ticker.Symbol}. Earnings not found.");
+                                    _logger.LogError($"Earnings ratio unavailable for {ticker.Symbol}. Earnings not found.");
                                 }
                                 if (priceIndex.HasValue && double.TryParse(csv[priceIndex.Value], out var price))
                                 {
