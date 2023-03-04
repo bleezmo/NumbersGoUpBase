@@ -1,7 +1,11 @@
 ﻿
 namespace NumbersGoUp.Models
 {
-    public class TickerInfo
+    public interface ITicker
+    {
+        string Symbol { get; set; }
+    }
+    public class TickerInfo : ITicker
     {
         public string Symbol { get; set; }
 

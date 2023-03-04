@@ -45,8 +45,9 @@ namespace NumbersGoUp.Services
         private readonly IStocksContextFactory _contextFactory;
         private readonly IRuntimeSettings _runtimeSettings;
         private readonly TickerBankService _tickerBankService;
-        private readonly string[] _blackList;
-        
+        public string[] TickerWhitelist { get; }
+        public string[] TickerBlacklist { get; }
+
         public double PERatioCutoff { get; }
 
         public TickerService(IConfiguration configuration, IHostEnvironment environment, IHttpClientFactory httpClientFactory, IStocksContextFactory contextFactory, IRuntimeSettings runtimeSettings,
@@ -63,7 +64,8 @@ namespace NumbersGoUp.Services
             _runtimeSettings = runtimeSettings;
             _tickerBankService = tickerBankService;
             PERatioCutoff = tickerBankService.PERatioCutoff;
-            _blackList = configuration["TickerBlacklist"]?.Split(',') ?? new string[] { };
+            TickerBlacklist = tickerBankService.TickerBlacklist;
+            TickerWhitelist = tickerBankService.TickerWhitelist;
         }
         public async Task<IEnumerable<Ticker>> GetTickers()
         {
@@ -71,7 +73,7 @@ namespace NumbersGoUp.Services
             {
                 var tickers = await stocksContext.Tickers.Where(t => t.PerformanceVector > PERFORMANCE_CUTOFF && t.AvgMonthPerc > -1000)
                                                   .OrderByDescending(t => t.PerformanceVector).Take(MAX_TICKERS).ToListAsync(_appCancellation.Token);
-                return tickers.Where(t => !_blackList.Any(s => string.Equals(s, t.Symbol, StringComparison.InvariantCultureIgnoreCase)));
+                return tickers.Where(t => !TickerBlacklist.TickerAny(t));
             }
         }
         public async Task<IEnumerable<Ticker>> GetTickers(string[] symbols)
@@ -162,12 +164,12 @@ namespace NumbersGoUp.Services
                                     var currentRegression = (regressionSlope * (bars.Length - 1)) + yintercept;
                                     var currentPerc = (bars[bars.Length - 1].Price() - initialPrice) * 100 / initialPrice;
                                     ticker.RegressionAngle = Utils.Utils.GetAngle(currentPerc - currentRegression, regressionStDev);
+                                    ticker.PERatio = ticker.EPS > 0 ? bars.Last().Price() / ticker.EPS : 1000;
                                     if (slopes.Count > 0 && regressionSlope > 0)
                                     {
                                         ticker.AvgMonthPerc = slopes.Average();
                                         ticker.MonthPercVariance = slopes.Sum(s => Math.Pow(s - ticker.AvgMonthPerc, 2)) / slopes.Count;
                                         ticker.MaxMonthConsecutiveLosses = maxMonthConsecutiveLosses;
-                                        ticker.PERatio = ticker.EPS > 0 ? bars.Last().Price() / ticker.EPS : 1000;
                                     }
                                 }
                             }
@@ -178,7 +180,14 @@ namespace NumbersGoUp.Services
                         var tickers = await stocksContext.Tickers.ToArrayAsync(_appCancellation.Token);
                         foreach(var ticker in tickers)
                         {
-                            if(ticker.AvgMonthPerc > -1000 && ticker.PERatio > 0 && ticker.PERatio < PERatioCutoff)
+                            if(TickerWhitelist.TickerAny(ticker))
+                            {
+                                ticker.PerformanceVector = 100;
+                                ticker.LastCalculatedPerformance = now.UtcDateTime;
+                                ticker.LastCalculatedPerformanceMillis = nowMillis;
+                                stocksContext.Tickers.Update(ticker);
+                            }
+                            else if(ticker.AvgMonthPerc > -1000 && ticker.PERatio > 0 && ticker.PERatio < PERatioCutoff)
                             {
                                 toUpdate.Add(ticker);
                             }
@@ -476,12 +485,12 @@ namespace NumbersGoUp.Services
                                 var currentRegression = (regressionSlope * (bars.Length - 1)) + yintercept;
                                 var currentPerc = (bars[bars.Length - 1].Price() - initialPrice) * 100 / initialPrice;
                                 ticker.RegressionAngle = Utils.Utils.GetAngle(currentPerc - currentRegression, regressionStDev);
+                                ticker.PERatio = ticker.EPS > 0 ? bars.Last().Price() / ticker.EPS : 1000;
                                 if (slopes.Count > 0 && regressionSlope > 0)
                                 {
                                     ticker.AvgMonthPerc = slopes.Average();
                                     ticker.MonthPercVariance = slopes.Sum(s => Math.Pow(s - ticker.AvgMonthPerc, 2)) / slopes.Count;
                                     ticker.MaxMonthConsecutiveLosses = maxMonthConsecutiveLosses;
-                                    ticker.PERatio = ticker.EPS > 0 ? bars.Last().Price() / ticker.EPS : 1000;
                                 }
                             }
                         }
@@ -496,7 +505,15 @@ namespace NumbersGoUp.Services
                     }
                     foreach (var ticker in tickers)
                     {
-                        if (ticker.AvgMonthPerc > -1000 && ticker.PERatio > 0 && ticker.PERatio < PERatioCutoff)
+
+                        if (TickerWhitelist.TickerAny(ticker))
+                        {
+                            ticker.PerformanceVector = 100;
+                            ticker.LastCalculatedPerformance = now.UtcDateTime;
+                            ticker.LastCalculatedPerformanceMillis = nowMillis;
+                            stocksContext.Tickers.Update(ticker);
+                        }
+                        else if (ticker.AvgMonthPerc > -1000 && ticker.PERatio > 0 && ticker.PERatio < PERatioCutoff)
                         {
                             toUpdate.Add(ticker);
                         }

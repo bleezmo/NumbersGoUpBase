@@ -23,9 +23,6 @@ namespace NumbersGoUp.Services
         private readonly IStocksContextFactory _contextFactory;
         private readonly double _peratioCutoff;
         private readonly TickerService _tickerService;
-        private Task _startTask;
-        private static readonly SemaphoreSlim _taskSem = new SemaphoreSlim(1, 1);
-        private double _buyCutoff = 100;
 
         public double EncouragementMultiplier { get; }
 
@@ -38,30 +35,6 @@ namespace NumbersGoUp.Services
             EncouragementMultiplier = Math.Min(Math.Max(double.TryParse(configuration["EncouragementMultiplier"], out var encouragementMultiplier) ? encouragementMultiplier : 0, -1), 1);
             _peratioCutoff = tickerService.PERatioCutoff;
             _tickerService = tickerService;
-        }
-        private async Task Init()
-        {
-            var tickers = await _tickerService.GetTickers();
-            _buyCutoff = tickers.Skip(4).Take(1).FirstOrDefault()?.PerformanceVector ?? _buyCutoff;
-        }
-        public async Task Ready()
-        {
-            if (_startTask == null)
-            {
-                await _taskSem.WaitAsync();
-                try
-                {
-                    if (_startTask == null)
-                    {
-                        _startTask = Task.Run(Init);
-                    }
-                }
-                finally
-                {
-                    _taskSem.Release();
-                }
-            }
-            await _startTask;
         }
         public Task<double?> BuyPredict(string symbol) => Predict(symbol, true);
         public Task<double> BuyPredict(BarMetric barMetric) => Predict(barMetric, true);
@@ -99,7 +72,7 @@ namespace NumbersGoUp.Services
                     _logger.LogError($"BarMetrics data for {symbol} isn't up to date! Returning default prediction.");
                     return 0.0;
                 }
-                return await Predict(ticker, barMetrics, buy);
+                return Predict(ticker, barMetrics, buy);
             }
             catch (Exception ex)
             {
@@ -120,7 +93,7 @@ namespace NumbersGoUp.Services
                     barMetrics = await stocksContext.BarMetrics.Where(p => p.Symbol == barMetric.Symbol && p.BarDayMilliseconds <= barMetric.BarDayMilliseconds)
                                         .OrderByDescending(b => b.BarDayMilliseconds).Take(FEATURE_HISTORY_DAY).Include(b => b.HistoryBar).ToArrayAsync(_appCancellation.Token);
                 }
-                return await Predict(ticker, barMetrics, buy);
+                return Predict(ticker, barMetrics, buy);
             }
             catch (Exception ex)
             {
@@ -128,13 +101,16 @@ namespace NumbersGoUp.Services
             }
             return 0.0;
         }
-        private async Task<double> Predict(Ticker ticker, BarMetric[] barMetrics, bool buy)
+        private double Predict(Ticker ticker, BarMetric[] barMetrics, bool buy)
         {
             if (barMetrics.Length == FEATURE_HISTORY_DAY)
             {
-                await Ready();
                 const double sellCutoff = 50 / 3;
                 double peRatio = ticker.EPS > 0 ? (barMetrics[0].HistoryBar.Price() / ticker.EPS) : _peratioCutoff;
+                if(_tickerService.TickerWhitelist.TickerAny(ticker))
+                {
+                    peRatio = Math.Min(peRatio, _peratioCutoff / 3);
+                }
                 double pricePrediction;
 
                 if (buy)
@@ -209,36 +185,5 @@ namespace NumbersGoUp.Services
             }
             return 0.0;
         }
-
-#if DEBUG
-        private Dictionary<int, List<double>> valueLists = new Dictionary<int, List<double>>();
-        private async Task DoAvgs(params double[] values)
-        {
-            await _taskSem.WaitAsync();
-            try
-            {
-                for (var i = 0; i < values.Length; i++)
-                {
-                    if (!valueLists.ContainsKey(i))
-                    {
-                        valueLists.Add(i, new List<double>());
-                    }
-                    valueLists[i].Add(values[i]);
-                }
-                foreach (var kv in valueLists)
-                {
-                    if (kv.Value.Count > 0)
-                    {
-                        var avg = kv.Value.Average();
-                        _logger.LogInformation($"avg{kv.Key}: {avg} stdev{kv.Key}: {Math.Sqrt(kv.Value.Sum(v => Math.Pow(v - 0, 2)) / kv.Value.Count)}");
-                    }
-                }
-            }
-            finally
-            {
-                _taskSem.Release();
-            }
-        }
-#endif
     }
 }

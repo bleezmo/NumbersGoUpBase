@@ -14,7 +14,7 @@ namespace NumbersGoUp.Models
     [Index(nameof(PerformanceVector))]
     [Index(nameof(PERatio))]
     [Index(nameof(AvgMonthPerc))]
-    public class Ticker
+    public class Ticker : ITicker
     {
         public long Id { get; set; }
         public string Symbol { get; set; }

@@ -11,7 +11,7 @@ namespace NumbersGoUp.Models
     [Index(nameof(PerformanceVector))]
     [Index(nameof(LastCalculatedPerformanceMillis))]
     [Index(nameof(LastCalculatedFinancialsMillis))]
-    public class BankTicker
+    public class BankTicker : ITicker
     {
         public long Id { get; set; }
         public string Symbol { get; set; }

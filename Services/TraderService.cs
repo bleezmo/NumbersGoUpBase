@@ -130,7 +130,7 @@ namespace NumbersGoUp.Services
                             if (tickerPosition.Position != null)
                             {
                                 var currentEquityPerc = tickerPosition.Position.Quantity * currentPrice / _account.Balance.LastEquity;
-                                buyMultiplier *= (1 - (currentEquityPerc /  MaxTickerEquityPerc(ticker, lastBarMetric)).DoubleReduce(1, 0.2)) *
+                                buyMultiplier *= (1 - (currentEquityPerc /  MaxTickerEquityPerc(ticker, lastBarMetric)).DoubleReduce(0.5, 0.2)) *
                                                  (1 - currentEquityPerc.DoubleReduce(0.2, 0.04)).Curve3(percProfit.DoubleReduce(ticker.ProfitLossAvg, 0, 3, 0));
                             }
                             buyMultiplier = FinalBuyMultiplier(buyMultiplier);
@@ -217,7 +217,7 @@ namespace NumbersGoUp.Services
                         var currentPrice = position.AssetLastPrice.HasValue ? position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(position.Symbol)).Price;
                         var percProfit = position.UnrealizedProfitLossPercent.HasValue ? position.UnrealizedProfitLossPercent.Value * 100 : ((currentPrice - position.CostBasis) * 100 / position.CostBasis);
 
-                        sellMultiplier += (1 - sellMultiplier) * sellMultiplier * ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * MaxTickerEquityPerc(ticker, lastBarMetric))).DoubleReduce(1.5, 0.5);
+                        sellMultiplier += (1 - sellMultiplier) * sellMultiplier * ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * MaxTickerEquityPerc(ticker, lastBarMetric))).DoubleReduce(1, 0.5);
 
 
                         if (percProfit < -5 && lastBarMetric.BarDay.Month == 12 && lastBarMetric.BarDay.Day > 10) //tax loss harvest
@@ -269,7 +269,7 @@ namespace NumbersGoUp.Services
         private double priorityOrdering(BuySellState bss) => bss.TickerPosition.Ticker.PerformanceVector * bss.ProfitLossPerc.ZeroReduce(bss.TickerPosition.Ticker.ProfitLossAvg + bss.TickerPosition.Ticker.ProfitLossStDev, (bss.TickerPosition.Ticker.ProfitLossAvg + bss.TickerPosition.Ticker.ProfitLossStDev) * -1);
         private double FinalSellMultiplier(double sellMultiplier) => sellMultiplier.Curve1(_cashEquityRatio.DoubleReduce(0.5, 0, 5, 1));
         private double FinalBuyMultiplier(double buyMultiplier) => buyMultiplier.Curve3((1 - _cashEquityRatio).DoubleReduce(1, 0.7, 4, 2));
-        private double MaxTickerEquityPerc(Ticker ticker, BarMetric lastBarMetric) => (0.5 * lastBarMetric.ProfitLossPerc.DoubleReduce(ticker.ProfitLossAvg, ticker.ProfitLossAvg - (ticker.ProfitLossStDev* 1.5))) + (0.5 * ticker.PerformanceVector.DoubleReduce(100, 0) * ticker.DividendYield.DoubleReduce(0.04, 0));
+        private double MaxTickerEquityPerc(Ticker ticker, BarMetric lastBarMetric) => (0.5 * lastBarMetric.ProfitLossPerc.DoubleReduce(ticker.ProfitLossAvg, ticker.ProfitLossAvg - (ticker.ProfitLossStDev* 1.5)).VTailExpCurve(2)) + (0.5 * ticker.PerformanceVector.DoubleReduce(100, 0) * ticker.DividendYield.DoubleReduce(0.04, 0));
 
         private async Task AddOrder(OrderSide orderSide, string symbol, double targetPrice, double multiplier)
         {

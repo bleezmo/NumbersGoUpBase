@@ -1,4 +1,6 @@
 ﻿
+using NumbersGoUp.Models;
+
 namespace NumbersGoUp.Utils
 {
     public static class Utils
@@ -60,6 +62,8 @@ namespace NumbersGoUp.Utils
         public static double WCurve(this double x) => (-0.5 * Math.Cos(4 * Math.PI * x)) + 0.5;
         public static double WExpCurve(this double x, int peaks = 2) => ((-0.5 * Math.Cos(peaks * 2 * Math.PI * x)) + 0.5)*x;
         public static double VTailCurve(this double x) => (-0.5 * Math.Cos(3 * Math.PI * x)) + 0.5;
+        public static double VTailExpCurve(this double x, int peaks = 1) => (-0.5 * Math.Cos(((peaks * 2)+1) * Math.PI * x)) + 0.5;
+        public static bool TickerAny(this string[] symbols, ITicker t) => symbols.Any(s => string.Equals(s, t.Symbol, StringComparison.InvariantCultureIgnoreCase));
         public static double ApplyAlma<T>(this T[] objs, Func<T, double> objFn, double[] gaussianWeights = null)
         {
             if(gaussianWeights == null)

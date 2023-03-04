@@ -33,6 +33,8 @@ namespace NumbersGoUp.Services
         private readonly DateTime _lookbackDate = DateTime.Now.AddYears(-DataService.LOOKBACK_YEARS);
         public double PERatioCutoff { get; }
         public double EVEarningsCutoff { get => PERatioCutoff * 1.5; }
+        public string[] TickerWhitelist { get; }
+        public string[] TickerBlacklist { get; }
 
         private readonly IBrokerService _brokerService;
 
@@ -50,6 +52,8 @@ namespace NumbersGoUp.Services
             _runtimeSettings = runtimeSettings;
             PERatioCutoff = double.TryParse(configuration[PERATIO_CUTOFF_KEY], out var peratioCutoff) ? peratioCutoff : 30;
             _brokerService = brokerService;
+            TickerWhitelist = configuration["TickerWhitelist"]?.Split(',') ?? new string[] { };
+            TickerBlacklist = configuration["TickerBlacklist"]?.Split(',') ?? new string[] { };
         }
         public async Task Load()
         {
@@ -57,12 +61,12 @@ namespace NumbersGoUp.Services
             {
                 var tickers = await _tickerProcessor.DownloadTickers(_runtimeSettings.ForceDataCollection);
                 if (tickers.Count == 0) { return; }
-                tickers = tickers.Where(t => BasicCutoff(t)).ToList();
+                tickers = tickers.Where(t => TickerWhitelist.TickerAny(t) || BasicCutoff(t)).ToList();
                 _logger.LogInformation($"Loading {tickers.Count} tickers into ticker bank");
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
                     var dbTickers = await stocksContext.TickerBank.ToArrayAsync(_appCancellation.Token);
-                    var toRemove = dbTickers.Where(t1 => !tickers.Any(t2 => t1.Symbol == t2.Symbol)).ToArray();
+                    var toRemove = dbTickers.Where(t1 => !tickers.Any(t2 => t1.Symbol == t2.Symbol) && !TickerWhitelist.TickerAny(t1)).ToArray();
                     stocksContext.TickerBank.RemoveRange(toRemove);
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
                     List<BankTicker> toUpdate = new List<BankTicker>(), toAdd = new List<BankTicker>();
@@ -96,7 +100,7 @@ namespace NumbersGoUp.Services
                 _logger.LogError(e, "Error occurred when loading ticker bank data");
             }
         }
-        private bool BasicCutoff(BankTicker ticker) => ticker.DebtEquityRatio > 0 && ticker.DebtEquityRatio < 1.5 && 
+        private bool BasicCutoff(BankTicker ticker) => !TickerBlacklist.TickerAny(ticker) && ticker.DebtEquityRatio > 0 && ticker.DebtEquityRatio < 1.5 && 
                                                        (ticker.CurrentRatio > (ticker.DebtEquityRatio * 1.1) || ticker.DebtEquityRatio < 0.9) && 
                                                        ticker.Earnings > 0 && ticker.DividendYield > 0.005 && ticker.EPS > 0 && ticker.EVEarnings > 0 && ticker.EVEarnings < EVEarningsCutoff;
         public async Task CalculatePerformance()
@@ -118,7 +122,8 @@ namespace NumbersGoUp.Services
                         {
                             if(t.EPS > 0)
                             {
-                                var price = (await _brokerService.GetLastTrade(t.Symbol)).Price;
+                                var currentBar = await stocksContext.HistoryBars.Where(b => b.Symbol == t.Symbol).OrderByDescending(b => b.BarDayMilliseconds).FirstOrDefaultAsync(_appCancellation.Token);
+                                var price = currentBar != null ? currentBar.ClosePrice : (await _brokerService.GetLastTrade(t.Symbol)).Price;
                                 peRatio = price / t.EPS;
                             }
                         }
@@ -126,7 +131,15 @@ namespace NumbersGoUp.Services
                         {
                             _logger.LogError(e, $"Error retrieving latest price info for bank ticker {t.Symbol}");
                         }
-                        if(BasicCutoff(t) && peRatio < PERatioCutoff && peRatio > 1 && t.PriceChangeAvg > 0)
+                        if(TickerWhitelist.TickerAny(t))
+                        {
+                            t.PERatio = peRatio;
+                            t.LastCalculatedPerformance = now;
+                            t.LastCalculatedPerformanceMillis = nowMillis;
+                            t.PerformanceVector = 100;
+                            stocksContext.TickerBank.Update(t);
+                        }
+                        else if(BasicCutoff(t) && peRatio < PERatioCutoff && peRatio > 1 && t.PriceChangeAvg > 0)
                         {
                             t.PERatio = peRatio;
                             tickers.Add(t);
