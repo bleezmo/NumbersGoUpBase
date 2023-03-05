@@ -129,9 +129,16 @@ namespace NumbersGoUp.Services
                                                                                                                                               (currentPrice - tickerPosition.Position.CostBasis) * 100 / tickerPosition.Position.CostBasis) : 0.0;
                             if (tickerPosition.Position != null)
                             {
-                                var currentEquityPerc = tickerPosition.Position.Quantity * currentPrice / _account.Balance.LastEquity;
-                                buyMultiplier *= (1 - (currentEquityPerc /  MaxTickerEquityPerc(ticker, lastBarMetric)).DoubleReduce(0.5, 0.2)) *
-                                                 (1 - currentEquityPerc.DoubleReduce(0.2, 0.04)).Curve3(percProfit.DoubleReduce(ticker.ProfitLossAvg, 0, 3, 0));
+                                if (percProfit < 0 && lastBarMetric.BarDay.Month == 12) //tax loss harvest
+                                {
+                                    buyMultiplier = 0;
+                                }
+                                else
+                                {
+                                    var currentEquityPerc = tickerPosition.Position.Quantity * currentPrice / _account.Balance.LastEquity;
+                                    buyMultiplier *= (1 - (currentEquityPerc / MaxTickerEquityPerc(ticker, lastBarMetric)).DoubleReduce(1, 0.2)) *
+                                                     (1 - currentEquityPerc.DoubleReduce(0.2, 0.04)).Curve3(percProfit.DoubleReduce(ticker.ProfitLossAvg, 0, 3, 0));
+                                }
                             }
                             buyMultiplier = FinalBuyMultiplier(buyMultiplier);
                             if (buyMultiplier > MULTIPLIER_BUY_THRESHOLD)
@@ -217,7 +224,8 @@ namespace NumbersGoUp.Services
                         var currentPrice = position.AssetLastPrice.HasValue ? position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(position.Symbol)).Price;
                         var percProfit = position.UnrealizedProfitLossPercent.HasValue ? position.UnrealizedProfitLossPercent.Value * 100 : ((currentPrice - position.CostBasis) * 100 / position.CostBasis);
 
-                        sellMultiplier += (1 - sellMultiplier) * sellMultiplier * ((tickerPosition.Position.Quantity * currentPrice) / (_account.Balance.LastEquity * MaxTickerEquityPerc(ticker, lastBarMetric))).DoubleReduce(1, 0.5);
+                        var currentEquityPerc = tickerPosition.Position.Quantity * currentPrice / _account.Balance.LastEquity;
+                        sellMultiplier += (1 - sellMultiplier) * sellMultiplier * (currentEquityPerc / MaxTickerEquityPerc(ticker, lastBarMetric)).DoubleReduce(1.5, 0.5);
 
 
                         if (percProfit < -5 && lastBarMetric.BarDay.Month == 12 && lastBarMetric.BarDay.Day > 10) //tax loss harvest
