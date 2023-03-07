@@ -59,10 +59,10 @@ namespace NumbersGoUp.Utils
         public static double Curve4(this double x, double exp, double cutoff = 1) => 1 - Math.Pow(Math.Pow(x * cutoff.CurveCoeff(exp), exp) - 1, 4);
         public static double Curve6(this double x, double exp, double cutoff = 1) => 1 - Math.Pow(Math.Pow(x * cutoff.CurveCoeff(exp), exp) - 1, 6);
         private static double CurveCoeff(this double cutoff, double exp) => 1 / Math.Pow(cutoff, exp);
-        public static double WCurve(this double x) => (-0.5 * Math.Cos(4 * Math.PI * x)) + 0.5;
+        public static double WCurve(this double x, int peaks = 2) => (-0.5 * Math.Cos(peaks * 2 * Math.PI * x)) + 0.5;
         public static double WExpCurve(this double x, int peaks = 2) => ((-0.5 * Math.Cos(peaks * 2 * Math.PI * x)) + 0.5)*x;
-        public static double VTailCurve(this double x) => (-0.5 * Math.Cos(3 * Math.PI * x)) + 0.5;
-        public static double VTailExpCurve(this double x, int peaks = 1) => (-0.5 * Math.Cos(((peaks * 2)+1) * Math.PI * x)) + 0.5;
+        public static double VTailCurve(this double x, int peaks = 1) => (-0.5 * Math.Cos(((peaks * 2) + 1) * Math.PI * x)) + 0.5;
+        public static double VTailExpCurve(this double x, int peaks = 1) => (-0.5 * Math.Cos(((peaks * 2) + 1) * Math.PI * x)) + 0.5;
         public static bool TickerAny(this string[] symbols, ITicker t) => symbols.Any(s => string.Equals(s, t.Symbol, StringComparison.InvariantCultureIgnoreCase));
         public static double ApplyAlma<T>(this T[] objs, Func<T, double> objFn, double[] gaussianWeights = null)
         {
