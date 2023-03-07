@@ -83,7 +83,7 @@ namespace NumbersGoUp.Services
             return;
 #endif
             var now = DateTime.Now;
-            if (now.DayOfWeek == DayOfWeek.Tuesday || now.DayOfWeek == DayOfWeek.Friday) //don't need to check every day
+            if (now.DayOfWeek == DayOfWeek.Friday) //don't need to check every day
             {
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
