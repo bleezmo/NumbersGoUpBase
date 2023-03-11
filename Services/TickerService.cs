@@ -369,11 +369,12 @@ namespace NumbersGoUp.Services
         }
 #if DEBUG
 
-        public async Task TestAveragesAndPerformance(DateTime? cutoff = null, string[] symbols = null)
+        public async Task TestAveragesAndPerformance(DateTime? cutoff = null, int? lookbackYears = null, string[] symbols = null)
         {
+            
             var now = cutoff.HasValue ? new DateTimeOffset(cutoff.Value) : DateTimeOffset.UtcNow;
             var nowMillis = now.ToUnixTimeMilliseconds();
-            var lookback = now.AddYears(-DataService.LOOKBACK_YEARS);
+            var lookback = lookbackYears.HasValue ? now.AddYears(-lookbackYears.Value) : now.AddYears(-DataService.LOOKBACK_YEARS);
             var lookbackMillis = lookback.ToUnixTimeMilliseconds();
             _logger.LogInformation($"Calculating performance from {lookback:yyyy-MM-dd} to {cutoff:yyyy-MM-dd}");
             using (var stocksContext = _contextFactory.CreateDbContext())
@@ -427,7 +428,7 @@ namespace NumbersGoUp.Services
                     var bars = await stocksContext.HistoryBars.Where(bar => bar.Symbol == ticker.Symbol && bar.BarDayMilliseconds > lookbackMillis && bar.BarDayMilliseconds < nowMillis).OrderBy(b => b.BarDayMilliseconds).ToArrayAsync(_appCancellation.Token);
                     if (bars.Any())
                     {
-                        if (now.AddYears(1 - DataService.LOOKBACK_YEARS).CompareTo(bars.First().BarDay) > 0 && now.AddDays(-7).CompareTo(bars.Last().BarDay) < 0)
+                        if (now.AddYears(lookbackYears.HasValue ? (1-lookbackYears.Value) : (1-DataService.LOOKBACK_YEARS)).CompareTo(bars.First().BarDay) > 0 && now.AddDays(-7).CompareTo(bars.Last().BarDay) < 0)
                         {
                             var maxMonthConsecutiveLosses = 0.0;
                             var consecutiveLosses = 0;

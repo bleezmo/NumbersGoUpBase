@@ -35,6 +35,7 @@ namespace NumbersGoUp.Services
         private MarketDay _lastMarketDay;
         private Task _startTask;
         private static readonly SemaphoreSlim _taskSem = new SemaphoreSlim(1, 1);
+        private readonly string[] _positionIgnore;
 
         private string ProfilePath = "/v1/user/profile";
         private string AccountPath => $"/v1/accounts/{_account.AccountId}/balances";
@@ -56,6 +57,7 @@ namespace NumbersGoUp.Services
             _tradierDataClient = httpClientFactory.CreateClient("retry");
             _tradierOrderClient = httpClientFactory.CreateClient();
             _configuration = configuration;
+            _positionIgnore = configuration["PositionIgnore"]?.Split(',') ?? new string[] { };
         }
         private void SetTradierHttpClients(string token, params HttpClient[] clients)
         {
@@ -458,7 +460,7 @@ namespace NumbersGoUp.Services
             await Ready();
             await _rateLimiter.LimitTradierRate();
             var jmodelPositions = (await GetResponse<JsonModels.TradierPositionsWrapper>(PositionsPath))?.TradierPositions?.Positions;
-            
+            jmodelPositions = jmodelPositions.Where(p => !_positionIgnore.Contains(p.Symbol)).ToArray();
             if(jmodelPositions != null && jmodelPositions.Length > 0)
             {
                 var positions = new List<Position>();

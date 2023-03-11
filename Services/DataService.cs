@@ -282,7 +282,6 @@ namespace NumbersGoUp.Services
                     HistoryBarId = bars[0].Id,
                 };
                 var (sma, smaUpper, smaLower) = BollingerBands(bars.Take(SMA_LENGTH).ToArray(), DefaultBarFn);
-                var (smaPrev, smaUpperPrev, _) = BollingerBands(bars.Skip(5).Take(SMA_LENGTH).ToArray(), DefaultBarFn);
                 var (sma2, sma2Upper, sma2Lower) = BollingerBands(bars.Take(SMA2_LENGTH).ToArray(), DefaultBarFn);
                 var (sma3, sma3Upper, sma3Lower) = BollingerBands(bars.Take(SMA3_LENGTH).ToArray(), DefaultBarFn);
                 var alma = ApplyAlma(bars.Take(ALMA_LENGTH).ToArray(), DefaultBarFn);

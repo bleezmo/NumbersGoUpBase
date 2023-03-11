@@ -59,7 +59,24 @@ namespace NumbersGoUp.Services
                         return;
                     }
                     var cash = _account.Balance.TradableCash;
-                    _cashEquityRatio = Math.Max(cash / equity, 0);
+                    var positions = await _brokerService.GetPositions();
+                    var currentBarMetrics = new List<BarMetric>();
+                    using (var stocksContext = _contextFactory.CreateDbContext())
+                    {
+                        foreach(var position in positions)
+                        {
+                            var barMetric = await stocksContext.BarMetrics.Where(b => b.Symbol == position.Symbol).OrderByDescending(m => m.BarDayMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
+                            if (barMetric != null) { currentBarMetrics.Add(barMetric); }
+                            else { _logger.LogError($"Bar metric not found for position {position.Symbol}"); }
+                        }
+                    }
+                    var cashEquityRatioOffset = 1.0;
+                    if (currentBarMetrics.Count > 1)
+                    {
+                        var smasmaMode = currentBarMetrics.OrderBy(b => b.SMASMA).Skip(currentBarMetrics.Count / 2).Take(1).First().SMASMA;
+                        cashEquityRatioOffset = smasmaMode.DoubleReduce(0, -20);
+                    }
+                    _cashEquityRatio = Math.Max(cash / equity, 0) * cashEquityRatioOffset;
                     _logger.LogInformation($"Using Cash-Equity Ratio: {_cashEquityRatio}");
 
                     _logger.LogInformation("Running previous-day metrics");
@@ -69,9 +86,9 @@ namespace NumbersGoUp.Services
                         _logger.LogError("Negative cash balance!");
                     }
                     _logger.LogInformation("Running buy orders");
-                    await Buy();
+                    await Buy(positions);
                     _logger.LogInformation("Running sell orders");
-                    await Sell();
+                    await Sell(positions);
                     _logger.LogInformation("Running order executions");
                     await ExecuteOrders();
                     _logger.LogInformation("Cleaning up");
@@ -92,7 +109,7 @@ namespace NumbersGoUp.Services
                 _logger.LogInformation("Trades Completed");
             }
         }
-        public async Task Buy()
+        public async Task Buy(IEnumerable<Position> positions)
         {
             var now = DateTime.UtcNow;
             var dayStart = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds();
@@ -102,7 +119,6 @@ namespace NumbersGoUp.Services
                 currentOrders = await stocksContext.Orders.Where(o => o.Account == _account.AccountId && o.TimeLocalMilliseconds > dayStart).ToListAsync(_appCancellation.Token);
             }
             var tickers = await _tickerService.GetTickers();
-            var positions = await _brokerService.GetPositions();
             var tickerPositions = tickers.Select(t => new TickerPosition { Ticker = t, Position = positions.FirstOrDefault(p => t.Symbol == p.Symbol) }).ToArray();
 
             var buys = new List<BuySellState>();
@@ -179,10 +195,9 @@ namespace NumbersGoUp.Services
                 _logger.LogInformation($"Added buy order for {buy.BarMetric.Symbol} with multiplier {buy.Multiplier} at price {limit:C2}");
             }
         }
-        public async Task Sell()
+        public async Task Sell(IEnumerable<Position> positions)
         {
             var now = DateTime.UtcNow;
-            var positions = await _brokerService.GetPositions();
             var tickers = await _tickerService.GetTickers(positions.Select(p => p.Symbol).ToArray());
             var tickerPositions = positions.Select(p => new TickerPosition { Position = p, Ticker = tickers.FirstOrDefault(t => t.Symbol == p.Symbol) });
 
@@ -275,8 +290,8 @@ namespace NumbersGoUp.Services
             }
         }
         private double priorityOrdering(BuySellState bss) => bss.TickerPosition.Ticker.PerformanceVector * bss.ProfitLossPerc.ZeroReduce(bss.TickerPosition.Ticker.ProfitLossAvg + bss.TickerPosition.Ticker.ProfitLossStDev, (bss.TickerPosition.Ticker.ProfitLossAvg + bss.TickerPosition.Ticker.ProfitLossStDev) * -1);
-        private double FinalSellMultiplier(double sellMultiplier) => sellMultiplier.Curve1(_cashEquityRatio.DoubleReduce(0.5, 0, 5, 1));
-        private double FinalBuyMultiplier(double buyMultiplier) => buyMultiplier.Curve3((1 - _cashEquityRatio).DoubleReduce(1, 0.7, 4, 2));
+        private double FinalSellMultiplier(double sellMultiplier) => sellMultiplier.Curve2(_cashEquityRatio.DoubleReduce(0.4, 0, 6, 1));
+        private double FinalBuyMultiplier(double buyMultiplier) => buyMultiplier.Curve4((1 - _cashEquityRatio).DoubleReduce(1, 0.6, 4, 2));
         private double MaxTickerEquityPerc(Ticker ticker, BarMetric lastBarMetric) => (0.5 * lastBarMetric.ProfitLossPerc.DoubleReduce(ticker.ProfitLossAvg, ticker.ProfitLossAvg - (ticker.ProfitLossStDev* 1.5)).VTailExpCurve(2)) + (0.5 * ticker.PerformanceVector.DoubleReduce(100, 0) * ticker.DividendYield.DoubleReduce(0.04, 0));
 
         private async Task AddOrder(OrderSide orderSide, string symbol, double targetPrice, double multiplier)
@@ -412,7 +427,7 @@ namespace NumbersGoUp.Services
             var sellOrders = currentOrders.Where(o => o.Side == OrderSide.Sell).ToArray();
 
             //var avgBuyMultiplier = buyOrders.Any() ? buyOrders.Select(o => o.Multiplier).Average() : 0.0;
-            var remainingBuyAmount = Math.Min(_account.Balance.LastEquity * MAX_DAILY_BUY * _cashEquityRatio.DoubleReduce(0.3,0).Curve4(1), balance);
+            var remainingBuyAmount = Math.Min(_account.Balance.LastEquity * MAX_DAILY_BUY * _cashEquityRatio.DoubleReduce(0.3,0).Curve2(1), balance);
 
             remainingBuyAmount -= currentOrders.Select(o => o.Side == OrderSide.Buy ? o.AppliedAmt : 0).Sum();
             _logger.LogInformation($"Starting balance {balance:C2} and remaining buy amount {remainingBuyAmount:C2}");
