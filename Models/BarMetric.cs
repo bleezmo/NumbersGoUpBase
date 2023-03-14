@@ -24,6 +24,7 @@ namespace NumbersGoUp.Models
         public double PriceSMA3 { get; set; }
         public double SMASMA { get; set; }
         public double ProfitLossPerc { get; set; }
+        public double RegressionSlope { get; set; }
         public double VolAlmaSMA { get; set; }
     }
 }

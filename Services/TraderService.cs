@@ -243,11 +243,7 @@ namespace NumbersGoUp.Services
                         sellMultiplier += (1 - sellMultiplier) * sellMultiplier * (currentEquityPerc / MaxTickerEquityPerc(ticker, lastBarMetric)).DoubleReduce(1.5, 0.5);
 
 
-                        if (percProfit < -5 && lastBarMetric.BarDay.Month == 12 && lastBarMetric.BarDay.Day > 10) //tax loss harvest
-                        {
-                            sellMultiplier += (1 - sellMultiplier) * sellMultiplier;
-                        }
-                        else if(_predicterService.EncouragementMultiplier == 0)
+                        if(_predicterService.EncouragementMultiplier == 0)
                         {
                             sellMultiplier *= (1 - _cashEquityRatio.DoubleReduce(0.5, 0)).Curve4((1 - percProfit.DoubleReduce(0, -2 * ticker.ProfitLossStDev).VTailCurve()).DoubleReduce(1, 0, 4, 1));
                         }
@@ -332,9 +328,9 @@ namespace NumbersGoUp.Services
                 if (order != null && brokerOrder.OrderSide == OrderSide.Sell && order.AvgEntryPrice > 0)
                 {
                     profitLossPerc = (brokerOrder.AverageFillPrice.Value - order.AvgEntryPrice) * 100 / order.AvgEntryPrice;
-                    if (profitLossPerc < -5)
+                    if (profitLossPerc < 0)
                     {
-                        daysToNextBuy = 62;
+                        daysToNextBuy = ((10 - profitLossPerc).DoubleReduce(20, 1, 10, 1) * 10) + daysToNextBuy;
                     }
                 }
                 var lastBuyOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == order.Symbol && o.NextBuy != null).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
