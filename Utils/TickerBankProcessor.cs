@@ -161,9 +161,9 @@ namespace NumbersGoUp.Utils
                                         }
                                         else
                                         {
-                                            changePerc = Math.Min(changePerc, 0.1);
+                                            changePerc = Math.Min(changePerc, 0.15);
                                         }
-                                        ticker.EPS = eps + (eps * changePerc);
+                                        ticker.EPS = Math.Min(eps + (eps * changePerc), futureEPS * 4);
                                     }
                                     else
                                     {

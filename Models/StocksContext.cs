@@ -11,6 +11,7 @@ namespace NumbersGoUp.Models
         public virtual DbSet<DbOrder> Orders { get; set; }
         public virtual DbSet<DbOrderHistory> OrderHistories { get; set; }
         public virtual DbSet<BankTicker> TickerBank { get; set; }
+        public virtual DbSet<SectorMetric> SectorMetrics { get; set; }
     }
     public interface IStocksContextFactory : IDbContextFactory<StocksContext>
     {

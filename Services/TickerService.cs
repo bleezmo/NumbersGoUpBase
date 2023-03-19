@@ -543,14 +543,16 @@ namespace NumbersGoUp.Services
                     minmaxPE.Run(ticker);
                     minmaxPEEarnings.Run(ticker);
                 }
-                Func<Ticker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 10) +
+                Func<Ticker, double> performanceFnTotal = (t) =>
                                                               (performanceFnEarnings(t).DoubleReduce(minmaxEarnings.Max, minmaxEarnings.Min) * 35) +
-                                                              (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 5) +
-                                                              (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 10) +
-                                                              (performanceFnRegression(t).DoubleReduce(minmaxRegression.Max, minmaxRegression.Min) * 15) +
                                                               (performanceFnEVEarnings(t).DoubleReduce(minmaxEVEarnings.Max, minmaxEVEarnings.Min) * 10) +
                                                               (performanceFnPE(t).DoubleReduce(minmaxPE.Max, minmaxPE.Min) * 5) +
-                                                              (performanceFnPEEarnings(t).DoubleReduce(minmaxPEEarnings.Max, minmaxPEEarnings.Min) * 10);
+                                                              (performanceFnPEEarnings(t).DoubleReduce(minmaxPEEarnings.Max, minmaxPEEarnings.Min) * 10) +
+                                                              (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 10) +
+                                                              (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 5) +
+                                                              (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 10) +
+                                                              (performanceFnRegression(t).DoubleReduce(minmaxRegression.Max, minmaxRegression.Min) * 15);
+
                 var minmaxTotal = new MinMaxStore<Ticker>(performanceFnTotal);
                 var perfAvg = 0.0;
                 foreach (var ticker in toUpdate)

@@ -133,7 +133,8 @@ namespace NumbersGoUp.Services
                         var lastBuyOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == ticker.Symbol && o.NextBuy != null).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
                         if (lastBuyOrder != null && lastBuyOrder.NextBuy.Value.Date.CompareTo(now) > 0) continue;
                     }
-                    var prediction = await _predicterService.BuyPredict(ticker.Symbol);
+                    double? prediction = 1.0;// await _predicterService.BuyPredict(ticker.Symbol);
+                    throw new Exception();
                     if (prediction.HasValue)
                     {
                         var lastBarMetric = await _dataService.GetLastMetric(ticker.Symbol);
@@ -226,7 +227,8 @@ namespace NumbersGoUp.Services
                         if (lastSellOrder != null && lastSellOrder.NextSell.Value.Date.CompareTo(now) > 0) continue;
                     }
                     var avgEntryPrice = position.AverageEntryPrice;
-                    var predictionSell = await _predicterService.SellPredict(position.Symbol);
+                    double? predictionSell = 1.0;// await _predicterService.SellPredict(position.Symbol);
+                    throw new Exception();
                     if (!predictionSell.HasValue) // if null comes back, means there's no info for symbol
                     {
                         _logger.LogWarning($"Invalid metrics for {position.Symbol}. Closing position.");

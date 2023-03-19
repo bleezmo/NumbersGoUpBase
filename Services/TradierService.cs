@@ -92,11 +92,12 @@ namespace NumbersGoUp.Services
 #endif
                 }
                 double.TryParse(_configuration[CASH_MIN], out var cashMinimum);
+                var cashAvailable = balances.Balance.Cash != null ? (balances.Balance.Cash.CashAvailable - balances.Balance.Cash.UnsettledFunds) : (balances.Balance.Margin != null ? balances.Balance.TotalCash : 0.0);
                 _account.Balance = new Balance
                 {
                     BuyingPower = balances.Balance.Margin?.BuyingPower ?? 0.0,
-                    LastEquity = balances.Balance.Equity,
-                    TradableCash = balances.Balance.Cash != null ? (balances.Balance.Cash.CashAvailable - balances.Balance.Cash.UnsettledFunds - cashMinimum) : (balances.Balance.Margin != null ? balances.Balance.TotalCash : 0.0)
+                    LastEquity = balances.Balance.Equity - cashMinimum,
+                    TradableCash = cashAvailable - cashMinimum
                 };
                 await LoadMarketDays(now.Month, now.Year);
                 if (_marketDay == null) //if null, it means we're on the last day of the month

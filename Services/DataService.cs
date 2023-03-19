@@ -7,7 +7,7 @@ namespace NumbersGoUp.Services
 {
     public class DataService
     {
-        public const int LOOKBACK_YEARS = 7;
+        public const int LOOKBACK_YEARS = 6;
 
         private const int VOLEMA_LENGTH = 8;
         private const int SMA_LENGTH = 40;
@@ -89,7 +89,7 @@ namespace NumbersGoUp.Services
         {
             var now = DateTime.Now;
             var days = new List<MarketDay>();
-            for(var i = now.Year-LOOKBACK_YEARS; i < now.Year; i++)
+            for (var i = now.Year - LOOKBACK_YEARS; i < now.Year; i++)
             {
                 _logger.LogInformation($"Retrieving all calendar days for year {i}");
                 days.AddRange(await _brokerService.GetMarketDays(i));
@@ -101,21 +101,21 @@ namespace NumbersGoUp.Services
             }
             var currentMonthDays = await _brokerService.GetMarketDays(now.Year, now.Month);
             days.AddRange(currentMonthDays.Where(d => d.Date.CompareTo(now) < 0));
-            foreach(var ticker in await _tickerService.GetTickers())
+            foreach (var ticker in await _tickerService.GetTickers())
             {
                 _logger.LogInformation($"Checking data for ticker {ticker.Symbol}");
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
                     var misses = 0;
                     var bars = await stocksContext.HistoryBars.Where(b => b.Symbol == ticker.Symbol).ToListAsync();
-                    foreach(var bar in bars)
+                    foreach (var bar in bars)
                     {
-                        if(!days.Any(d => d.Date.CompareTo(bar.BarDay.Date) == 0))
+                        if (!days.Any(d => d.Date.CompareTo(bar.BarDay.Date) == 0))
                         {
                             misses++;
                         }
                     }
-                    if(misses > 0)
+                    if (misses > 0)
                     {
                         _logger.LogWarning($"Missing {misses} days of bar data for {ticker.Symbol}");
                     }
@@ -128,7 +128,7 @@ namespace NumbersGoUp.Services
         }
         public async Task<BarMetric> GetLastMetric(string symbol)
         {
-            using(var stocksContext = _contextFactory.CreateDbContext())
+            using (var stocksContext = _contextFactory.CreateDbContext())
             {
                 return await stocksContext.BarMetrics.Where(b => b.Symbol == symbol).OrderByDescending(m => m.BarDayMilliseconds).Take(1).Include(m => m.HistoryBar).ThenInclude(h => h.Ticker).FirstOrDefaultAsync(_appCancellation.Token);
             }
@@ -291,6 +291,57 @@ namespace NumbersGoUp.Services
             }
             await stocksContext.SaveChangesAsync(_appCancellation.Token);
         }
+        private async Task GenerateSectorMetrics(IEnumerable<Ticker> allTickers)
+        {
+            using var stocksContext = _contextFactory.CreateDbContext();
+            var now = DateTime.Now.Date;
+            var sectorDict = new Dictionary<string, List<Ticker>>();
+            foreach (var ticker in allTickers)
+            {
+                if (sectorDict.TryGetValue(ticker.Sector, out var sectorTickers))
+                {
+                    sectorTickers.Add(ticker);
+                }
+                else
+                {
+                    sectorDict.Add(ticker.Sector, new List<Ticker>(new[] { ticker }));
+                }
+            }
+            foreach (var (sector, tickers) in sectorDict.Select(kv => (kv.Key, kv.Value)))
+            {
+                if (tickers.Count > 2)
+                {
+                    var symbols = tickers.Select(t => t.Symbol).ToArray();
+                    var lookback = DateTime.Now.AddYears(0 - LOOKBACK_YEARS);
+                    var cutoff = new DateTime(lookback.Year, lookback.Month, lookback.Day, 0, 0, 0);
+                    var currentSectorMetric = await stocksContext.SectorMetrics.Where(t => t.Sector == sector).OrderByDescending(t => t.BarDayMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
+                    cutoff = currentSectorMetric?.BarDay ?? cutoff; //give buffer to cutoff
+                    var cutoffMillis = new DateTimeOffset(cutoff).ToUnixTimeMilliseconds();
+                    var barsAll = await stocksContext.BarMetrics.Where(t => symbols.Contains(t.Symbol) && t.BarDayMilliseconds > cutoffMillis).OrderBy(t => t.BarDayMilliseconds).ToArrayAsync(_appCancellation.Token);
+                    for (var dayIndex = cutoff; dayIndex.CompareTo(now) < 0; dayIndex = dayIndex.AddDays(1))
+                    {
+                        var bars = barsAll.Where(b => b.BarDay.Date.CompareTo(dayIndex) == 0).ToArray();
+                        if (bars.Length < 2)
+                        {
+                            continue;
+                        }
+                        var sectorMetric = new SectorMetric
+                        {
+                            Sector = sector,
+                            BarDay = bars[0].BarDay,
+                            BarDayMilliseconds = bars[0].BarDayMilliseconds,
+                        };
+                        sectorMetric.AlmaSMA1 = bars.Average(b => b.AlmaSMA1);
+                        sectorMetric.AlmaSMA2 = bars.Average(b => b.AlmaSMA2);
+                        sectorMetric.AlmaSMA3 = bars.Average(b => b.AlmaSMA3);
+                        sectorMetric.SMASMA = bars.Average(b => b.SMASMA);
+                        sectorMetric.RegressionSlope = bars.Average(b => b.RegressionSlope);
+                        stocksContext.SectorMetrics.Add(sectorMetric);
+                    }
+                    await stocksContext.SaveChangesAsync(_appCancellation.Token);
+                }
+            }
+        }
         private double GetRegressionSlope(HistoryBar[] barsAsc)
         {
             var initialPrice = barsAsc[0].Price();
@@ -307,8 +358,8 @@ namespace NumbersGoUp.Services
             return regressionDenom != 0 ? ((barsAsc.Length * xy) - (x * y)) / regressionDenom : 0.0;
         }
 
-        private static double DefaultBarFn(HistoryBar bar) => bar.Price(); 
-        private static (double sma, double smaUpper, double smaLower) BollingerBands(HistoryBar[] bars, Func<HistoryBar,double> barFn)
+        private static double DefaultBarFn(HistoryBar bar) => bar.Price();
+        private static (double sma, double smaUpper, double smaLower) BollingerBands(HistoryBar[] bars, Func<HistoryBar, double> barFn)
         {
             var sma = bars.Aggregate(0.0, (acc, bar) => acc + barFn(bar)) / bars.Length;
             var stdev = Math.Sqrt(bars.Aggregate(0.0, (acc, bar) => acc + Math.Pow(barFn(bar) - sma, 2)) / bars.Length);
@@ -318,11 +369,11 @@ namespace NumbersGoUp.Services
         }
         private static double GetAngle(double num, double denom)
         {
-            if(denom == 0) { return 0.0; }
+            if (denom == 0) { return 0.0; }
             var perc = num / denom;
             return Math.Asin(perc > 1 ? 1 : (perc < -1 ? -1 : perc)) * (180 / Math.PI);
         }
-        private static double ApplyAlma(HistoryBar[] bars, Func<HistoryBar,double> barFn)
+        private static double ApplyAlma(HistoryBar[] bars, Func<HistoryBar, double> barFn)
         {
             double WtdSum = 0, WtdNorm = 0;
             for (int i = 0; i < bars.Length; i++)
@@ -344,5 +395,13 @@ namespace NumbersGoUp.Services
             }
             return weights;
         }
+#if DEBUG
+        public async Task GenerateMetricsExternal()
+        {
+            var tickers = await _tickerService.GetFullTickerList();
+            await GenerateMetrics(tickers);
+            await GenerateSectorMetrics(tickers);
+        }
+#endif
     }
 }
