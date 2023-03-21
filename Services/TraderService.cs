@@ -214,7 +214,9 @@ namespace NumbersGoUp.Services
                 }
                 else if(bond.Diff < 0) { await ExecuteBondSell(bond); }
             }
+            _logger.LogInformation("Executing sells");
             await ExecuteSells(stocks.Where(r => r.Diff < 0).ToArray());
+            _logger.LogInformation("Executing buys");
             await ExecuteBuys(stocks.Where(r => r.Diff > 0).ToArray(), remainingBuyAmount);
         }
         private async Task ExecuteSells(StockRebalancer[] rebalancers)

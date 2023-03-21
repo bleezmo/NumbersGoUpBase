@@ -1,6 +1,4 @@
-﻿using Alpaca.Markets;
-using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using NumbersGoUp.Models;
 using NumbersGoUp.Services;
@@ -18,14 +16,15 @@ namespace NumbersGoUpBase.Services
         private readonly ILogger<PredicterService> _logger;
         private readonly TickerService _tickerService;
         private readonly PredicterService _predicterService;
-        private readonly string _bondsSymbol;
         private readonly double _stockBondPerc;
+
+        public string BondsSymbol { get; }
 
         public RebalancerService(ILogger<PredicterService> logger, TickerService tickerService, IConfiguration configuration, PredicterService predicterService)
         {
             _logger = logger;
             _tickerService = tickerService;
-            _bondsSymbol = configuration["BondsSymbol"] ?? "STIP";
+            BondsSymbol = configuration["BondsSymbol"] ?? "STIP";
             _stockBondPerc = double.TryParse(configuration["StockBondPerc"], out var stockBondPerc) ? stockBondPerc : 0.85;
             _predicterService = predicterService;
         }
@@ -35,7 +34,7 @@ namespace NumbersGoUpBase.Services
             var equity = account.Balance.LastEquity;
             var cash = account.Balance.TradableCash;
             var allTickers = await _tickerService.GetFullTickerList();
-            foreach(var position in positions.Where(p => p.Symbol != _bondsSymbol))
+            foreach(var position in positions.Where(p => p.Symbol != BondsSymbol))
             {
                 if(!allTickers.Any(t => t.Symbol == position.Symbol))
                 {
@@ -105,11 +104,11 @@ namespace NumbersGoUpBase.Services
             }
             var bondPerc = 1 - _stockBondPerc;
             var bondTargetValue = bondPerc * equity;
-            var bondPosition = positions.FirstOrDefault(p => p.Symbol == _bondsSymbol);
+            var bondPosition = positions.FirstOrDefault(p => p.Symbol == BondsSymbol);
 
             if (bondPosition == null)
             {
-                rebalancers.Add(new BondRebalancer(_bondsSymbol, bondTargetValue));
+                rebalancers.Add(new BondRebalancer(BondsSymbol, bondTargetValue));
             }
             else
             {
@@ -119,7 +118,7 @@ namespace NumbersGoUpBase.Services
                     var diffPerc = (bondTargetValue - marketValue) * 100.0 / marketValue;
                     if (Math.Abs(diffPerc) > 10)
                     {
-                        rebalancers.Add(new BondRebalancer(_bondsSymbol, bondTargetValue - marketValue)
+                        rebalancers.Add(new BondRebalancer(BondsSymbol, bondTargetValue - marketValue)
                         {
                             Position = bondPosition
                         });
@@ -179,8 +178,8 @@ namespace NumbersGoUpBase.Services
             var performanceMultiplier = (0.75 * equityPercMultiplier) + (0.25 * sectorMultiplier);
             if(Position != null && Position.UnrealizedProfitLossPercent.HasValue)
             {
-                var dividentMultiplier = Position.UnrealizedProfitLossPercent.Value < 0 ? 1 : Ticker.DividendYield.DoubleReduce(0.05, 0, 1.25, 0.75);
-                performanceMultiplier *= Math.Log((2 * Position.UnrealizedProfitLossPercent.Value * dividentMultiplier) + Math.E);
+                var dividendMultiplier = Position.UnrealizedProfitLossPercent.Value < 0 ? 1 : Ticker.DividendYield.DoubleReduce(0.05, 0, 1.25, 0.75);
+                performanceMultiplier *= Math.Log((2 * Position.UnrealizedProfitLossPercent.Value * dividendMultiplier) + Math.E);
             }
             return performanceMultiplier;
         }
