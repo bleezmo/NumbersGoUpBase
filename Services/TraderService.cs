@@ -117,8 +117,8 @@ namespace NumbersGoUp.Services
             {
                 var profitLossPerc = 0.0;
                 var dayOfWeek = brokerOrder.FilledAt.Value.DayOfWeek;
-                var daysToNextBuy = 1.0; 
-                var daysToNextSell = 1.0;
+                var daysToNextBuy = brokerOrder.OrderSide == OrderSide.Buy ? (1 - _cashEquityRatio.DoubleReduce(2, 0.2)) * MAX_COOLDOWN_DAYS : MAX_COOLDOWN_DAYS; 
+                var daysToNextSell = brokerOrder.OrderSide == OrderSide.Sell ? _cashEquityRatio.DoubleReduce(0.2, -0.2) * MAX_COOLDOWN_DAYS : MAX_COOLDOWN_DAYS;
                 if (order != null && brokerOrder.OrderSide == OrderSide.Sell && order.AvgEntryPrice > 0)
                 {
                     profitLossPerc = (brokerOrder.AverageFillPrice.Value - order.AvgEntryPrice) * 100 / order.AvgEntryPrice;
