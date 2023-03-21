@@ -117,14 +117,14 @@ namespace NumbersGoUp.Services
             {
                 var profitLossPerc = 0.0;
                 var dayOfWeek = brokerOrder.FilledAt.Value.DayOfWeek;
-                var daysToNextBuy = brokerOrder.OrderSide == OrderSide.Buy ? (1 - _cashEquityRatio.DoubleReduce(2, 0.2)) * MAX_COOLDOWN_DAYS : MAX_COOLDOWN_DAYS; 
-                var daysToNextSell = brokerOrder.OrderSide == OrderSide.Sell ? _cashEquityRatio.DoubleReduce(0.2, -0.2) * MAX_COOLDOWN_DAYS : MAX_COOLDOWN_DAYS;
+                var daysToNextBuy = 1.0; 
+                var daysToNextSell = 1.0;
                 if (order != null && brokerOrder.OrderSide == OrderSide.Sell && order.AvgEntryPrice > 0)
                 {
                     profitLossPerc = (brokerOrder.AverageFillPrice.Value - order.AvgEntryPrice) * 100 / order.AvgEntryPrice;
                     if (profitLossPerc < 0)
                     {
-                        daysToNextBuy = ((10 - profitLossPerc).DoubleReduce(20, 1, 10, 1) * 10) + daysToNextBuy;
+                        daysToNextBuy = 62;
                     }
                 }
                 var lastBuyOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == order.Symbol && o.NextBuy != null).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
@@ -223,6 +223,11 @@ namespace NumbersGoUp.Services
             var equity = _account.Balance.LastEquity;
             foreach (var rebalancer in rebalancers)
             {
+                using (var stocksContext = _contextFactory.CreateDbContext())
+                {
+                    var lastSellOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == rebalancer.Symbol && o.NextSell != null).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
+                    if (lastSellOrder != null && lastSellOrder.NextSell.Value.Date.CompareTo(now) > 0) continue;
+                }
                 var position = rebalancer.Position;
                 if (position == null)
                 {
@@ -283,6 +288,11 @@ namespace NumbersGoUp.Services
             var equity = _account.Balance.LastEquity;
             foreach (var rebalancer in rebalancers.OrderByDescending(r => r.Diff))
             {
+                using (var stocksContext = _contextFactory.CreateDbContext())
+                {
+                    var lastBuyOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == rebalancer.Symbol && o.NextBuy != null).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
+                    if (lastBuyOrder != null && lastBuyOrder.NextBuy.Value.Date.CompareTo(now) > 0) continue;
+                }
                 var position = rebalancer.Position;
                 var buy = rebalancer.Diff;
                 if (remainingBuyAmount < buy) { buy = remainingBuyAmount; }

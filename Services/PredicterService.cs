@@ -184,7 +184,7 @@ namespace NumbersGoUp.Services
                     pricePrediction = pricePrediction.Curve1(3 - ticker.PerformanceVector.DoubleReduce(60, 0, 2, 1));
                     pricePrediction *= 1 - peRatio.DoubleReduce(_peratioCutoff, Math.Min(12, _peratioCutoff / 2));
                 }
-                else
+                else if (barMetrics[0].AlmaSMA3 > 0)
                 {
                     pricePrediction = ((
                                       ((1 - barMetrics[0].AlmaSMA1.ZeroReduce(ticker.AlmaSma1Avg + (ticker.AlmaSma1StDev * 2), ticker.AlmaSma1Avg - ticker.AlmaSma1StDev)) * barMetrics[0].AlmaSMA1.DoubleReduce(ticker.AlmaSma1Avg - ticker.AlmaSma1StDev, ticker.AlmaSma1Avg - (ticker.AlmaSma1StDev * 2)) * 0.2) +
@@ -198,11 +198,11 @@ namespace NumbersGoUp.Services
                     pricePrediction = pricePrediction.Curve1(ticker.PerformanceVector.DoubleReduce(100, sellCutoff, 2, 0.5));
                     pricePrediction += (1 - pricePrediction) * peRatio.DoubleReduce(_peratioCutoff * 2, _peratioCutoff);
                 }
-                //else
-                //{
-                //    pricePrediction = Math.Max(peRatio.DoubleReduce(_peratioCutoff * 2, _peratioCutoff),
-                //                                (1 - ticker.PerformanceVector.DoubleReduce(TickerService.PERFORMANCE_CUTOFF, -TickerService.PERFORMANCE_CUTOFF)).Curve2(1));
-                //}
+                else
+                {
+                    pricePrediction = Math.Max(peRatio.DoubleReduce(_peratioCutoff * 2, _peratioCutoff),
+                                                (1 - ticker.PerformanceVector.DoubleReduce(TickerService.PERFORMANCE_CUTOFF, -TickerService.PERFORMANCE_CUTOFF)).Curve2(1));
+                }
 
                 if (buy)
                 {
