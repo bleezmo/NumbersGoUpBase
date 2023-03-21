@@ -572,14 +572,28 @@ namespace NumbersGoUp.Services
             using var response = await _tradierDataClient.GetAsync(path, _appCancellation.Token);
             response.EnsureSuccessStatusCode();
             var json = await response.Content.ReadAsStringAsync(_appCancellation.Token);
-            return JsonConvert.DeserializeObject<T>(json);
+            var objResponse = JsonConvert.DeserializeObject<T>(json);
+            if (objResponse == null)
+            {
+                _logger.LogError($"Deserialization of response failed. Content: {json}");
+            }
+            return objResponse;
         }
         private async Task<JsonModels.TradierPostOrderResponse> PostOrder(string path, TradierPostOrder order)
         {
             using var response = await _tradierOrderClient.PostAsync(path, order.HttpContent(), _appCancellation.Token);
             response.EnsureSuccessStatusCode();
             var json = await response.Content.ReadAsStringAsync(_appCancellation.Token);
-            return JsonConvert.DeserializeObject<JsonModels.TradierPostOrderResponseWrapper>(json).Order;
+            var objResponse = JsonConvert.DeserializeObject<JsonModels.TradierPostOrderResponseWrapper>(json).Order;
+            if(objResponse != null)
+            {
+                return objResponse;
+            }
+            _logger.LogError($"Deserialization of order response failed. Content: {json}");
+            return new JsonModels.TradierPostOrderResponse
+            {
+                OrderStatus = "Rejected"
+            };
         }
 
     }

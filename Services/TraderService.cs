@@ -219,7 +219,7 @@ namespace NumbersGoUp.Services
         }
         private async Task ExecuteSells(StockRebalancer[] rebalancers)
         {
-            var now = DateTime.Now;
+            var now = DateTime.UtcNow;
             var equity = _account.Balance.LastEquity;
             foreach (var rebalancer in rebalancers)
             {
@@ -274,16 +274,12 @@ namespace NumbersGoUp.Services
                         _logger.LogError($"Failed to execute sell order for {rebalancer.Symbol}");
                     }
                 }
-                else
-                {
-                    _logger.LogInformation($"Attempted to sell {rebalancer.Symbol} but amount was to small");
-                }
             }
         }
 
         private async Task ExecuteBuys(StockRebalancer[] rebalancers, double remainingBuyAmount)
         {
-            var now = DateTime.Now;
+            var now = DateTime.UtcNow;
             var equity = _account.Balance.LastEquity;
             foreach (var rebalancer in rebalancers.OrderByDescending(r => r.Diff))
             {
@@ -314,11 +310,11 @@ namespace NumbersGoUp.Services
                                 Symbol = rebalancer.Symbol,
                                 TargetPrice = targetPrice,
                                 Side = OrderSide.Buy,
-                                Multiplier = rebalancer.Prediction.SellMultiplier,
+                                Multiplier = rebalancer.Prediction.BuyMultiplier,
                                 Account = _account.AccountId,
                                 Qty = qty,
                                 AppliedAmt = qty * targetPrice,
-                                AvgEntryPrice = position.AverageEntryPrice,
+                                AvgEntryPrice = position?.AverageEntryPrice ?? 0,
                                 BrokerOrderId = brokerOrder.BrokerOrderId
                             });
                             await stocksContext.SaveChangesAsync(_appCancellation.Token);
@@ -329,10 +325,6 @@ namespace NumbersGoUp.Services
                     {
                         _logger.LogError($"Failed to execute buy order for {rebalancer.Symbol}");
                     }
-                }
-                else
-                {
-                    _logger.LogInformation($"Attempted to buy {rebalancer.Symbol} but amount was to small");
                 }
             }
         }
@@ -365,10 +357,6 @@ namespace NumbersGoUp.Services
                     _logger.LogError($"Failed to execute sell order for {rebalancer.Symbol}");
                 }
             }
-            else
-            {
-                _logger.LogInformation($"Attempted to sell bond {rebalancer.Symbol} but amount was to small");
-            }
         }
         private async Task<double> ExecuteBondBuy(BondRebalancer rebalancer, double remainingBuyAmount)
         {
@@ -392,10 +380,6 @@ namespace NumbersGoUp.Services
                 {
                     _logger.LogError($"Failed to execute buy order for {rebalancer.Symbol}");
                 }
-            }
-            else
-            {
-                _logger.LogInformation($"Attempted to buy bond {rebalancer.Symbol} but amount was to small");
             }
             return remainingBuyAmount;
         }

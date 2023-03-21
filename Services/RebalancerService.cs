@@ -23,7 +23,7 @@ namespace NumbersGoUpBase.Services
         private readonly PredicterService _predicterService;
         private readonly IStocksContextFactory _contextFactory;
         private readonly string _bondsSymbol;
-        private readonly double _stockBondRatio;
+        private readonly double _stockBondPerc;
 
         public RebalancerService(IAppCancellation appCancellation, ILogger<PredicterService> logger, IBrokerService brokerService, TickerService tickerService, 
                                     DataService dataService, IConfiguration configuration, PredicterService predicterService, IStocksContextFactory contextFactory)
@@ -33,7 +33,7 @@ namespace NumbersGoUpBase.Services
             _brokerService = brokerService;
             _tickerService = tickerService;
             _bondsSymbol = configuration["BondsSymbol"] ?? "STIP";
-            _stockBondRatio = double.TryParse(configuration["StockBondRatio"], out var stockBondRatio) ? stockBondRatio : 0.85;
+            _stockBondPerc = double.TryParse(configuration["StockBondPerc"], out var stockBondPerc) ? stockBondPerc : 0.85;
             _dataService = dataService;
             _predicterService = predicterService;
             _contextFactory = contextFactory;
@@ -44,7 +44,7 @@ namespace NumbersGoUpBase.Services
             var equity = account.Balance.LastEquity;
             var cash = account.Balance.TradableCash;
             var allTickers = await _tickerService.GetFullTickerList();
-            foreach(var position in positions)
+            foreach(var position in positions.Where(p => p.Symbol != _bondsSymbol))
             {
                 if(!allTickers.Any(t => t.Symbol == position.Symbol))
                 {
@@ -80,7 +80,7 @@ namespace NumbersGoUpBase.Services
                     {
                         continue;
                     }
-                    var targetValue = equity * performanceTicker.Ticker.PerformanceVector * performanceTicker.PerformanceMultiplier() * _stockBondRatio / totalPerformance;
+                    var targetValue = equity * performanceTicker.Ticker.PerformanceVector * performanceTicker.PerformanceMultiplier() * _stockBondPerc / totalPerformance;
                     var position = performanceTicker.Position;
                     if (position == null)
                     {
@@ -112,7 +112,7 @@ namespace NumbersGoUpBase.Services
                     }
                 }
             }
-            var bondPerc = 1 - _stockBondRatio;
+            var bondPerc = 1 - _stockBondPerc;
             var bondTargetValue = bondPerc * equity;
             var bondPosition = positions.FirstOrDefault(p => p.Symbol == _bondsSymbol);
 
