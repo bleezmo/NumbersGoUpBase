@@ -25,6 +25,7 @@ namespace NumbersGoUp.Models
         public DateTime TimeLocal { get; set; }
         public long TimeLocalMilliseconds { get; set; }
         public double Multiplier { get; set; }
+        public double Qty { get; set; }
         public int DaysFromLastBuy { get; set; }
         public double AvgEntryPrice { get; set; }
         public string BrokerOrderId { get; set; }

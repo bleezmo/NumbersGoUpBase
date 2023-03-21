@@ -546,8 +546,8 @@ namespace NumbersGoUp.Services
                 Func<Ticker, double> performanceFnTotal = (t) =>
                                                               (performanceFnEarnings(t).DoubleReduce(minmaxEarnings.Max, minmaxEarnings.Min) * 35) +
                                                               (performanceFnEVEarnings(t).DoubleReduce(minmaxEVEarnings.Max, minmaxEVEarnings.Min) * 10) +
-                                                              (performanceFnPE(t).DoubleReduce(minmaxPE.Max, minmaxPE.Min) * 5) +
                                                               (performanceFnPEEarnings(t).DoubleReduce(minmaxPEEarnings.Max, minmaxPEEarnings.Min) * 10) +
+                                                              (performanceFnPE(t).DoubleReduce(minmaxPE.Max, minmaxPE.Min) * 5) +
                                                               (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 10) +
                                                               (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 5) +
                                                               (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 10) +

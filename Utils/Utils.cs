@@ -20,6 +20,7 @@ namespace NumbersGoUp.Utils
         public static double DoubleReduce(this double value, double max = 1.0, double min = 0.0)
         {
             if (max == min) throw new DivideByZeroException();
+            if (max < min) throw new ArgumentOutOfRangeException("max must be greater than min");
             if (value < min) { value = min; }
             if (value > max) { value = max; }
             return (value - min) / (max - min);
