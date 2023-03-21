@@ -16,27 +16,18 @@ namespace NumbersGoUpBase.Services
     public class RebalancerService
     {
         private readonly ILogger<PredicterService> _logger;
-        private readonly IAppCancellation _appCancellation;
-        private readonly IBrokerService _brokerService;
         private readonly TickerService _tickerService;
-        private readonly DataService _dataService;
         private readonly PredicterService _predicterService;
-        private readonly IStocksContextFactory _contextFactory;
         private readonly string _bondsSymbol;
         private readonly double _stockBondPerc;
 
-        public RebalancerService(IAppCancellation appCancellation, ILogger<PredicterService> logger, IBrokerService brokerService, TickerService tickerService, 
-                                    DataService dataService, IConfiguration configuration, PredicterService predicterService, IStocksContextFactory contextFactory)
+        public RebalancerService(ILogger<PredicterService> logger, TickerService tickerService, IConfiguration configuration, PredicterService predicterService)
         {
             _logger = logger;
-            _appCancellation = appCancellation;
-            _brokerService = brokerService;
             _tickerService = tickerService;
             _bondsSymbol = configuration["BondsSymbol"] ?? "STIP";
             _stockBondPerc = double.TryParse(configuration["StockBondPerc"], out var stockBondPerc) ? stockBondPerc : 0.85;
-            _dataService = dataService;
             _predicterService = predicterService;
-            _contextFactory = contextFactory;
         }
         public async Task<IEnumerable<IRebalancer>> Rebalance(IEnumerable<Position> positions, Account account) => await Rebalance(positions, account, DateTime.Now);
         public async Task<IEnumerable<IRebalancer>> Rebalance(IEnumerable<Position> positions, Account account, DateTime day)
@@ -143,7 +134,6 @@ namespace NumbersGoUpBase.Services
         }
         private async Task<List<SectorInfo>> GetSectors(IEnumerable<Ticker> allTickers, DateTime day)
         {
-            using var stocksContext = _contextFactory.CreateDbContext();
             var sectorDict = new Dictionary<string, List<Ticker>>();
             foreach (var ticker in allTickers)
             {
