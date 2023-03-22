@@ -20,5 +20,6 @@ namespace NumbersGoUp.Models
         public double? BuyingPower { get; set; }
 
         public double LastEquity { get; set; }
+        public double TradeableEquity { get; set; }
     }
 }

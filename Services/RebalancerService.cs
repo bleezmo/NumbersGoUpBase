@@ -31,7 +31,7 @@ namespace NumbersGoUpBase.Services
         public async Task<IEnumerable<IRebalancer>> Rebalance(IEnumerable<Position> positions, Account account) => await Rebalance(positions, account, DateTime.Now);
         public async Task<IEnumerable<IRebalancer>> Rebalance(IEnumerable<Position> positions, Account account, DateTime day)
         {
-            var equity = account.Balance.LastEquity;
+            var equity = account.Balance.TradeableEquity;
             var cash = account.Balance.TradableCash;
             var allTickers = await _tickerService.GetFullTickerList();
             foreach(var position in positions.Where(p => p.Symbol != BondsSymbol))

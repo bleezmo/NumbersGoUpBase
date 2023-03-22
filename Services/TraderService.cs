@@ -52,13 +52,13 @@ namespace NumbersGoUp.Services
                 if (DateTime.Now.CompareTo(marketOpen.AddHours(-4)) > 0)
                 {
                     _account = await _brokerService.GetAccount();
-                    var equity = _account.Balance.LastEquity;
-                    _logger.LogInformation($"Total Account Equity: {equity:C2}");
-                    if (equity == 0)
+                    if (_account.Balance.LastEquity == 0)
                     {
                         _logger.LogError("Error retrieving equity value! Shutting down");
                         return;
                     }
+                    _logger.LogInformation($"Total Account Equity: {_account.Balance.LastEquity:C2}");
+                    var equity = _account.Balance.TradeableEquity;
                     var cash = _account.Balance.TradableCash;
                     var positions = await _brokerService.GetPositions();
                     var currentBarMetrics = new List<BarMetric>();
@@ -202,7 +202,7 @@ namespace NumbersGoUp.Services
             rebalancers = rebalancers.Where(r => !currentOrders.Any(o => o.Symbol == r.Symbol));
             var (stocks, bond) = (rebalancers.Where(r => r.IsStock).Select(r => r as StockRebalancer), rebalancers.Where(r => r.IsBond).Select(r => r as BondRebalancer).FirstOrDefault());
 
-            var remainingBuyAmount = Math.Min(_account.Balance.LastEquity * MAX_DAILY_BUY * _cashEquityRatio.DoubleReduce(0.3, 0).Curve2(1), _account.Balance.TradableCash);
+            var remainingBuyAmount = Math.Min(_account.Balance.TradeableEquity * MAX_DAILY_BUY * _cashEquityRatio.DoubleReduce(0.3, 0).Curve2(1), _account.Balance.TradableCash);
 
             remainingBuyAmount -= currentOrders.Select(o => o.Side == OrderSide.Buy ? o.AppliedAmt : 0).Sum();
             _logger.LogInformation($"Starting balance {_account.Balance.TradableCash:C2} and remaining buy amount {remainingBuyAmount:C2}");
@@ -222,7 +222,7 @@ namespace NumbersGoUp.Services
         private async Task ExecuteSells(StockRebalancer[] rebalancers)
         {
             var now = DateTime.UtcNow;
-            var equity = _account.Balance.LastEquity;
+            var equity = _account.Balance.TradeableEquity;
             foreach (var rebalancer in rebalancers)
             {
                 using (var stocksContext = _contextFactory.CreateDbContext())
@@ -287,8 +287,8 @@ namespace NumbersGoUp.Services
         private async Task ExecuteBuys(StockRebalancer[] rebalancers, double remainingBuyAmount)
         {
             var now = DateTime.UtcNow;
-            var equity = _account.Balance.LastEquity;
-            foreach (var rebalancer in rebalancers.OrderByDescending(r => r.Diff))
+            var equity = _account.Balance.TradeableEquity;
+            foreach (var rebalancer in rebalancers.OrderByDescending(r => r.Ticker.PerformanceVector))
             {
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
