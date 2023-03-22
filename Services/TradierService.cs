@@ -22,6 +22,7 @@ namespace NumbersGoUp.Services
         private const string SANDBOX_URL = "sandbox.tradier.com";
         private const string PRODUCTION_URL = "api.tradier.com";
         private const string CASH_MIN = "CashMinimum";
+        private const string CASH_PERC = "CashPerc";
 
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<TradierService> _logger;
@@ -90,6 +91,10 @@ namespace NumbersGoUp.Services
 #endif
                 }
                 double.TryParse(_configuration[CASH_MIN], out var cashMinimum);
+                if(double.TryParse(_configuration[CASH_PERC], out var cashPerc))
+                {
+                    cashMinimum = Math.Max(cashMinimum, cashPerc.DoubleReduce(1, 0) * balances.Balance.Equity);
+                }
                 var cashAvailable = balances.Balance.Cash != null ? (balances.Balance.Cash.CashAvailable - balances.Balance.Cash.UnsettledFunds) : (balances.Balance.Margin != null ? balances.Balance.TotalCash : 0.0);
                 _account.Balance = new Balance
                 {
