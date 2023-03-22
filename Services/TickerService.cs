@@ -131,6 +131,11 @@ namespace NumbersGoUp.Services
                                 var slopes = new List<double>();
                                 var monthPeriod = 20;
                                 var initialPrice = bars[0].Price();
+                                if(initialPrice == 0)
+                                {
+                                    _logger.LogError($"Error calculating performance. Inital price was zero for {ticker.Symbol}");
+                                    continue;
+                                }
                                 double x = 0.0, y = 0.0, xsqr = 0.0, xy = 0.0;
                                 for (var i = 0; i < bars.Length; i++)
                                 {
@@ -232,6 +237,11 @@ namespace NumbersGoUp.Services
                     foreach (var ticker in toUpdate)
                     {
                         perfAvg += minmaxTotal.Run(ticker) / toUpdate.Count;
+                    }
+                    if(minmaxTotal.Max == 0)
+                    {
+                        _logger.LogError($"No performances. Dunno what to do here");
+                        return;
                     }
                     var idealAvg = minmaxTotal.Max / 2;
                     var maxMultiplier = idealAvg / Math.Max(minmaxTotal.Max - perfAvg, idealAvg);

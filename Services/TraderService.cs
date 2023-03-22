@@ -77,7 +77,7 @@ namespace NumbersGoUp.Services
                         var smasmaMode = currentBarMetrics.OrderBy(b => b.SMASMA).Skip(currentBarMetrics.Count / 2).Take(1).First().SMASMA;
                         cashEquityRatioOffset = smasmaMode.DoubleReduce(0, -20);
                     }
-                    _cashEquityRatio = Math.Max(cash / equity, 0) * cashEquityRatioOffset;
+                    _cashEquityRatio = equity > 0 ? (Math.Max(cash / equity, 0) * cashEquityRatioOffset) : 0;
                     _logger.LogInformation($"Using Cash-Equity Ratio: {_cashEquityRatio}");
 
                     _logger.LogInformation("Running previous-day metrics");
@@ -238,6 +238,11 @@ namespace NumbersGoUp.Services
                 }
                 var lastBarMetric = await _dataService.GetLastMetric(rebalancer.Symbol);
                 var targetPrice = lastBarMetric.HistoryBar.ClosePrice;
+                if(targetPrice == 0)
+                {
+                    _logger.LogError($"Target price zero when selling. Ticker {position.Symbol}");
+                    continue;
+                }
                 var sellAmt = Math.Abs(rebalancer.Diff);
                 var qty = Math.Floor(sellAmt / targetPrice);
                 var currentQty = position.Quantity;
@@ -301,7 +306,14 @@ namespace NumbersGoUp.Services
                     else
                     {
                         var currentPrice = rebalancer.Position?.AssetLastPrice != null ? rebalancer.Position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(rebalancer.Symbol)).Price;
-                        percProfit = (currentPrice - rebalancer.Position.CostBasis) * 100 / rebalancer.Position.CostBasis;
+                        if(rebalancer.Position.CostBasis > 0)
+                        {
+                            percProfit = (currentPrice - rebalancer.Position.CostBasis) * 100 / rebalancer.Position.CostBasis;
+                        }
+                        else
+                        {
+                            _logger.LogError($"Cost basis somehow zero. Ticker {rebalancer.Position.Symbol}");
+                        }
                     }
                 }
                 buys.Add(new BuyState
@@ -323,6 +335,11 @@ namespace NumbersGoUp.Services
                 if (remainingBuyAmount < buyAmt) { buyAmt = remainingBuyAmount; }
                 var lastBarMetric = await _dataService.GetLastMetric(rebalancer.Symbol);
                 var targetPrice = Math.Min(lastBarMetric.HistoryBar.Price(), lastBarMetric.HistoryBar.ClosePrice);
+                if (targetPrice == 0)
+                {
+                    _logger.LogError($"Target price zero when buying. Ticker {position.Symbol}");
+                    continue;
+                }
                 var qty = Math.Floor(buyAmt / targetPrice);
                 if(qty > 0)
                 {
@@ -372,24 +389,31 @@ namespace NumbersGoUp.Services
             }
             var targetPrice = position.AssetLastPrice.HasValue ? position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(rebalancer.Symbol)).Price;
             var sellAmt = Math.Abs(rebalancer.Diff);
-            var qty = Math.Floor(sellAmt / targetPrice);
-            var currentQty = position.Quantity;
-            if (qty > currentQty)
+            if (targetPrice > 0)
             {
-                qty = currentQty;
+                var qty = Math.Floor(sellAmt / targetPrice);
+                var currentQty = position.Quantity;
+                if (qty > currentQty)
+                {
+                    qty = currentQty;
+                }
+                if (qty > 0)
+                {
+                    _logger.LogInformation($"Selling {qty} shares of bond {rebalancer.Symbol}");
+                    BrokerOrder brokerOrder = await _brokerService.Sell(rebalancer.Symbol, qty, targetPrice);
+                    if (brokerOrder != null)
+                    {
+                        _logger.LogInformation($"Submitted sell order for {rebalancer.Symbol} at price {targetPrice:C2}");
+                    }
+                    else
+                    {
+                        _logger.LogError($"Failed to execute sell order for {rebalancer.Symbol}");
+                    }
+                }
             }
-            if(qty > 0)
+            else
             {
-                _logger.LogInformation($"Selling {qty} shares of bond {rebalancer.Symbol}");
-                BrokerOrder brokerOrder = await _brokerService.Sell(rebalancer.Symbol, qty, targetPrice);
-                if (brokerOrder != null)
-                {
-                    _logger.LogInformation($"Submitted sell order for {rebalancer.Symbol} at price {targetPrice:C2}");
-                }
-                else
-                {
-                    _logger.LogError($"Failed to execute sell order for {rebalancer.Symbol}");
-                }
+                _logger.LogError($"Target price zero when selling bond. Ticker {position.Symbol}");
             }
         }
         private async Task<double> ExecuteBondBuy(BondRebalancer rebalancer, double remainingBuyAmount)
@@ -398,22 +422,29 @@ namespace NumbersGoUp.Services
             var buy = rebalancer.Diff;
             if (remainingBuyAmount < buy) { buy = remainingBuyAmount; }
             var targetPrice = position?.AssetLastPrice != null ? position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(rebalancer.Symbol)).Price;
-            var qty = Math.Floor(buy / targetPrice);
-            if (qty > 0)
+            if(targetPrice > 0)
             {
-                buy = qty * targetPrice;
-                _logger.LogInformation($"Buying {qty} shares of bond {rebalancer.Symbol}");
-                var brokerOrder = await _brokerService.Buy(rebalancer.Symbol, qty, targetPrice);
-                if (brokerOrder != null)
+                var qty = Math.Floor(buy / targetPrice);
+                if (qty > 0)
                 {
-                    //just approximate here. it's probably fine
-                    remainingBuyAmount -= buy;
-                    _logger.LogInformation($"Submitted buy order for bond {rebalancer.Symbol} at price {targetPrice:C2}. Remaining amount for buys {remainingBuyAmount:C2}");
+                    buy = qty * targetPrice;
+                    _logger.LogInformation($"Buying {qty} shares of bond {rebalancer.Symbol}");
+                    var brokerOrder = await _brokerService.Buy(rebalancer.Symbol, qty, targetPrice);
+                    if (brokerOrder != null)
+                    {
+                        //just approximate here. it's probably fine
+                        remainingBuyAmount -= buy;
+                        _logger.LogInformation($"Submitted buy order for bond {rebalancer.Symbol} at price {targetPrice:C2}. Remaining amount for buys {remainingBuyAmount:C2}");
+                    }
+                    else
+                    {
+                        _logger.LogError($"Failed to execute buy order for {rebalancer.Symbol}");
+                    }
                 }
-                else
-                {
-                    _logger.LogError($"Failed to execute buy order for {rebalancer.Symbol}");
-                }
+            }
+            else
+            {
+                _logger.LogError($"Target price zero when buying bond. Ticker {position.Symbol}");
             }
             return remainingBuyAmount;
         }

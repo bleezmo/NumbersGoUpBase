@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Alpaca.Markets;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using NumbersGoUp.Models;
 using NumbersGoUp.Services;
@@ -79,21 +80,28 @@ namespace NumbersGoUpBase.Services
                     else if (position.MarketValue.HasValue)
                     {
                         var marketValue = position.MarketValue.Value;
-                        var diffPerc = (targetValue - marketValue) * 100.0 / marketValue;
-                        if (diffPerc > 0)
+                        if(marketValue > 0)
                         {
-                            diffPerc = diffPerc * prediction.BuyMultiplier;
-                        }
-                        else if (diffPerc < 0)
-                        {
-                            diffPerc = diffPerc * prediction.SellMultiplier;
-                        }
-                        if (Math.Abs(diffPerc) > 10)
-                        {
-                            rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, targetValue - marketValue, prediction)
+                            var diffPerc = (targetValue - marketValue) * 100.0 / marketValue;
+                            if (diffPerc > 0)
                             {
-                                Position = position
-                            });
+                                diffPerc = diffPerc * prediction.BuyMultiplier;
+                            }
+                            else if (diffPerc < 0)
+                            {
+                                diffPerc = diffPerc * prediction.SellMultiplier;
+                            }
+                            if (Math.Abs(diffPerc) > 10)
+                            {
+                                rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, targetValue - marketValue, prediction)
+                                {
+                                    Position = position
+                                });
+                            }
+                        }
+                        else
+                        {
+                            _logger.LogError($"Stupid market value  not positive, which is impossible. Ticker {position.Symbol}");
                         }
                     }
                     else
@@ -115,13 +123,20 @@ namespace NumbersGoUpBase.Services
                 if (bondPosition.MarketValue.HasValue)
                 {
                     var marketValue = bondPosition.MarketValue.Value;
-                    var diffPerc = (bondTargetValue - marketValue) * 100.0 / marketValue;
-                    if (Math.Abs(diffPerc) > 10)
+                    if (marketValue > 0)
                     {
-                        rebalancers.Add(new BondRebalancer(BondsSymbol, bondTargetValue - marketValue)
+                        var diffPerc = (bondTargetValue - marketValue) * 100.0 / marketValue;
+                        if (Math.Abs(diffPerc) > 10)
                         {
-                            Position = bondPosition
-                        });
+                            rebalancers.Add(new BondRebalancer(BondsSymbol, bondTargetValue - marketValue)
+                            {
+                                Position = bondPosition
+                            });
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogError($"Stupid market value not positive, which is impossible. Bond Ticker {bondPosition.Symbol}");
                     }
                 }
                 else

@@ -100,8 +100,8 @@ namespace NumbersGoUp.Services
                 {
                     BuyingPower = balances.Balance.Margin?.BuyingPower ?? 0.0,
                     LastEquity = balances.Balance.Equity,
-                    TradableCash = cashAvailable - cashMinimum,
-                    TradeableEquity = balances.Balance.Equity - cashMinimum
+                    TradableCash = Math.Max(cashAvailable - cashMinimum, 0),
+                    TradeableEquity = Math.Max(balances.Balance.Equity - cashMinimum, 0)
                 };
                 await LoadMarketDays(now.Month, now.Year);
                 if (_marketDay == null) //if null, it means we're on the last day of the month
