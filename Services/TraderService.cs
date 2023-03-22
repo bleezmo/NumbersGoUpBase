@@ -64,7 +64,7 @@ namespace NumbersGoUp.Services
                     var currentBarMetrics = new List<BarMetric>();
                     using (var stocksContext = _contextFactory.CreateDbContext())
                     {
-                        foreach(var position in positions)
+                        foreach(var position in positions.Where(p => p.Symbol != _rebalancerService.BondsSymbol))
                         {
                             var barMetric = await stocksContext.BarMetrics.Where(b => b.Symbol == position.Symbol).OrderByDescending(m => m.BarDayMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
                             if (barMetric != null) { currentBarMetrics.Add(barMetric); }
@@ -238,7 +238,6 @@ namespace NumbersGoUp.Services
                 }
                 var lastBarMetric = await _dataService.GetLastMetric(rebalancer.Symbol);
                 var targetPrice = lastBarMetric.HistoryBar.ClosePrice;
-                var currentPrice = position.AssetLastPrice.HasValue ? position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(rebalancer.Symbol)).Price;
                 var sellAmt = Math.Abs(rebalancer.Diff);
                 var qty = Math.Floor(sellAmt / targetPrice);
                 var currentQty = position.Quantity;
@@ -283,34 +282,57 @@ namespace NumbersGoUp.Services
                 }
             }
         }
+        private double priorityOrdering(BuyState bss) => bss.Rebalancer.Ticker.PerformanceVector * bss.ProfitLossPerc.ZeroReduce(bss.Rebalancer.Ticker.ProfitLossAvg + bss.Rebalancer.Ticker.ProfitLossStDev, (bss.Rebalancer.Ticker.ProfitLossAvg + bss.Rebalancer.Ticker.ProfitLossStDev) * -1);
 
         private async Task ExecuteBuys(StockRebalancer[] rebalancers, double remainingBuyAmount)
         {
             var now = DateTime.UtcNow;
             var equity = _account.Balance.TradeableEquity;
-            foreach (var rebalancer in rebalancers.OrderByDescending(r => r.Ticker.PerformanceVector))
+            var buys = new List<BuyState>();
+            foreach(var rebalancer in rebalancers)
             {
+                double percProfit = 0.0;
+                if(rebalancer.Position != null) 
+                {
+                    if (rebalancer.Position.UnrealizedProfitLossPercent.HasValue)
+                    {
+                        percProfit = rebalancer.Position.UnrealizedProfitLossPercent.Value * 100;
+                    }
+                    else
+                    {
+                        var currentPrice = rebalancer.Position?.AssetLastPrice != null ? rebalancer.Position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(rebalancer.Symbol)).Price;
+                        percProfit = (currentPrice - rebalancer.Position.CostBasis) * 100 / rebalancer.Position.CostBasis;
+                    }
+                }
+                buys.Add(new BuyState
+                {
+                    ProfitLossPerc = percProfit,
+                    Rebalancer = rebalancer
+                });
+            }
+            foreach (var buy in buys.OrderByDescending(priorityOrdering))
+            {
+                var rebalancer = buy.Rebalancer;
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
                     var lastBuyOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == rebalancer.Symbol && o.NextBuy != null).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
                     if (lastBuyOrder != null && lastBuyOrder.NextBuy.Value.Date.CompareTo(now) > 0) continue;
                 }
                 var position = rebalancer.Position;
-                var buy = rebalancer.Diff;
-                if (remainingBuyAmount < buy) { buy = remainingBuyAmount; }
+                var buyAmt = rebalancer.Diff;
+                if (remainingBuyAmount < buyAmt) { buyAmt = remainingBuyAmount; }
                 var lastBarMetric = await _dataService.GetLastMetric(rebalancer.Symbol);
-                var targetPrice = lastBarMetric.HistoryBar.ClosePrice;
-                var currentPrice = position?.AssetLastPrice != null ? position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(rebalancer.Symbol)).Price;
-                var qty = Math.Floor(buy / targetPrice);
+                var targetPrice = Math.Min(lastBarMetric.HistoryBar.Price(), lastBarMetric.HistoryBar.ClosePrice);
+                var qty = Math.Floor(buyAmt / targetPrice);
                 if(qty > 0)
                 {
-                    buy = qty * targetPrice;
+                    buyAmt = qty * targetPrice;
                     _logger.LogInformation($"Buying {qty} shares of {rebalancer.Symbol} with multiplier {rebalancer.Prediction.BuyMultiplier}");
                     var brokerOrder = await _brokerService.Buy(rebalancer.Symbol, qty, targetPrice);
                     if (brokerOrder != null)
                     {
                         //just approximate here. it's probably fine
-                        remainingBuyAmount -= buy;
+                        remainingBuyAmount -= buyAmt;
                         using (var stocksContext = _contextFactory.CreateDbContext())
                         {
                             stocksContext.Orders.Add(new DbOrder
@@ -395,5 +417,10 @@ namespace NumbersGoUp.Services
             }
             return remainingBuyAmount;
         }
+    }
+    public class BuyState
+    {
+        public StockRebalancer Rebalancer { get; set; }
+        public double ProfitLossPerc { get; set; }
     }
 }
