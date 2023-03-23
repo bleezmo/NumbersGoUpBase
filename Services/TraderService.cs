@@ -64,7 +64,7 @@ namespace NumbersGoUp.Services
                     var currentBarMetrics = new List<BarMetric>();
                     using (var stocksContext = _contextFactory.CreateDbContext())
                     {
-                        foreach(var position in positions.Where(p => p.Symbol != _rebalancerService.BondsSymbol))
+                        foreach(var position in positions.Where(p => !_rebalancerService.BondSymbols.Contains(p.Symbol)))
                         {
                             var barMetric = await stocksContext.BarMetrics.Where(b => b.Symbol == position.Symbol).OrderByDescending(m => m.BarDayMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
                             if (barMetric != null) { currentBarMetrics.Add(barMetric); }
@@ -200,19 +200,19 @@ namespace NumbersGoUp.Services
                 currentOrders = await stocksContext.Orders.Where(o => o.Account == _account.AccountId && o.TimeLocalMilliseconds > dayStart).Include(o => o.Ticker).ToListAsync(_appCancellation.Token);
             }
             rebalancers = rebalancers.Where(r => !currentOrders.Any(o => o.Symbol == r.Symbol));
-            var (stocks, bond) = (rebalancers.Where(r => r.IsStock).Select(r => r as StockRebalancer), rebalancers.Where(r => r.IsBond).Select(r => r as BondRebalancer).FirstOrDefault());
+            var (stocks, bonds) = (rebalancers.Where(r => r.IsStock).Select(r => r as StockRebalancer), rebalancers.Where(r => r.IsBond).Select(r => r as BondRebalancer));
 
             var remainingBuyAmount = Math.Min(_account.Balance.TradeableEquity * MAX_DAILY_BUY * _cashEquityRatio.DoubleReduce(0.3, 0).Curve2(1), _account.Balance.TradableCash);
 
             remainingBuyAmount -= currentOrders.Select(o => o.Side == OrderSide.Buy ? o.AppliedAmt : 0).Sum();
             _logger.LogInformation($"Starting balance {_account.Balance.TradableCash:C2} and remaining buy amount {remainingBuyAmount:C2}");
-            if (bond != null)
+            foreach(var bond in bonds)
             {
                 if (bond.Diff > 0)
                 {
                     remainingBuyAmount = await ExecuteBondBuy(bond, remainingBuyAmount);
                 }
-                else if(bond.Diff < 0) { await ExecuteBondSell(bond); }
+                else if (bond.Diff < 0) { await ExecuteBondSell(bond); }
             }
             _logger.LogInformation("Executing sells");
             await ExecuteSells(stocks.Where(r => r.Diff < 0).ToArray());
@@ -287,8 +287,8 @@ namespace NumbersGoUp.Services
                 }
             }
         }
-        private double priorityOrdering(BuyState bss) => bss.Rebalancer.Ticker.PerformanceVector * bss.ProfitLossPerc.ZeroReduce(bss.Rebalancer.Ticker.ProfitLossAvg + bss.Rebalancer.Ticker.ProfitLossStDev, (bss.Rebalancer.Ticker.ProfitLossAvg + bss.Rebalancer.Ticker.ProfitLossStDev) * -1);
 
+        private double priorityOrdering(BuyState bss) => bss.Rebalancer.Ticker.PerformanceVector * bss.ProfitLossPerc.ZeroReduce(bss.Rebalancer.Ticker.ProfitLossAvg + bss.Rebalancer.Ticker.ProfitLossStDev, (bss.Rebalancer.Ticker.ProfitLossAvg + bss.Rebalancer.Ticker.ProfitLossStDev) * -1);
         private async Task ExecuteBuys(StockRebalancer[] rebalancers, double remainingBuyAmount)
         {
             var now = DateTime.UtcNow;
@@ -379,6 +379,7 @@ namespace NumbersGoUp.Services
                 }
             }
         }
+
         private async Task ExecuteBondSell(BondRebalancer rebalancer)
         {
             var position = rebalancer.Position;
@@ -416,6 +417,7 @@ namespace NumbersGoUp.Services
                 _logger.LogError($"Target price zero when selling bond. Ticker {position.Symbol}");
             }
         }
+
         private async Task<double> ExecuteBondBuy(BondRebalancer rebalancer, double remainingBuyAmount)
         {
             var position = rebalancer.Position;

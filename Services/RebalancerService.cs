@@ -19,13 +19,14 @@ namespace NumbersGoUpBase.Services
         private readonly PredicterService _predicterService;
         private readonly double _stockBondPerc;
 
-        public string BondsSymbol { get; }
+        public string[] BondSymbols { get; }
 
         public RebalancerService(ILogger<PredicterService> logger, TickerService tickerService, IConfiguration configuration, PredicterService predicterService)
         {
             _logger = logger;
             _tickerService = tickerService;
-            BondsSymbol = configuration["BondsSymbol"] ?? "STIP";
+            var bondSymbols = configuration["BondSymbols"]?.Split(',');
+            BondSymbols = bondSymbols != null && !bondSymbols.Any(s => string.IsNullOrWhiteSpace(s)) ? bondSymbols : new string[] { "VTIP", "STIP" };
             _stockBondPerc = double.TryParse(configuration["StockBondPerc"], out var stockBondPerc) ? stockBondPerc : 0.85;
             _predicterService = predicterService;
         }
@@ -35,24 +36,37 @@ namespace NumbersGoUpBase.Services
             var equity = account.Balance.TradeableEquity;
             var cash = account.Balance.TradableCash;
             var allTickers = await _tickerService.GetFullTickerList();
-            foreach(var position in positions.Where(p => p.Symbol != BondsSymbol))
+            foreach(var position in positions.Where(p => !BondSymbols.Contains(p.Symbol)))
             {
                 if(!allTickers.Any(t => t.Symbol == position.Symbol))
                 {
                     _logger.LogError($"Ticker not found for position {position.Symbol}. Manual intervention required");
                 }
             }
-            allTickers = allTickers.Where(t => t.PerformanceVector > TickerService.PERFORMANCE_CUTOFF);
             var maxCount = Math.Min(allTickers.Count(), 100.0);
             var sectors = await GetSectors(allTickers, day);
             var tickersPerSector = (int) Math.Ceiling(maxCount / Math.Min(Convert.ToDouble(sectors.Count), maxCount));
             var totalPerformance = 0.0;
             foreach (var sector in sectors)
             {
-                if(sector.PerformanceTickers.Count > tickersPerSector) 
-                { 
-                    sector.PerformanceTickers = sector.PerformanceTickers.OrderByDescending(t => t.Ticker.PerformanceVector).Take(tickersPerSector).ToList();
+                var selectedTickers = sector.PerformanceTickers.Where(t => t.Ticker.PerformanceVector > TickerService.PERFORMANCE_CUTOFF).ToList();
+                if (selectedTickers.Count > tickersPerSector) 
+                {
+                    selectedTickers = selectedTickers.OrderByDescending(t => t.Ticker.PerformanceVector).Take(tickersPerSector).ToList();
                 }
+                foreach (var performanceTicker in sector.PerformanceTickers)
+                {
+                    if(selectedTickers.Any(t => t.Ticker.Symbol == performanceTicker.Ticker.Symbol))
+                    {
+                        performanceTicker.MeetsRequirements = true;
+                    }
+                    else if(positions.Any(p => p.Symbol == performanceTicker.Ticker.Symbol))
+                    {
+                        selectedTickers.Add(performanceTicker); //still have to pull in the ones we have positions for
+                    }
+                }
+                sector.PerformanceTickers = selectedTickers;
+
                 foreach(var performanceTicker in sector.PerformanceTickers)
                 {
                     performanceTicker.TickerPrediction = await _predicterService.Predict(performanceTicker.Ticker, day);
@@ -73,7 +87,7 @@ namespace NumbersGoUpBase.Services
                     }
                     var targetValue = equity * performanceTicker.Ticker.PerformanceVector * performanceTicker.PerformanceMultiplier() * _stockBondPerc / totalPerformance;
                     var position = performanceTicker.Position;
-                    if (position == null)
+                    if (position == null && targetValue > 0 && performanceTicker.MeetsRequirements)
                     {
                         rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, targetValue, prediction));
                     }
@@ -85,11 +99,23 @@ namespace NumbersGoUpBase.Services
                             var diffPerc = (targetValue - marketValue) * 100.0 / marketValue;
                             if (diffPerc > 0)
                             {
-                                diffPerc = diffPerc * prediction.BuyMultiplier;
+                                if (performanceTicker.MeetsRequirements)
+                                {
+                                    diffPerc = diffPerc * prediction.BuyMultiplier;
+                                    if (sector.PerformanceTickers.Count > 2)
+                                    {
+                                        diffPerc *= sector.Prediction.DoubleReduce(1, 0.6, 1.25, 1);
+                                    }
+                                }
+                                else { diffPerc = 0; }
                             }
                             else if (diffPerc < 0)
                             {
                                 diffPerc = diffPerc * prediction.SellMultiplier;
+                                if(sector.PerformanceTickers.Count > 2)
+                                {
+                                    diffPerc *= 2 - sector.Prediction.DoubleReduce(1, 0.6, 1.25, 1);
+                                }
                             }
                             if (Math.Abs(diffPerc) > 10)
                             {
@@ -101,7 +127,7 @@ namespace NumbersGoUpBase.Services
                         }
                         else
                         {
-                            _logger.LogError($"Stupid market value  not positive, which is impossible. Ticker {position.Symbol}");
+                            _logger.LogError($"Stupid market value not positive, which is impossible. Ticker {position.Symbol}");
                         }
                     }
                     else
@@ -111,37 +137,40 @@ namespace NumbersGoUpBase.Services
                 }
             }
             var bondPerc = 1 - _stockBondPerc;
-            var bondTargetValue = bondPerc * equity;
-            var bondPosition = positions.FirstOrDefault(p => p.Symbol == BondsSymbol);
+            var perBondTargetValue = bondPerc * equity / BondSymbols.Length;
+            foreach(var bondSymbol in BondSymbols)
+            {
+                var bondPosition = positions.FirstOrDefault(p => bondSymbol == p.Symbol);
 
-            if (bondPosition == null)
-            {
-                rebalancers.Add(new BondRebalancer(BondsSymbol, bondTargetValue));
-            }
-            else
-            {
-                if (bondPosition.MarketValue.HasValue)
+                if (bondPosition == null && perBondTargetValue > 0)
                 {
-                    var marketValue = bondPosition.MarketValue.Value;
-                    if (marketValue > 0)
+                    rebalancers.Add(new BondRebalancer(bondSymbol, perBondTargetValue));
+                }
+                else if(bondPosition != null)
+                {
+                    if (bondPosition.MarketValue.HasValue)
                     {
-                        var diffPerc = (bondTargetValue - marketValue) * 100.0 / marketValue;
-                        if (Math.Abs(diffPerc) > 10)
+                        var marketValue = bondPosition.MarketValue.Value;
+                        if (marketValue > 0)
                         {
-                            rebalancers.Add(new BondRebalancer(BondsSymbol, bondTargetValue - marketValue)
+                            var diffPerc = (perBondTargetValue - marketValue) * 100.0 / marketValue;
+                            if (Math.Abs(diffPerc) > 10)
                             {
-                                Position = bondPosition
-                            });
+                                rebalancers.Add(new BondRebalancer(bondSymbol, perBondTargetValue - marketValue)
+                                {
+                                    Position = bondPosition
+                                });
+                            }
+                        }
+                        else
+                        {
+                            _logger.LogError($"Stupid market value not positive, which is impossible. Bond Ticker {bondPosition.Symbol}");
                         }
                     }
                     else
                     {
-                        _logger.LogError($"Stupid market value not positive, which is impossible. Bond Ticker {bondPosition.Symbol}");
+                        _logger.LogError($"Unable to rebalance bond {bondPosition.Symbol}. Position unavailable");
                     }
-                }
-                else
-                {
-                    _logger.LogError($"Unable to rebalance bond {bondPosition.Symbol}. Position unavailable");
                 }
             }
             return rebalancers;
@@ -184,19 +213,24 @@ namespace NumbersGoUpBase.Services
         public Prediction TickerPrediction { get; set; }
         public Position Position { get; set; }
         public double SectorPrediction { get; set; }
+        public bool MeetsRequirements { get; set; }
 
         public double PerformanceMultiplier()
         {
-            if(TickerPrediction == null) { return 1.0; }
-            var equityPercMultiplier = 1 + (TickerPrediction.BuyMultiplier * 0.1) + (TickerPrediction.SellMultiplier * -0.1);
-            var sectorMultiplier = SectorPrediction.DoubleReduce(1, 0, 1.1, 0.9);
-            var performanceMultiplier = (0.75 * equityPercMultiplier) + (0.25 * sectorMultiplier);
-            if(Position != null && Position.UnrealizedProfitLossPercent.HasValue)
+            if (TickerPrediction != null)
             {
-                var dividendMultiplier = Position.UnrealizedProfitLossPercent.Value < 0 ? 1 : Ticker.DividendYield.DoubleReduce(0.05, 0, 1.25, 0.75);
-                performanceMultiplier *= Math.Log((2 * Position.UnrealizedProfitLossPercent.Value * dividendMultiplier) + Math.E);
+                var predictionMax = MeetsRequirements ? 1.1 : 1.0;
+                var equityPercMultiplier = 1 + (TickerPrediction.BuyMultiplier * (predictionMax - 1)) + (TickerPrediction.SellMultiplier * -0.1);
+                var sectorMultiplier = SectorPrediction.DoubleReduce(1, 0, predictionMax, predictionMax - 0.2);
+                var performanceMultiplier = (0.75 * equityPercMultiplier) + (0.25 * sectorMultiplier);
+                if (Position != null && Position.UnrealizedProfitLossPercent.HasValue)
+                {
+                    var dividendMultiplier = Position.UnrealizedProfitLossPercent.Value < 0 ? 0.5 : Ticker.DividendYield.DoubleReduce(0.05, 0, 1.25, 0.75);
+                    performanceMultiplier *= Math.Log((2 * Position.UnrealizedProfitLossPercent.Value * dividendMultiplier) + Math.E);
+                }
+                return performanceMultiplier;
             }
-            return performanceMultiplier;
+            return MeetsRequirements ? 1 : 0.8;
         }
     }
     public class SectorInfo
