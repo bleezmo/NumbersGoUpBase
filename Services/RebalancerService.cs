@@ -220,7 +220,7 @@ namespace NumbersGoUpBase.Services
             if (TickerPrediction != null)
             {
                 var predictionMax = MeetsRequirements ? 1.1 : 1.0;
-                var equityPercMultiplier = 1 + (TickerPrediction.BuyMultiplier * (predictionMax - 1)) + (TickerPrediction.SellMultiplier * -0.1);
+                var equityPercMultiplier = 1 + (TickerPrediction.BuyMultiplier * (predictionMax - 1)) + (TickerPrediction.SellMultiplier * (predictionMax - 1.2));
                 var sectorMultiplier = SectorPrediction.DoubleReduce(1, 0, predictionMax, predictionMax - 0.2);
                 var performanceMultiplier = (0.75 * equityPercMultiplier) + (0.25 * sectorMultiplier);
                 if (Position != null && Position.UnrealizedProfitLossPercent.HasValue)

@@ -479,7 +479,7 @@ namespace NumbersGoUp.Services
                             var currentPerc = (bars[bars.Length - 1].Price() - initialPrice) * 100 / initialPrice;
                             ticker.RegressionAngle = Utils.Utils.GetAngle(currentPerc - currentRegression, regressionStDev);
                             ticker.PERatio = ticker.EPS > 0 ? bars.Last().Price() / ticker.EPS : 1000;
-                            if (slopes.Count > 0 && regressionSlope > 0)
+                            if (slopes.Count > 0)
                             {
                                 ticker.AvgMonthPerc = slopes.Average();
                                 ticker.MonthPercVariance = slopes.Sum(s => Math.Pow(s - ticker.AvgMonthPerc, 2)) / slopes.Count;

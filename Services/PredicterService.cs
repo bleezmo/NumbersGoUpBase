@@ -223,7 +223,7 @@ namespace NumbersGoUp.Services
         {
             if (sectorMetrics.Length == FEATURE_HISTORY_DAY)
             {
-                return ((1 - sectorMetrics[0].SMASMA.DoubleReduce(40, 20)) * sectorMetrics[0].SMASMA.DoubleReduce(20, -10) * 0.4) +
+                return (sectorMetrics[0].SMASMA.DoubleReduce(20, -10) * 0.4) +
                        (sectorMetrics.CalculateAvgVelocity(b => b.SMASMA).DoubleReduce(1, -1) * 0.3) + 
                        (sectorMetrics.CalculateAvgVelocity(b => b.AlmaSMA3).DoubleReduce(2, -2) * 0.3);
             }
