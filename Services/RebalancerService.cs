@@ -217,20 +217,20 @@ namespace NumbersGoUpBase.Services
 
         public double PerformanceMultiplier()
         {
+            var performanceMultiplier = MeetsRequirements ? 1 : 0.8;
             if (TickerPrediction != null)
             {
                 var predictionMax = MeetsRequirements ? 1.1 : 1.0;
                 var equityPercMultiplier = 1 + (TickerPrediction.BuyMultiplier * (predictionMax - 1)) + (TickerPrediction.SellMultiplier * (predictionMax - 1.2));
                 var sectorMultiplier = SectorPrediction.DoubleReduce(1, 0, predictionMax, predictionMax - 0.2);
-                var performanceMultiplier = (0.75 * equityPercMultiplier) + (0.25 * sectorMultiplier);
-                if (Position != null && Position.UnrealizedProfitLossPercent.HasValue)
-                {
-                    var dividendMultiplier = Position.UnrealizedProfitLossPercent.Value < 0 ? 0.5 : Ticker.DividendYield.DoubleReduce(0.05, 0, 1.25, 0.75);
-                    performanceMultiplier *= Math.Log((2 * Position.UnrealizedProfitLossPercent.Value * dividendMultiplier) + Math.E);
-                }
-                return performanceMultiplier;
+                performanceMultiplier = (0.75 * equityPercMultiplier) + (0.25 * sectorMultiplier);
             }
-            return MeetsRequirements ? 1 : 0.8;
+            if (Position != null && Position.UnrealizedProfitLossPercent.HasValue)
+            {
+                var dividendMultiplier = Position.UnrealizedProfitLossPercent.Value < 0 ? 0.5 : Ticker.DividendYield.DoubleReduce(0.05, 0, 1.25, 0.75);
+                performanceMultiplier *= Math.Log((2 * Position.UnrealizedProfitLossPercent.Value * dividendMultiplier) + Math.E);
+            }
+            return performanceMultiplier;
         }
     }
     public class SectorInfo
