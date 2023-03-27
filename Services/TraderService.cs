@@ -206,7 +206,7 @@ namespace NumbersGoUp.Services
             rebalancers = rebalancers.Where(r => !currentOrders.Any(o => o.Symbol == r.Symbol));
             var (stocks, bonds) = (rebalancers.Where(r => r.IsStock).Select(r => r as StockRebalancer), rebalancers.Where(r => r.IsBond).Select(r => r as BondRebalancer));
 
-            var remainingBuyAmount = Math.Min(_account.Balance.TradeableEquity * MAX_DAILY_BUY * _cashEquityRatio.DoubleReduce(0.3, 0).Curve2(1), _account.Balance.TradableCash);
+            var remainingBuyAmount = Math.Min(_account.Balance.TradeableEquity * MAX_DAILY_BUY, _account.Balance.TradableCash);
 
             remainingBuyAmount -= currentOrders.Select(o => o.Side == OrderSide.Buy ? o.AppliedAmt : 0).Sum();
             _logger.LogInformation($"Starting balance {_account.Balance.TradableCash:C2} and remaining buy amount {remainingBuyAmount:C2}");

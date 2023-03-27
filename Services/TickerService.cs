@@ -98,7 +98,9 @@ namespace NumbersGoUp.Services
             try
             {
                 await _tickerBankService.Load();
+                _logger.LogInformation("Loaded bank tickers");
                 await _tickerBankService.CalculatePerformance();
+                _logger.LogInformation("Completed bank ticker performance calculations");
                 await Load();
             }
             catch (Exception e)
