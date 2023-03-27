@@ -169,7 +169,7 @@ namespace NumbersGoUp.Services
                                 var currentPerc = (bars[bars.Length - 1].Price() - initialPrice) * 100 / initialPrice;
                                 ticker.RegressionAngle = Utils.Utils.GetAngle(currentPerc - currentRegression, regressionStDev);
                                 ticker.PERatio = ticker.EPS > 0 ? bars.Last().Price() / ticker.EPS : 1000;
-                                if (slopes.Count > 0 && regressionSlope > 0)
+                                if (slopes.Count > 0)
                                 {
                                     ticker.AvgMonthPerc = slopes.Average();
                                     ticker.MonthPercVariance = slopes.Sum(s => Math.Pow(s - ticker.AvgMonthPerc, 2)) / slopes.Count;
@@ -344,11 +344,11 @@ namespace NumbersGoUp.Services
                         else if (positions.Any(p => p.Symbol == ticker.Symbol))
                         {
                             _logger.LogWarning($"Could not remove {ticker.Symbol}. Position exists. Modifying properties to encourage selling.");
-                            ticker.PERatio = 1000;
-                            ticker.EVEarnings = 1000;
-                            ticker.EPS = 0.01;
-                            ticker.Earnings = 1;
-                            ticker.PerformanceVector = 0;
+                            ticker.PERatio *= 4;
+                            ticker.EVEarnings *= 4;
+                            ticker.EPS *= 0.25;
+                            ticker.Earnings *= 0.25;
+                            ticker.PerformanceVector *= 0.25;
                             ticker.LastCalculated = now.UtcDateTime;
                             ticker.LastCalculatedMillis = nowMillis;
                             stocksContext.Tickers.Update(ticker);

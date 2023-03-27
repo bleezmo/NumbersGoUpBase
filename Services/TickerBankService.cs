@@ -144,6 +144,7 @@ namespace NumbersGoUp.Services
                         }
                         else
                         {
+                            t.PERatio = peRatio;
                             t.LastCalculatedPerformance = now;
                             t.LastCalculatedPerformanceMillis = nowMillis;
                             t.PerformanceVector = 0;
