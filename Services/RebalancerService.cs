@@ -17,6 +17,7 @@ namespace NumbersGoUpBase.Services
         private readonly TickerService _tickerService;
         private readonly PredicterService _predicterService;
         private readonly double _stockBondPerc;
+        private readonly string[] _tickerBlacklist;
 
         public string[] BondSymbols { get; }
 
@@ -28,6 +29,7 @@ namespace NumbersGoUpBase.Services
             BondSymbols = bondSymbols != null && !bondSymbols.Any(s => string.IsNullOrWhiteSpace(s)) ? bondSymbols : new string[] { "VTIP", "STIP" };
             _stockBondPerc = double.TryParse(configuration["StockBondPerc"], out var stockBondPerc) ? stockBondPerc : 0.85;
             _predicterService = predicterService;
+            _tickerBlacklist = tickerService.TickerBlacklist;
         }
         public async Task<IEnumerable<IRebalancer>> Rebalance(IEnumerable<Position> positions, Balance balance) => await Rebalance(positions, balance, DateTime.Now);
         public async Task<IEnumerable<IRebalancer>> Rebalance(IEnumerable<Position> positions, Balance balance, DateTime day)
@@ -48,7 +50,7 @@ namespace NumbersGoUpBase.Services
             var totalPerformance = 0.0;
             foreach (var sector in sectors)
             {
-                var selectedTickers = sector.PerformanceTickers.Where(t => t.Ticker.PerformanceVector > TickerService.PERFORMANCE_CUTOFF).ToList();
+                var selectedTickers = sector.PerformanceTickers.Where(t => t.Ticker.PerformanceVector > TickerService.PERFORMANCE_CUTOFF && !_tickerBlacklist.Contains(t.Ticker.Symbol)).ToList();
                 if (selectedTickers.Count > tickersPerSector) 
                 {
                     selectedTickers = selectedTickers.OrderByDescending(t => t.Ticker.PerformanceVector).Take(tickersPerSector).ToList();
