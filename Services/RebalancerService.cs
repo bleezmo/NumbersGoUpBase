@@ -1,5 +1,4 @@
-﻿using Alpaca.Markets;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using NumbersGoUp.Models;
 using NumbersGoUp.Services;
@@ -30,11 +29,11 @@ namespace NumbersGoUpBase.Services
             _stockBondPerc = double.TryParse(configuration["StockBondPerc"], out var stockBondPerc) ? stockBondPerc : 0.85;
             _predicterService = predicterService;
         }
-        public async Task<IEnumerable<IRebalancer>> Rebalance(IEnumerable<Position> positions, Account account) => await Rebalance(positions, account, DateTime.Now);
-        public async Task<IEnumerable<IRebalancer>> Rebalance(IEnumerable<Position> positions, Account account, DateTime day)
+        public async Task<IEnumerable<IRebalancer>> Rebalance(IEnumerable<Position> positions, Balance balance) => await Rebalance(positions, balance, DateTime.Now);
+        public async Task<IEnumerable<IRebalancer>> Rebalance(IEnumerable<Position> positions, Balance balance, DateTime day)
         {
-            var equity = account.Balance.TradeableEquity;
-            var cash = account.Balance.TradableCash;
+            var equity = balance.TradeableEquity;
+            var cash = balance.TradableCash;
             var allTickers = await _tickerService.GetFullTickerList();
             foreach(var position in positions.Where(p => !BondSymbols.Contains(p.Symbol)))
             {
@@ -87,11 +86,11 @@ namespace NumbersGoUpBase.Services
                     }
                     var targetValue = equity * performanceTicker.Ticker.PerformanceVector * performanceTicker.PerformanceMultiplier() * _stockBondPerc / totalPerformance;
                     var position = performanceTicker.Position;
-                    if (position == null && targetValue > 0 && performanceTicker.MeetsRequirements)
+                    if (position == null && targetValue > 0 && performanceTicker.MeetsRequirements && cash > 0)
                     {
                         rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, targetValue, prediction));
                     }
-                    else if (position.MarketValue.HasValue)
+                    else if (position != null && position.MarketValue.HasValue)
                     {
                         var marketValue = position.MarketValue.Value;
                         if(marketValue > 0)
@@ -99,7 +98,7 @@ namespace NumbersGoUpBase.Services
                             var diffPerc = (targetValue - marketValue) * 100.0 / marketValue;
                             if (diffPerc > 0)
                             {
-                                if (performanceTicker.MeetsRequirements)
+                                if (performanceTicker.MeetsRequirements && cash > (position.AssetLastPrice ?? 0))
                                 {
                                     diffPerc = diffPerc * prediction.BuyMultiplier;
                                     if (sector.PerformanceTickers.Count > 2)
@@ -130,7 +129,7 @@ namespace NumbersGoUpBase.Services
                             _logger.LogError($"Stupid market value not positive, which is impossible. Ticker {position.Symbol}");
                         }
                     }
-                    else
+                    else if(cash > 0)
                     {
                         _logger.LogError($"Unable to rebalance {performanceTicker.Ticker.Symbol}. Position unavailable");
                     }

@@ -87,7 +87,11 @@ namespace NumbersGoUp.Services
                         _logger.LogError("Negative cash balance!");
                     }
                     _logger.LogInformation("Running rebalancer");
-                    var rebalancers = await _rebalancerService.Rebalance(positions, _account);
+                    var rebalancers = await _rebalancerService.Rebalance(positions, new Balance
+                    {
+                        TradeableEquity = equity,
+                        TradableCash = cash
+                    });
                     _logger.LogInformation("Running order executions");
                     await ExecuteOrders(rebalancers);
                     _logger.LogInformation("Cleaning up");
