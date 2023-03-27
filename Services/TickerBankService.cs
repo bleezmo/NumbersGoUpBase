@@ -101,7 +101,7 @@ namespace NumbersGoUp.Services
             }
         }
         private bool BasicCutoff(BankTicker ticker) => !TickerBlacklist.TickerAny(ticker) && ticker.DebtEquityRatio > 0 && ticker.DebtEquityRatio < 1.5 && 
-                                                       (ticker.CurrentRatio > (ticker.DebtEquityRatio * 1.1) || ticker.DebtEquityRatio < 0.9) && 
+                                                       (ticker.CurrentRatio > (ticker.DebtEquityRatio * 1.2) || ticker.DebtEquityRatio < 0.9) && 
                                                        ticker.Earnings > 0 && ticker.DividendYield > 0.005 && ticker.EPS > 0 && ticker.EVEarnings > 0 && ticker.EVEarnings < EVEarningsCutoff;
         public async Task CalculatePerformance()
         {
@@ -156,7 +156,6 @@ namespace NumbersGoUp.Services
                     Func<BankTicker, double> performanceFn2 = (t) => t.PriceChangeAvg;
                     Func<BankTicker, double> performanceFn3 = (t) => Math.Min(t.DividendYield, 0.06);
                     Func<BankTicker, double> performanceFn4 = (t) => 1 - t.EVEarnings.DoubleReduce(EVEarningsCutoff, 0);
-                    //slope here is based on a graph where x-axis is MedianMonthPercVariance and y-axis is MedianMonthPerc
                     var minmax1 = new MinMaxStore<BankTicker>(performanceFn1);
                     var minmax2 = new MinMaxStore<BankTicker>(performanceFn2);
                     var minmax3 = new MinMaxStore<BankTicker>(performanceFn3);
