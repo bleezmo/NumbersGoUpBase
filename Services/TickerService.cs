@@ -348,7 +348,7 @@ namespace NumbersGoUp.Services
                             ticker.EVEarnings *= 2;
                             ticker.EPS *= 0.5;
                             ticker.Earnings *= 0.5;
-                            ticker.PerformanceVector *= 0.5;
+                            ticker.PerformanceVector *= 0.8;
                             ticker.LastCalculated = now.UtcDateTime;
                             ticker.LastCalculatedMillis = nowMillis;
                             stocksContext.Tickers.Update(ticker);
