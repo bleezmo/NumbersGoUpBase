@@ -344,11 +344,11 @@ namespace NumbersGoUp.Services
                         else if (positions.Any(p => p.Symbol == ticker.Symbol))
                         {
                             _logger.LogWarning($"Could not remove {ticker.Symbol}. Position exists. Modifying properties to encourage selling.");
-                            ticker.PERatio *= 4;
-                            ticker.EVEarnings *= 4;
-                            ticker.EPS *= 0.25;
-                            ticker.Earnings *= 0.25;
-                            ticker.PerformanceVector *= 0.25;
+                            ticker.PERatio *= 2;
+                            ticker.EVEarnings *= 2;
+                            ticker.EPS *= 0.5;
+                            ticker.Earnings *= 0.5;
+                            ticker.PerformanceVector *= 0.5;
                             ticker.LastCalculated = now.UtcDateTime;
                             ticker.LastCalculatedMillis = nowMillis;
                             stocksContext.Tickers.Update(ticker);
