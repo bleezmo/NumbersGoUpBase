@@ -91,7 +91,7 @@ namespace NumbersGoUpBase.Services
                     var position = performanceTicker.Position;
                     if (position == null && targetValue > 0 && performanceTicker.MeetsRequirements && cash > 0)
                     {
-                        rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, targetValue, prediction));
+                        rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, targetValue * prediction.BuyMultiplier, prediction));
                     }
                     else if (position != null && position.MarketValue.HasValue)
                     {
