@@ -86,7 +86,8 @@ namespace NumbersGoUpBase.Services
                     {
                         continue;
                     }
-                    var targetValue = equity * performanceTicker.Ticker.PerformanceVector * performanceTicker.PerformanceMultiplier() * _stockBondPerc / totalPerformance;
+                    var calculatedPerformance = equity * performanceTicker.Ticker.PerformanceVector * performanceTicker.PerformanceMultiplier() * _predicterService.EncouragementMultiplier.DoubleReduce(0, -1) * _stockBondPerc;
+                    var targetValue = totalPerformance > 0 ? (calculatedPerformance / totalPerformance) : 0.0;
                     var position = performanceTicker.Position;
                     if (position == null && targetValue > 0 && performanceTicker.MeetsRequirements && cash > 0)
                     {
