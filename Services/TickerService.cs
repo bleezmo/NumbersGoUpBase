@@ -327,6 +327,8 @@ namespace NumbersGoUp.Services
                     var tickers = await stocksContext.Tickers.ToArrayAsync(_appCancellation.Token);
                     var bankTickers = await stocksContext.TickerBank.Where(t => t.PerformanceVector > 0 && t.PERatio < PERatioCutoff).OrderByDescending(t => t.PerformanceVector).Take(200).ToArrayAsync(_appCancellation.Token);
                     var positions = await _brokerService.GetPositions();
+                    var positionSymbols = positions.Select(p => p.Symbol).ToArray();
+                    var bankTickerPositions = await stocksContext.TickerBank.Where(t => positionSymbols.Contains(t.Symbol)).ToArrayAsync(_appCancellation.Token);
                     foreach (var ticker in tickers)
                     {
                         var bankTicker = bankTickers.FirstOrDefault(t => ticker.Symbol == t.Symbol);
@@ -334,9 +336,9 @@ namespace NumbersGoUp.Services
                         {
                             ticker.Sector = bankTicker.Sector;
                             ticker.PERatio = bankTicker.PERatio;
+                            ticker.EVEarnings = bankTicker.EVEarnings;
                             ticker.EPS = bankTicker.EPS;
                             ticker.Earnings = bankTicker.Earnings;
-                            ticker.EVEarnings = bankTicker.EVEarnings;
                             ticker.DividendYield = bankTicker.DividendYield;
                             ticker.DebtMinusCash = bankTicker.DebtMinusCash;
                             ticker.Shares = bankTicker.Shares;
@@ -354,11 +356,25 @@ namespace NumbersGoUp.Services
                         else if (positions.Any(p => p.Symbol == ticker.Symbol))
                         {
                             _logger.LogWarning($"Could not remove {ticker.Symbol}. Position exists. Modifying properties to encourage selling.");
-                            ticker.PERatio *= 2;
-                            ticker.EVEarnings *= 2;
-                            ticker.EPS *= 0.5;
-                            ticker.Earnings *= 0.5;
-                            ticker.PerformanceVector *= 0.8;
+                            var bankTickerPosition = bankTickerPositions.FirstOrDefault(t => t.Symbol == ticker.Symbol);
+                            if (bankTickerPosition != null)
+                            {
+                                ticker.Sector = bankTickerPosition.Sector;
+                                ticker.PERatio = bankTickerPosition.PERatio;
+                                ticker.EVEarnings = bankTickerPosition.EVEarnings;
+                                ticker.EPS = bankTickerPosition.EPS * 2 / 3;
+                                ticker.Earnings = bankTickerPosition.Earnings * 2 / 3;
+                                ticker.DividendYield = bankTickerPosition.DividendYield;
+                                ticker.DebtMinusCash = bankTickerPosition.DebtMinusCash;
+                                ticker.Shares = bankTickerPosition.Shares;
+                                ticker.MarketCap = bankTickerPosition.MarketCap;
+                            }
+                            else
+                            {
+                                ticker.EPS *= 0.5;
+                                ticker.Earnings *= 0.5;
+                                ticker.PerformanceVector *= 0.8;
+                            }
                             ticker.LastCalculated = now.UtcDateTime;
                             ticker.LastCalculatedMillis = nowMillis;
                             stocksContext.Tickers.Update(ticker);
