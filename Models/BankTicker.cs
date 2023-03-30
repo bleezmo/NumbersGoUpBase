@@ -24,6 +24,8 @@ namespace NumbersGoUp.Models
         public double CurrentRatio { get; set; }
         public double DebtEquityRatio { get; set; }
         public double DividendYield { get; set; }
+        public double DebtMinusCash { get; set; }
+        public double Shares { get; set; }
         public double PriceChangeAvg { get; set; }
         public double PerformanceVector { get; set; }
         public DateTime? LastCalculatedPerformance { get; set; }

@@ -47,6 +47,9 @@ namespace NumbersGoUp.Models
         public double SMAVelStDev { get; set; }
         public double RegressionAngle { get; set; }
         public double EVEarnings { get; set; }
+        public double DebtMinusCash { get; set; }
+        public double Shares { get; set; }
+        public double MarketCap { get; set; }
 
         public List<HistoryBar> HistoryBars { get; set; }
         public List<DbOrder> Orders { get; set; }

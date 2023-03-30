@@ -19,7 +19,7 @@ namespace NumbersGoUp.Services
 {
     public class TickerBankService
     {
-        private const string PERATIO_CUTOFF_KEY = "PERatioCutoff";
+        private const string EARNINGS_MULTIPLE_CUTOFF_KEY = "EarningsMultipleCutoff";
 
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IAppCancellation _appCancellation;
@@ -31,8 +31,7 @@ namespace NumbersGoUp.Services
         private readonly IStocksContextFactory _contextFactory;
         private readonly IRuntimeSettings _runtimeSettings;
         private readonly DateTime _lookbackDate = DateTime.Now.AddYears(-DataService.LOOKBACK_YEARS);
-        public double PERatioCutoff { get; }
-        public double EVEarningsCutoff { get => PERatioCutoff * 1.5; }
+        public double EarningsMultipleCutoff { get; }
         public string[] TickerWhitelist { get; }
         public string[] TickerBlacklist { get; }
 
@@ -50,7 +49,7 @@ namespace NumbersGoUp.Services
             _configuration = configuration;
             _contextFactory = contextFactory;
             _runtimeSettings = runtimeSettings;
-            PERatioCutoff = double.TryParse(configuration[PERATIO_CUTOFF_KEY], out var peratioCutoff) ? peratioCutoff : 30;
+            EarningsMultipleCutoff = double.TryParse(configuration[EARNINGS_MULTIPLE_CUTOFF_KEY], out var peratioCutoff) ? peratioCutoff : 45;
             _brokerService = brokerService;
             TickerWhitelist = configuration["TickerWhitelist"]?.Split(',') ?? new string[] { };
             TickerBlacklist = configuration["TickerBlacklist"]?.Split(',') ?? new string[] { };
@@ -101,8 +100,8 @@ namespace NumbersGoUp.Services
             }
         }
         private bool BasicCutoff(BankTicker ticker) => !TickerBlacklist.TickerAny(ticker) && ticker.DebtEquityRatio > 0 && ticker.DebtEquityRatio < 1.5 && 
-                                                       (ticker.CurrentRatio > (ticker.DebtEquityRatio * 1.2) || ticker.DebtEquityRatio < 0.9) && 
-                                                       ticker.Earnings > 0 && ticker.DividendYield > 0.005 && ticker.EPS > 0 && ticker.EVEarnings > 0 && ticker.EVEarnings < EVEarningsCutoff;
+                                                       (ticker.CurrentRatio > (ticker.DebtEquityRatio * 1.2) || ticker.DebtEquityRatio < 0.9) && (ticker.DebtMinusCash / ticker.MarketCap) < 0.5 && 
+                                                       ticker.Earnings > 0 && ticker.DividendYield > 0.005 && ticker.EPS > 0 && ticker.EVEarnings > 0 && ticker.EVEarnings < EarningsMultipleCutoff;
         public async Task CalculatePerformance()
         {
             var now = DateTime.UtcNow;
@@ -115,14 +114,16 @@ namespace NumbersGoUp.Services
                     var tickers = new List<BankTicker>();
                     foreach (var t in dbTickers)
                     {
-                        double peRatio = t.PERatio;
                         try
                         {
                             if (t.EPS > 0)
                             {
                                 var currentBar = await stocksContext.HistoryBars.Where(b => b.Symbol == t.Symbol).OrderByDescending(b => b.BarDayMilliseconds).FirstOrDefaultAsync(_appCancellation.Token);
                                 var price = currentBar != null ? currentBar.ClosePrice : (await _brokerService.GetLastTrade(t.Symbol)).Price;
-                                peRatio = price / t.EPS;
+                                t.PERatio = price / t.EPS;
+                                t.MarketCap = price * t.Shares;
+                                if(t.Earnings > 0) { t.EVEarnings = (t.MarketCap + t.DebtMinusCash) / t.Earnings; }
+                                
                             }
                         }
                         catch (Exception e)
@@ -131,20 +132,17 @@ namespace NumbersGoUp.Services
                         }
                         if (TickerWhitelist.TickerAny(t))
                         {
-                            t.PERatio = peRatio;
                             t.LastCalculatedPerformance = now;
                             t.LastCalculatedPerformanceMillis = nowMillis;
                             t.PerformanceVector = 100;
                             stocksContext.TickerBank.Update(t);
                         }
-                        else if (BasicCutoff(t) && peRatio < PERatioCutoff && peRatio > 1 && t.PriceChangeAvg > 0)
+                        else if (BasicCutoff(t) && t.PERatio < EarningsMultipleCutoff && t.PERatio > 1 && t.PriceChangeAvg > 0)
                         {
-                            t.PERatio = peRatio;
                             tickers.Add(t);
                         }
                         else
                         {
-                            t.PERatio = peRatio;
                             t.LastCalculatedPerformance = now;
                             t.LastCalculatedPerformanceMillis = nowMillis;
                             t.PerformanceVector = 0;
@@ -155,22 +153,26 @@ namespace NumbersGoUp.Services
                     Func<BankTicker, double> performanceFn1 = (t) => Math.Sqrt(t.Earnings) * 2;
                     Func<BankTicker, double> performanceFn2 = (t) => t.PriceChangeAvg;
                     Func<BankTicker, double> performanceFn3 = (t) => Math.Min(t.DividendYield, 0.06);
-                    Func<BankTicker, double> performanceFn4 = (t) => 1 - t.EVEarnings.DoubleReduce(EVEarningsCutoff, 0);
+                    Func<BankTicker, double> performanceFn4 = (t) => 1 - t.EVEarnings.DoubleReduce(EarningsMultipleCutoff, 0);
+                    Func<BankTicker, double> performanceFn5 = (t) => 1 - (t.DebtMinusCash / t.MarketCap).DoubleReduce(0.5, -0.5);
                     var minmax1 = new MinMaxStore<BankTicker>(performanceFn1);
                     var minmax2 = new MinMaxStore<BankTicker>(performanceFn2);
                     var minmax3 = new MinMaxStore<BankTicker>(performanceFn3);
                     var minmax4 = new MinMaxStore<BankTicker>(performanceFn4);
+                    var minmax5 = new MinMaxStore<BankTicker>(performanceFn5);
                     foreach (var ticker in tickers)
                     {
                         minmax1.Run(ticker);
                         minmax2.Run(ticker);
                         minmax3.Run(ticker);
                         minmax4.Run(ticker);
+                        minmax5.Run(ticker);
                     }
-                    Func<BankTicker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 35) +
-                                                                         (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 25) +
-                                                                         (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 10) +
-                                                                         (performanceFn4(t).DoubleReduce(minmax4.Max, minmax4.Min) * 30);
+                    Func<BankTicker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 50) +
+                                                                         (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 15) +
+                                                                         (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 5) +
+                                                                         (performanceFn4(t).DoubleReduce(minmax4.Max, minmax4.Min) * 15) + 
+                                                                         (performanceFn5(t).DoubleReduce(minmax5.Max, minmax5.Min) * 15);
                     var minmaxTotal = new MinMaxStore<BankTicker>(performanceFnTotal);
                     foreach (var ticker in tickers)
                     {

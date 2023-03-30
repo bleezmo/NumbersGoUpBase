@@ -106,14 +106,6 @@ namespace NumbersGoUp.Utils
                                 {
                                     _logger.LogWarning($"Sector not found for {ticker.Symbol}");
                                 }
-                                if (marketCapIndex.HasValue && double.TryParse(csv[marketCapIndex.Value], out var marketCap))
-                                {
-                                    ticker.MarketCap = marketCap;
-                                }
-                                else
-                                {
-                                    _logger.LogWarning($"Market cap not found for {ticker.Symbol}");
-                                }
                                 if (peRatioIndex.HasValue && double.TryParse(csv[peRatioIndex.Value], out var peRatio))
                                 {
                                     ticker.PERatio = peRatio;
@@ -172,11 +164,12 @@ namespace NumbersGoUp.Utils
                                     }
                                     if(sharesIndex.HasValue && double.TryParse(csv[sharesIndex.Value], out var shares))
                                     {
+                                        ticker.Shares = shares;
                                         ticker.Earnings = ticker.EPS * shares;
                                     }
                                     else
                                     {
-                                        _logger.LogWarning($"No shares outstanding for {ticker.Symbol} to calculate earnings.");
+                                        _logger.LogError($"No shares outstanding for {ticker.Symbol} to calculate earnings.");
                                     }
                                 }
                                 else
@@ -185,7 +178,8 @@ namespace NumbersGoUp.Utils
                                 }
                                 if (ticker.Earnings > 0)
                                 {
-                                    if (evIndex.HasValue && double.TryParse(csv[evIndex.Value], out var ev))
+                                    double ev = 0;
+                                    if (evIndex.HasValue && double.TryParse(csv[evIndex.Value], out ev))
                                     {
                                         ticker.EVEarnings = ev / ticker.Earnings;
                                     }
@@ -198,6 +192,24 @@ namespace NumbersGoUp.Utils
                                     else
                                     {
                                         _logger.LogWarning($"EV EBITDA ratio unavailable for {ticker.Symbol}. Could not calculate EV.");
+                                    }
+                                    if (marketCapIndex.HasValue && double.TryParse(csv[marketCapIndex.Value], out var marketCap))
+                                    {
+                                        ticker.MarketCap = marketCap;
+                                        if(ev > 0)
+                                        {
+                                            ticker.DebtMinusCash = ev - marketCap;
+                                        }
+                                        else
+                                        {
+                                            ticker.DebtMinusCash = marketCap; //make this large to invalidate ticker
+                                            _logger.LogWarning($"Unable to calculate DebtMinusCash for {ticker.Symbol}. EV not found.");
+                                        }
+
+                                    }
+                                    else
+                                    {
+                                        _logger.LogError($"Market cap not found for {ticker.Symbol}");
                                     }
                                 }
                                 else
@@ -234,6 +246,8 @@ namespace NumbersGoUp.Utils
             dest.PERatio = src.PERatio;
             dest.EVEarnings = src.EVEarnings;
             dest.PriceChangeAvg = src.PriceChangeAvg;
+            dest.DebtMinusCash = src.DebtMinusCash;
+            dest.Shares = src.Shares;
         }
     }
 }
