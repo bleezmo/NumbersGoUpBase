@@ -128,7 +128,7 @@ namespace NumbersGoUp.Services
                     profitLossPerc = (brokerOrder.AverageFillPrice.Value - order.AvgEntryPrice) * 100 / order.AvgEntryPrice;
                     if (profitLossPerc < 0)
                     {
-                        daysToNextBuy = 62;
+                        daysToNextBuy = 64;
                     }
                 }
                 var lastBuyOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == order.Symbol && o.NextBuy != null).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
