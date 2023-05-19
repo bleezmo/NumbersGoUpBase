@@ -413,14 +413,14 @@ namespace NumbersGoUp.Services
         }
 #if DEBUG
 
-        public async Task TestAveragesAndPerformance(DateTime? cutoff = null, int? lookbackYears = null, string[] symbols = null)
+        public async Task TestAveragesAndPerformance(DateTime? cutoff = null, int? lookbackYears = null, string[] symbols = null, bool showLogs = true)
         {
             
             var now = cutoff.HasValue ? new DateTimeOffset(cutoff.Value) : DateTimeOffset.UtcNow;
             var nowMillis = now.ToUnixTimeMilliseconds();
             var lookback = lookbackYears.HasValue ? now.AddYears(-lookbackYears.Value) : now.AddYears(-DataService.LOOKBACK_YEARS);
             var lookbackMillis = lookback.ToUnixTimeMilliseconds();
-            _logger.LogInformation($"Calculating performance from {lookback:yyyy-MM-dd} to {cutoff:yyyy-MM-dd}");
+            if(showLogs) _logger.LogInformation($"Calculating performance from {lookback:yyyy-MM-dd} to {cutoff:yyyy-MM-dd}");
             using (var stocksContext = _contextFactory.CreateDbContext())
             {
                 var tickers = await stocksContext.Tickers.ToListAsync(_appCancellation.Token);

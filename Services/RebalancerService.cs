@@ -86,12 +86,14 @@ namespace NumbersGoUpBase.Services
                     {
                         continue;
                     }
+                    var buyMultiplier = FinalBuyMultiplier(Math.Max(cash / equity, 0), prediction.BuyMultiplier);
+                    var sellMultiplier = FinalSellMultiplier(Math.Max(cash / equity, 0), prediction.SellMultiplier);
                     var calculatedPerformance = equity * performanceTicker.Ticker.PerformanceVector * performanceTicker.PerformanceMultiplier() * _predicterService.EncouragementMultiplier.DoubleReduce(0, -1) * _stockBondPerc;
                     var targetValue = totalPerformance > 0 ? (calculatedPerformance / totalPerformance) : 0.0;
                     var position = performanceTicker.Position;
                     if (position == null && targetValue > 0 && performanceTicker.MeetsRequirements && cash > 0)
                     {
-                        rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, targetValue * prediction.BuyMultiplier, prediction));
+                        rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, targetValue * buyMultiplier, prediction));
                     }
                     else if (position != null && position.MarketValue.HasValue)
                     {
@@ -103,7 +105,7 @@ namespace NumbersGoUpBase.Services
                             {
                                 if (performanceTicker.MeetsRequirements && cash > (position.AssetLastPrice ?? 0))
                                 {
-                                    diffPerc = diffPerc * prediction.BuyMultiplier;
+                                    diffPerc = diffPerc * buyMultiplier;
                                     if (sector.PerformanceTickers.Count > 2)
                                     {
                                         diffPerc *= sector.Prediction.DoubleReduce(1, 0.6, 1.25, 1);
@@ -113,7 +115,7 @@ namespace NumbersGoUpBase.Services
                             }
                             else if (diffPerc < 0)
                             {
-                                diffPerc = diffPerc * prediction.SellMultiplier;
+                                diffPerc = diffPerc * sellMultiplier;
                                 if(sector.PerformanceTickers.Count > 2)
                                 {
                                     diffPerc *= 2 - sector.Prediction.DoubleReduce(1, 0.6, 1.25, 1);
@@ -208,6 +210,9 @@ namespace NumbersGoUpBase.Services
             }
             return sectors;
         }
+
+        private static double FinalSellMultiplier(double cashEquityRatio, double sellMultiplier) => sellMultiplier.Curve1(cashEquityRatio.DoubleReduce(0.3, 0, 3, 1));
+        private static double FinalBuyMultiplier(double cashEquityRatio, double buyMultiplier) => buyMultiplier.Curve3((1 - cashEquityRatio).DoubleReduce(1, 0.7, 4, 2));
     }
     public class PerformanceTicker
     {
