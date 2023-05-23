@@ -325,7 +325,8 @@ namespace NumbersGoUp.Services
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
                     var tickers = await stocksContext.Tickers.ToArrayAsync(_appCancellation.Token);
-                    var bankTickers = await stocksContext.TickerBank.Where(t => t.PerformanceVector > 0 && t.PERatio < PERatioCutoff).OrderByDescending(t => t.PerformanceVector).Take(200).ToArrayAsync(_appCancellation.Token);
+                    var bankTickers = await stocksContext.TickerBank.Where(t => t.PerformanceVector > 0).OrderByDescending(t => t.PerformanceVector).Take(200).ToArrayAsync(_appCancellation.Token);
+                    bankTickers = bankTickers.Where(t => t.PERatio < PERatioCutoff || TickerWhitelist.Any(symbol => symbol == t.Symbol)).ToArray();
                     var positions = await _brokerService.GetPositions();
                     var positionSymbols = positions.Select(p => p.Symbol).ToArray();
                     var bankTickerPositions = await stocksContext.TickerBank.Where(t => positionSymbols.Contains(t.Symbol)).ToArrayAsync(_appCancellation.Token);
