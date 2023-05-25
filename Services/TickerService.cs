@@ -118,6 +118,7 @@ namespace NumbersGoUp.Services
                 {
                     var nowMillis = now.ToUnixTimeMilliseconds();
                     var lookback = now.AddYears(-DataService.LOOKBACK_YEARS).ToUnixTimeMilliseconds();
+                    var gaussianWeights = Utils.Utils.GaussianWeights(24 * DataService.LOOKBACK_YEARS);
                     var tickers = await stocksContext.Tickers.ToListAsync(_appCancellation.Token);
                     foreach (var ticker in tickers) //filter any positions we currently hold in case we find we want to remove them
                     {
@@ -128,6 +129,7 @@ namespace NumbersGoUp.Services
                         {
                             if (now.AddYears(1 - DataService.LOOKBACK_YEARS).CompareTo(bars.First().BarDay) > 0 && now.AddDays(-7).CompareTo(bars.Last().BarDay) < 0) //remove anything that doesn't have enough history
                             {
+                                var currentMin = 0.0;
                                 var maxMonthConsecutiveLosses = 0.0;
                                 var consecutiveLosses = 0;
                                 var slopes = new List<double>();
@@ -143,10 +145,12 @@ namespace NumbersGoUp.Services
                                 {
                                     if (i % monthPeriod == 0)
                                     {
+                                        var min = (bars.Skip(i).Take(monthPeriod).Min(b => b.LowPrice) - initialPrice) * 100 / initialPrice;
+                                        slopes.Add(min - currentMin);
+                                        currentMin = min;
                                         var monthEnd = i + monthPeriod < bars.Length ? monthPeriod + i : bars.Length;
                                         var monthBegin = bars.Skip(i).First().Price();
                                         var avgMonth = ((bars.Skip(monthEnd - 1).First().Price() - monthBegin) * 100) / monthBegin;
-                                        slopes.Add(avgMonth);
                                         consecutiveLosses = avgMonth > 0 ? 0 : (consecutiveLosses + 1);
                                         maxMonthConsecutiveLosses = consecutiveLosses > maxMonthConsecutiveLosses ? consecutiveLosses : maxMonthConsecutiveLosses;
                                     }
@@ -174,8 +178,8 @@ namespace NumbersGoUp.Services
                                 var debtCapRatio = ticker.DebtMinusCash / ticker.MarketCap;
                                 if (slopes.Count > 0 && debtCapRatio < 0.5)
                                 {
-                                    ticker.AvgMonthPerc = slopes.Average();
-                                    ticker.MonthPercVariance = slopes.Sum(s => Math.Pow(s - ticker.AvgMonthPerc, 2)) / slopes.Count;
+                                    ticker.AvgMonthPerc = slopes.Reverse<double>().ToArray().ApplyAlma(gaussianWeights);
+                                    //ticker.MonthPercVariance = slopes.Sum(s => Math.Pow(s - ticker.AvgMonthPerc, 2)) / slopes.Count;
                                     ticker.MaxMonthConsecutiveLosses = maxMonthConsecutiveLosses;
                                 }
                             }
@@ -205,7 +209,7 @@ namespace NumbersGoUp.Services
                     }
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
 
-                    Func<Ticker, double> performanceFn1 = (t) => t.MonthPercVariance > 0 ? t.AvgMonthPerc * (1 - t.MaxMonthConsecutiveLosses.DoubleReduce(12, 1)) / Math.Sqrt(t.MonthPercVariance) : 0.0;
+                    Func<Ticker, double> performanceFn1 = (t) => (0.8 * t.AvgMonthPerc) + (0.2 * (1 - t.MaxMonthConsecutiveLosses.DoubleReduce(12, 1)));
                     Func<Ticker, double> performanceFn2 = (t) => t.ProfitLossStDev > 0 ? t.ProfitLossAvg / t.ProfitLossStDev : 0.0;
                     Func<Ticker, double> performanceFn3 = (t) => t.SMASMAStDev > 0 ? t.SMASMAAvg / t.SMASMAStDev : 0.0;
                     Func<Ticker, double> performanceFnRegression = (t) => 1 - t.RegressionAngle.DoubleReduce(45, -45);
@@ -241,10 +245,10 @@ namespace NumbersGoUp.Services
                                                                   (performanceFnPEEarnings(t).DoubleReduce(minmaxPEEarnings.Max, minmaxPEEarnings.Min) * 5) +
                                                                   (performanceFnPE(t).DoubleReduce(minmaxPE.Max, minmaxPE.Min) * 5) +
                                                                   (performanceFnDebtCap(t).DoubleReduce(minmaxDebtCap.Max, minmaxDebtCap.Min) * 15) +
-                                                                  (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 10) +
-                                                                  (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 5) +
-                                                                  (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 5) +
-                                                                  (performanceFnRegression(t).DoubleReduce(minmaxRegression.Max, minmaxRegression.Min) * 5);
+                                                                  (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 15) +
+                                                                  //(performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 5) +
+                                                                  //(performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 5) +
+                                                                  (performanceFnRegression(t).DoubleReduce(minmaxRegression.Max, minmaxRegression.Min) * 10);
 
                     var minmaxTotal = new MinMaxStore<Ticker>(performanceFnTotal);
                     var perfAvg = 0.0;
@@ -466,6 +470,7 @@ namespace NumbersGoUp.Services
                 {
                     tickers = tickers.Where(t => symbols.Contains(t.Symbol)).ToArray();
                 }
+                var gaussianWeights = Utils.Utils.GaussianWeights(24 * DataService.LOOKBACK_YEARS);
                 foreach (var ticker in tickers) //filter any positions we currently hold in case we find we want to remove them
                 {
                     ticker.AvgMonthPerc = -1000; //default if ticker is invalid
@@ -475,6 +480,7 @@ namespace NumbersGoUp.Services
                     {
                         if (now.AddYears(lookbackYears.HasValue ? (1-lookbackYears.Value) : (1-DataService.LOOKBACK_YEARS)).CompareTo(bars.First().BarDay) > 0 && now.AddDays(-7).CompareTo(bars.Last().BarDay) < 0)
                         {
+                            var currentMin = 0.0; 
                             var maxMonthConsecutiveLosses = 0.0;
                             var consecutiveLosses = 0;
                             var slopes = new List<double>();
@@ -485,10 +491,12 @@ namespace NumbersGoUp.Services
                             {
                                 if (i % monthPeriod == 0)
                                 {
+                                    var min = (bars.Skip(i).Take(monthPeriod).Min(b => b.LowPrice) - initialPrice) * 100 / initialPrice;
+                                    slopes.Add(min - currentMin);
+                                    currentMin = min;
                                     var monthEnd = i + monthPeriod < bars.Length ? monthPeriod + i : bars.Length;
                                     var monthBegin = bars.Skip(i).First().Price();
                                     var avgMonth = ((bars.Skip(monthEnd - 1).First().Price() - monthBegin) * 100) / monthBegin;
-                                    slopes.Add(avgMonth);
                                     consecutiveLosses = avgMonth > 0 ? 0 : (consecutiveLosses + 1);
                                     maxMonthConsecutiveLosses = consecutiveLosses > maxMonthConsecutiveLosses ? consecutiveLosses : maxMonthConsecutiveLosses;
                                 }
@@ -515,8 +523,8 @@ namespace NumbersGoUp.Services
                             ticker.EVEarnings = ticker.Earnings > 0 ? ((ticker.MarketCap + ticker.DebtMinusCash) / ticker.Earnings) : 1000;
                             if (slopes.Count > 0)
                             {
-                                ticker.AvgMonthPerc = slopes.Average();
-                                ticker.MonthPercVariance = slopes.Sum(s => Math.Pow(s - ticker.AvgMonthPerc, 2)) / slopes.Count;
+                                ticker.AvgMonthPerc = slopes.Reverse<double>().ToArray().ApplyAlma(gaussianWeights);
+                                //ticker.MonthPercVariance = slopes.Sum(s => Math.Pow(s - ticker.AvgMonthPerc, 2)) / slopes.Count;
                                 ticker.MaxMonthConsecutiveLosses = maxMonthConsecutiveLosses;
                             }
                         }
@@ -537,7 +545,7 @@ namespace NumbersGoUp.Services
                         ticker.LastCalculatedPerformanceMillis = nowMillis;
                         stocksContext.Tickers.Update(ticker);
                     }
-                    else if (ticker.AvgMonthPerc > -1000 && ticker.PERatio > 0 && ticker.PERatio < PERatioCutoff)
+                    else if (ticker.AvgMonthPerc > -1000)
                     {
                         toUpdate.Add(ticker);
                     }
@@ -551,7 +559,7 @@ namespace NumbersGoUp.Services
                 }
                 await stocksContext.SaveChangesAsync(_appCancellation.Token);
 
-                Func<Ticker, double> performanceFn1 = (t) => t.MonthPercVariance > 0 ? t.AvgMonthPerc * (1 - t.MaxMonthConsecutiveLosses.DoubleReduce(12, 1)) / Math.Sqrt(t.MonthPercVariance) : 0.0;
+                Func<Ticker, double> performanceFn1 = (t) => (0.8 * t.AvgMonthPerc) + (0.2 * (1 - t.MaxMonthConsecutiveLosses.DoubleReduce(12, 1)));
                 Func<Ticker, double> performanceFn2 = (t) => t.ProfitLossStDev > 0 ? t.ProfitLossAvg / t.ProfitLossStDev : 0.0;
                 Func<Ticker, double> performanceFn3 = (t) => t.SMASMAStDev > 0 ? t.SMASMAAvg / t.SMASMAStDev : 0.0;
                 Func<Ticker, double> performanceFnRegression = (t) => 1 - t.RegressionAngle.DoubleReduce(45, -45);
@@ -599,10 +607,10 @@ namespace NumbersGoUp.Services
                                                               //(performanceFnPEEarnings(t).DoubleReduce(minmaxPEEarnings.Max, minmaxPEEarnings.Min) * 5) +
                                                               //(performanceFnPE(t).DoubleReduce(minmaxPE.Max, minmaxPE.Min) * 5) +
                                                               //(performanceFnDebtCap(t).DoubleReduce(minmaxDebtCap.Max, minmaxDebtCap.Min) * 15) +
-                                                              (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 10) +
-                                                              (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 5) +
-                                                              (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 5) +
-                                                              (performanceFnRegression(t).DoubleReduce(minmaxRegression.Max, minmaxRegression.Min) * 5);
+                                                              (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 15) +
+                                                              //(performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 5) +
+                                                              //(performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 5) +
+                                                              (performanceFnRegression(t).DoubleReduce(minmaxRegression.Max, minmaxRegression.Min) * 10);
 
                 var minmaxTotal = new MinMaxStore<Ticker>(performanceFnTotal);
                 var perfAvg = 0.0;

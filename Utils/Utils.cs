@@ -65,16 +65,17 @@ namespace NumbersGoUp.Utils
         public static double VTailCurve(this double x, int peaks = 1) => (-0.5 * Math.Cos(((peaks * 2) + 1) * Math.PI * x)) + 0.5;
         public static double VTailExpCurve(this double x, int peaks = 1) => (-0.5 * Math.Cos(((peaks * 2) + 1) * Math.PI * x)) + 0.5;
         public static bool TickerAny(this string[] symbols, ITicker t) => symbols.Any(s => string.Equals(s, t.Symbol, StringComparison.InvariantCultureIgnoreCase));
-        public static double ApplyAlma<T>(this T[] objs, Func<T, double> objFn, double[] gaussianWeights = null)
+        public static double ApplyAlma<T>(this T[] objs, Func<T, double> objFn, double[] gaussianWeights = null) => objs.Select(o => objFn(o)).ToArray().ApplyAlma(gaussianWeights);
+        public static double ApplyAlma(this double[] values, double[] gaussianWeights = null)
         {
-            if(gaussianWeights == null)
+            if (gaussianWeights == null)
             {
-                gaussianWeights = GaussianWeights(objs.Length);
+                gaussianWeights = GaussianWeights(values.Length);
             }
             double WtdSum = 0, WtdNorm = 0;
-            for (int i = 0; i < objs.Length; i++)
+            for (int i = 0; i < values.Length; i++)
             {
-                WtdSum = WtdSum + (gaussianWeights[i] * objFn(objs[i]));
+                WtdSum = WtdSum + (gaussianWeights[i] * values[i]);
                 WtdNorm = WtdNorm + gaussianWeights[i];
             }
             return WtdSum / WtdNorm;
