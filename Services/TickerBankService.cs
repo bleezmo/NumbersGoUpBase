@@ -49,7 +49,7 @@ namespace NumbersGoUp.Services
             _configuration = configuration;
             _contextFactory = contextFactory;
             _runtimeSettings = runtimeSettings;
-            EarningsMultipleCutoff = double.TryParse(configuration[EARNINGS_MULTIPLE_CUTOFF_KEY], out var peratioCutoff) ? peratioCutoff : 45;
+            EarningsMultipleCutoff = double.TryParse(configuration[EARNINGS_MULTIPLE_CUTOFF_KEY], out var peratioCutoff) ? peratioCutoff : 51;
             _brokerService = brokerService;
             TickerWhitelist = configuration["TickerWhitelist"]?.Split(',') ?? new string[] { };
             TickerBlacklist = configuration["TickerBlacklist"]?.Split(',') ?? new string[] { };

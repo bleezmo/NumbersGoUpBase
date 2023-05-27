@@ -13,14 +13,13 @@ namespace NumbersGoUp.Models
     [Index(nameof(LastCalculatedAvgsMillis))]
     [Index(nameof(PerformanceVector))]
     [Index(nameof(PERatio))]
-    [Index(nameof(AvgMonthPerc))]
+    [Index(nameof(MonthTrend))]
     public class Ticker : ITicker
     {
         public long Id { get; set; }
         public string Symbol { get; set; }
         public string Sector { get; set; }
-        public double AvgMonthPerc { get; set; }
-        public double MonthPercVariance { get; set; }
+        public double MonthTrend { get; set; }
         public double MaxMonthConsecutiveLosses { get; set; }
         public double PerformanceVector { get; set; }
         public DateTime LastCalculated { get; set; }

@@ -289,7 +289,7 @@ namespace NumbersGoUp.Services
                 barMetric.PriceSMA3 = GetAngle(bars[0].Price() - sma3, sma3Upper - sma3);
                 barMetric.SMASMA = GetAngle(sma - sma3, sma3Upper - sma3);
                 barMetric.ProfitLossPerc = (bars.First().Price() - bars.Last().Price()) * 100 / bars.Last().Price();
-                barMetric.RegressionSlope = GetRegressionSlope(bars.Take(SMA2_LENGTH).Reverse().ToArray());
+                barMetric.WeekTrend = GetWeekTrend(bars.Take(SMA2_LENGTH).Reverse().ToArray());
                 var volAlma = ApplyAlma(bars.Take(ALMA_LENGTH).ToArray(), (bar) => Convert.ToDouble(bar.Volume));
                 var (volSma, volSmaUpper, volSmaLower) = BollingerBands(bars.Take(SMA_LENGTH).ToArray(), (bar) => Convert.ToDouble(bar.Volume));
                 barMetric.VolAlmaSMA = GetAngle(volAlma - volSma, volSmaUpper - volSma);
@@ -341,27 +341,27 @@ namespace NumbersGoUp.Services
                         sectorMetric.AlmaSMA2 = bars.Average(b => b.AlmaSMA2);
                         sectorMetric.AlmaSMA3 = bars.Average(b => b.AlmaSMA3);
                         sectorMetric.SMASMA = bars.Average(b => b.SMASMA);
-                        sectorMetric.RegressionSlope = bars.Average(b => b.RegressionSlope);
+                        sectorMetric.RegressionSlope = bars.Average(b => b.WeekTrend);
                         stocksContext.SectorMetrics.Add(sectorMetric);
                     }
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
                 }
             }
         }
-        private double GetRegressionSlope(HistoryBar[] barsAsc)
+        private double GetWeekTrend(HistoryBar[] barsAsc)
         {
+            var size = (int)Math.Floor(Convert.ToDouble(barsAsc.Length) / 10);
+
             var initialPrice = barsAsc[0].Price();
-            double x = 0.0, y = 0.0, xsqr = 0.0, xy = 0.0;
-            for (var i = 0; i < barsAsc.Length; i++)
+            var currentMin = 0.0;
+            var slopes = new List<double>();
+            for (var i = 0; i < barsAsc.Length; i += size)
             {
-                var perc = (barsAsc[i].Price() - initialPrice) * 100 / initialPrice;
-                y += perc;
-                x += i;
-                xsqr += Math.Pow(i, 2);
-                xy += perc * i;
+                var min = (barsAsc.Skip(i).Take(size).Min(b => b.LowPrice) - initialPrice) * 100 / initialPrice;
+                slopes.Add(min - currentMin);
+                currentMin = min;
             }
-            var regressionDenom = (barsAsc.Length * xsqr) - Math.Pow(x, 2);
-            return regressionDenom != 0 ? ((barsAsc.Length * xy) - (x * y)) / regressionDenom : 0.0;
+            return slopes.Reverse<double>().ToArray().ApplyAlma(_gaussianWeights);
         }
 
         private static double DefaultBarFn(HistoryBar bar) => bar.Price();
