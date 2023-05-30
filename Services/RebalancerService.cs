@@ -232,11 +232,11 @@ namespace NumbersGoUpBase.Services
                 var sectorMultiplier = SectorPrediction.DoubleReduce(1, 0, predictionMax, predictionMax - 0.2);
                 performanceMultiplier = (0.8 * equityPercMultiplier) + (0.2 * sectorMultiplier);
             }
-            if (Position != null && Position.UnrealizedProfitLossPercent.HasValue)
-            {
-                var dividendMultiplier = Position.UnrealizedProfitLossPercent.Value < 0 ? 0.5 : Ticker.DividendYield.DoubleReduce(0.05, 0, 1.1, 0.9);
-                performanceMultiplier *= Math.Log((2 * Position.UnrealizedProfitLossPercent.Value * dividendMultiplier) + Math.E);
-            }
+            //if (Position != null && Position.UnrealizedProfitLossPercent.HasValue)
+            //{
+            //    var dividendMultiplier = Position.UnrealizedProfitLossPercent.Value < 0 ? 0.5 : Ticker.DividendYield.DoubleReduce(0.05, 0, 1.1, 0.9);
+            //    performanceMultiplier *= Math.Log((2 * Position.UnrealizedProfitLossPercent.Value * dividendMultiplier) + Math.E);
+            //}
             return performanceMultiplier;
         }
     }
