@@ -149,18 +149,18 @@ namespace NumbersGoUp.Utils
                                         {
                                             epsGrowthPerc = (epsGrowthPerc / 100).DoubleReduce(1, -1, 1, -1);
                                             var coeff = epsGrowthPerc.ZeroReduce(0, -1);
-                                            changePerc = (coeff * epsGrowthPerc) + ((1 - coeff) * changePerc);
+                                            changePerc = Math.Min((coeff * epsGrowthPerc) + ((1 - coeff) * changePerc), 0.5);
                                         }
                                         else
                                         {
-                                            changePerc = Math.Min(changePerc, 0.15);
+                                            changePerc = Math.Min(changePerc, 0.2);
                                         }
-                                        ticker.EPS = Math.Min(eps + (eps * changePerc), futureEPS * 4);
+                                        ticker.EPS = Math.Min(eps + (eps * changePerc), futureEPS * 4) * Math.Sqrt(Math.Max(1 + changePerc, 0));
                                     }
                                     else
                                     {
                                         _logger.LogWarning($"Current and/or future eps not found. Using default eps for {ticker.Symbol}");
-                                        ticker.EPS = eps;
+                                        ticker.EPS = eps * 0.75; //add a penalty if we can't get better
                                     }
                                     if(sharesIndex.HasValue && double.TryParse(csv[sharesIndex.Value], out var shares))
                                     {
