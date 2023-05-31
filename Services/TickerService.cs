@@ -130,8 +130,6 @@ namespace NumbersGoUp.Services
                             if (now.AddYears(1 - DataService.LOOKBACK_YEARS).CompareTo(bars.First().BarDay) > 0 && now.AddDays(-7).CompareTo(bars.Last().BarDay) < 0) //remove anything that doesn't have enough history
                             {
                                 var currentMin = 0.0;
-                                var maxMonthConsecutiveLosses = 0.0;
-                                var consecutiveLosses = 0;
                                 var slopes = new List<double>();
                                 var monthPeriod = 20;
                                 var initialPrice = bars[0].Price();
@@ -148,11 +146,6 @@ namespace NumbersGoUp.Services
                                         var min = (bars.Skip(i).Take(monthPeriod).Min(b => b.LowPrice) - initialPrice) * 100 / initialPrice;
                                         slopes.Add(min - currentMin);
                                         currentMin = min;
-                                        var monthEnd = i + monthPeriod < bars.Length ? monthPeriod + i : bars.Length;
-                                        var monthBegin = bars.Skip(i).First().Price();
-                                        var avgMonth = ((bars.Skip(monthEnd - 1).First().Price() - monthBegin) * 100) / monthBegin;
-                                        consecutiveLosses = avgMonth > 0 ? 0 : (consecutiveLosses + 1);
-                                        maxMonthConsecutiveLosses = consecutiveLosses > maxMonthConsecutiveLosses ? consecutiveLosses : maxMonthConsecutiveLosses;
                                     }
                                     var perc = (bars[i].Price() - initialPrice) * 100 / initialPrice;
                                     y += perc;
@@ -179,7 +172,6 @@ namespace NumbersGoUp.Services
                                 if (slopes.Count > 0 && debtCapRatio < 0.5)
                                 {
                                     ticker.MonthTrend = slopes.Reverse<double>().ToArray().ApplyAlma(gaussianWeights);
-                                    ticker.MaxMonthConsecutiveLosses = maxMonthConsecutiveLosses;
                                 }
                             }
                         }
@@ -208,7 +200,8 @@ namespace NumbersGoUp.Services
                     }
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
 
-                    Func<Ticker, double> performanceFn1 = (t) => (0.8 * t.MonthTrend) + (0.2 * (1 - t.MaxMonthConsecutiveLosses.DoubleReduce(12, 1)));
+                    Func<Ticker, double> performanceFn1 = (t) => (0.9 * t.MonthTrend) + (0.1 * (1 - t.MaxMonthConsecutiveLosses.DoubleReduce(20, 1)));
+                    Func<Ticker, double> performanceFn2 = (t) => Math.Pow(t.ProfitLossAvg, 2) / Math.Pow(t.ProfitLossStDev, 2);
                     Func<Ticker, double> performanceFnRegression = (t) => 1 - t.RegressionAngle.DoubleReduce(45, -45);
                     Func<Ticker, double> performanceFnEarnings = (t) => Math.Sqrt(t.Earnings) * 2;
                     Func<Ticker, double> performanceFnEVEarnings = (t) => 1 - t.EVEarnings.DoubleReduce(_tickerBankService.EarningsMultipleCutoff, 0);
@@ -216,6 +209,7 @@ namespace NumbersGoUp.Services
                     Func<Ticker, double> performanceFnPEEarnings = (t) => 1 - (t.PERatio * t.EVEarnings).DoubleReduce(_tickerBankService.EarningsMultipleCutoff * PERatioCutoff, 0);
                     Func<Ticker, double> performanceFnDebtCap = (t) => t.MarketCap > 0 ? (1 - (t.DebtMinusCash / t.MarketCap).DoubleReduce(0.5, -0.5)) : 0.0;
                     var minmax1 = new MinMaxStore<Ticker>(performanceFn1);
+                    var minmax2 = new MinMaxStore<Ticker>(performanceFn2);
                     var minmaxRegression = new MinMaxStore<Ticker>(performanceFnRegression);
                     var minmaxEarnings = new MinMaxStore<Ticker>(performanceFnEarnings);
                     var minmaxEVEarnings = new MinMaxStore<Ticker>(performanceFnEVEarnings);
@@ -225,6 +219,7 @@ namespace NumbersGoUp.Services
                     foreach (var ticker in toUpdate)
                     {
                         minmax1.Run(ticker);
+                        minmax2.Run(ticker);
                         minmaxRegression.Run(ticker);
                         minmaxEarnings.Run(ticker);
                         minmaxEVEarnings.Run(ticker);
@@ -233,12 +228,13 @@ namespace NumbersGoUp.Services
                         minmaxDebtCap.Run(ticker);
                     }
                     Func<Ticker, double> performanceFnTotal = (t) =>
-                                                                  (performanceFnEarnings(t).DoubleReduce(minmaxEarnings.Max, minmaxEarnings.Min) * 30) +
+                                                                  (performanceFnEarnings(t).DoubleReduce(minmaxEarnings.Max, minmaxEarnings.Min) * 20) +
                                                                   (performanceFnEVEarnings(t).DoubleReduce(minmaxEVEarnings.Max, minmaxEVEarnings.Min) * 5) +
                                                                   (performanceFnPEEarnings(t).DoubleReduce(minmaxPEEarnings.Max, minmaxPEEarnings.Min) * 5) +
                                                                   (performanceFnPE(t).DoubleReduce(minmaxPE.Max, minmaxPE.Min) * 5) +
-                                                                  (performanceFnDebtCap(t).DoubleReduce(minmaxDebtCap.Max, minmaxDebtCap.Min) * 20) +
+                                                                  (performanceFnDebtCap(t).DoubleReduce(minmaxDebtCap.Max, minmaxDebtCap.Min) * 15) +
                                                                   (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 20) +
+                                                                  (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 15) +
                                                                   (performanceFnRegression(t).DoubleReduce(minmaxRegression.Max, minmaxRegression.Min) * 15);
 
                     var minmaxTotal = new MinMaxStore<Ticker>(performanceFnTotal);
@@ -299,6 +295,16 @@ namespace NumbersGoUp.Services
 
                             ticker.AlmaVelStDev = (bars.CalculateVelocityStDev(b => b.AlmaSMA1) + bars.CalculateVelocityStDev(b => b.AlmaSMA2) + bars.CalculateVelocityStDev(b => b.AlmaSMA3)) / 3;
                             ticker.SMAVelStDev = bars.CalculateVelocityStDev(b => b.SMASMA);
+
+                            var maxMonthConsecutiveLosses = 0.0;
+                            var consecutiveLosses = 0;
+                            const int monthLength = 20;
+                            for (var i = 0; i < bars.Length; i += monthLength)
+                            {
+                                consecutiveLosses = bars.Skip(i).Take(monthLength).Average(b => b.SMASMA) > 0 ? 0 : (consecutiveLosses + 1);
+                                maxMonthConsecutiveLosses = maxMonthConsecutiveLosses < consecutiveLosses ? consecutiveLosses : maxMonthConsecutiveLosses;
+                            }
+                            ticker.MaxMonthConsecutiveLosses = maxMonthConsecutiveLosses;
 
                             ticker.LastCalculatedAvgs = now.UtcDateTime;
                             ticker.LastCalculatedAvgsMillis = nowMillis;
@@ -447,6 +453,16 @@ namespace NumbersGoUp.Services
                         ticker.AlmaVelStDev = (bars.CalculateVelocityStDev(b => b.AlmaSMA1) + bars.CalculateVelocityStDev(b => b.AlmaSMA2) + bars.CalculateVelocityStDev(b => b.AlmaSMA3)) / 3;
                         ticker.SMAVelStDev = bars.CalculateVelocityStDev(b => b.SMASMA);
 
+                        var maxMonthConsecutiveLosses = 0.0;
+                        var consecutiveLosses = 0;
+                        const int monthLength = 20;
+                        for (var i = 0; i < bars.Length; i+=monthLength)
+                        {
+                            consecutiveLosses = bars.Skip(i).Take(monthLength).Average(b => b.SMASMA) > 0 ? 0 : (consecutiveLosses + 1);
+                            maxMonthConsecutiveLosses = maxMonthConsecutiveLosses < consecutiveLosses ? consecutiveLosses : maxMonthConsecutiveLosses;
+                        }
+                        ticker.MaxMonthConsecutiveLosses = maxMonthConsecutiveLosses;
+
                         ticker.LastCalculatedAvgs = now.UtcDateTime;
                         ticker.LastCalculatedAvgsMillis = nowMillis;
                         stocksContext.Tickers.Update(ticker);
@@ -471,9 +487,7 @@ namespace NumbersGoUp.Services
                     {
                         if (now.AddYears(lookbackYears.HasValue ? (1-lookbackYears.Value) : (1-DataService.LOOKBACK_YEARS)).CompareTo(bars.First().BarDay) > 0 && now.AddDays(-7).CompareTo(bars.Last().BarDay) < 0)
                         {
-                            var currentMin = 0.0; 
-                            var maxMonthConsecutiveLosses = 0.0;
-                            var consecutiveLosses = 0;
+                            var currentMin = 0.0;
                             var slopes = new List<double>();
                             var monthPeriod = 20;
                             var initialPrice = bars[0].Price();
@@ -485,11 +499,6 @@ namespace NumbersGoUp.Services
                                     var min = (bars.Skip(i).Take(monthPeriod).Min(b => b.LowPrice) - initialPrice) * 100 / initialPrice;
                                     slopes.Add(min - currentMin);
                                     currentMin = min;
-                                    var monthEnd = i + monthPeriod < bars.Length ? monthPeriod + i : bars.Length;
-                                    var monthBegin = bars.Skip(i).First().Price();
-                                    var avgMonth = ((bars.Skip(monthEnd - 1).First().Price() - monthBegin) * 100) / monthBegin;
-                                    consecutiveLosses = avgMonth > 0 ? 0 : (consecutiveLosses + 1);
-                                    maxMonthConsecutiveLosses = consecutiveLosses > maxMonthConsecutiveLosses ? consecutiveLosses : maxMonthConsecutiveLosses;
                                 }
                                 var perc = (bars[i].Price() - initialPrice) * 100 / initialPrice;
                                 y += perc;
@@ -515,7 +524,6 @@ namespace NumbersGoUp.Services
                             if (slopes.Count > 0)
                             {
                                 ticker.MonthTrend = slopes.Reverse<double>().ToArray().ApplyAlma(gaussianWeights);
-                                ticker.MaxMonthConsecutiveLosses = maxMonthConsecutiveLosses;
                             }
                         }
                     }
@@ -548,19 +556,16 @@ namespace NumbersGoUp.Services
                     }
                 }
                 await stocksContext.SaveChangesAsync(_appCancellation.Token);
-
-                Func<Ticker, double> performanceFn1 = (t) => (0.8 * t.MonthTrend) + (0.2 * (1 - t.MaxMonthConsecutiveLosses.DoubleReduce(12, 1)));
-                Func<Ticker, double> performanceFn2 = (t) => t.ProfitLossStDev > 0 ? t.ProfitLossAvg / t.ProfitLossStDev : 0.0;
-                Func<Ticker, double> performanceFn3 = (t) => t.SMASMAStDev > 0 ? t.SMASMAAvg / t.SMASMAStDev : 0.0;
+                Func<Ticker, double> performanceFn1 = (t) => (0.9 * t.MonthTrend) + (0.1 * (1 - t.MaxMonthConsecutiveLosses.DoubleReduce(20, 1)));
+                Func<Ticker, double> performanceFn2 = (t) => t.ProfitLossStDev > 0 ? Math.Pow(t.ProfitLossAvg, 2) / Math.Pow(t.ProfitLossStDev, 2) : 0;
                 Func<Ticker, double> performanceFnRegression = (t) => 1 - t.RegressionAngle.DoubleReduce(45, -45);
                 Func<Ticker, double> performanceFnEarnings = (t) => Math.Sqrt(t.Earnings) * 2;
                 Func<Ticker, double> performanceFnEVEarnings = (t) => 1 - t.EVEarnings.DoubleReduce(_tickerBankService.EarningsMultipleCutoff, 0);
                 Func<Ticker, double> performanceFnPE = (t) => 1 - t.PERatio.DoubleReduce(PERatioCutoff, 0);
                 Func<Ticker, double> performanceFnPEEarnings = (t) => 1 - (t.PERatio * t.EVEarnings).DoubleReduce(_tickerBankService.EarningsMultipleCutoff * PERatioCutoff, 0);
-                Func<Ticker, double> performanceFnDebtCap = (t) => 1 - (t.DebtMinusCash / t.MarketCap).DoubleReduce(0.5, -0.5);
+                Func<Ticker, double> performanceFnDebtCap = (t) => t.MarketCap > 0 ? (1 - (t.DebtMinusCash / t.MarketCap).DoubleReduce(0.5, -0.5)) : 0.0;
                 var minmax1 = new MinMaxStore<Ticker>(performanceFn1);
                 var minmax2 = new MinMaxStore<Ticker>(performanceFn2);
-                var minmax3 = new MinMaxStore<Ticker>(performanceFn3);
                 var minmaxRegression = new MinMaxStore<Ticker>(performanceFnRegression);
                 var minmaxEarnings = new MinMaxStore<Ticker>(performanceFnEarnings);
                 var minmaxEVEarnings = new MinMaxStore<Ticker>(performanceFnEVEarnings);
@@ -583,7 +588,6 @@ namespace NumbersGoUp.Services
                 {
                     minmax1.Run(ticker);
                     minmax2.Run(ticker);
-                    minmax3.Run(ticker);
                     minmaxRegression.Run(ticker);
                     minmaxEarnings.Run(ticker);
                     minmaxEVEarnings.Run(ticker);
@@ -592,12 +596,13 @@ namespace NumbersGoUp.Services
                     minmaxDebtCap.Run(ticker);
                 }
                 Func<Ticker, double> performanceFnTotal = (t) =>
-                                                              (performanceFnEarnings(t).DoubleReduce(minmaxEarnings.Max, minmaxEarnings.Min) * 30) +
+                                                              (performanceFnEarnings(t).DoubleReduce(minmaxEarnings.Max, minmaxEarnings.Min) * 20) +
                                                               //(performanceFnEVEarnings(t).DoubleReduce(minmaxEVEarnings.Max, minmaxEVEarnings.Min) * 5) +
                                                               //(performanceFnPEEarnings(t).DoubleReduce(minmaxPEEarnings.Max, minmaxPEEarnings.Min) * 5) +
                                                               //(performanceFnPE(t).DoubleReduce(minmaxPE.Max, minmaxPE.Min) * 5) +
-                                                              //(performanceFnDebtCap(t).DoubleReduce(minmaxDebtCap.Max, minmaxDebtCap.Min) * 20) +
+                                                              //(performanceFnDebtCap(t).DoubleReduce(minmaxDebtCap.Max, minmaxDebtCap.Min) * 15) +
                                                               (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 20) +
+                                                              (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 15) +
                                                               (performanceFnRegression(t).DoubleReduce(minmaxRegression.Max, minmaxRegression.Min) * 15);
 
                 var minmaxTotal = new MinMaxStore<Ticker>(performanceFnTotal);
