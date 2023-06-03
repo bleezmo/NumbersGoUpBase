@@ -135,6 +135,26 @@ namespace NumbersGoUp.Utils
             if (size < 3) { throw new Exception("Length does not meet minimum requirements to calculate acceleration"); }
             return (angleValueFn(barsDesc.First()) - angleValueFn(barsDesc.Skip(size / 2).First())) - (angleValueFn(barsDesc.Skip(size / 2).First()) - angleValueFn(barsDesc.Last()));
         }
+        public static (double slope, double yintercept) CalculateRegression(this double[] itemsAsc)
+        {
+            double x = 0.0, y = 0.0, xsqr = 0.0, xy = 0.0;
+            for (var i = 1; i <= itemsAsc.Length; i++)
+            {
+                y += itemsAsc[i-1];
+                x += i;
+                xsqr += Math.Pow(i, 2);
+                xy += itemsAsc[i-1] * i;
+            }
+            var regressionDenom = (itemsAsc.Length * xsqr) - Math.Pow(x, 2);
+            var regressionSlope = regressionDenom != 0 ? ((itemsAsc.Length * xy) - (x * y)) / regressionDenom : 0.0;
+            var yintercept = (y - (regressionSlope * x)) / itemsAsc.Length;
+            return (regressionSlope, yintercept);
+        }
+        public static double CalculateRegression(this double[] itemsAsc, int index)
+        {
+            var (slope, yintercept) = itemsAsc.CalculateRegression();
+            return (slope * index) + yintercept;
+        }
 
         public static async Task<int> BatchJobs<T>(this IEnumerable<T> data, Func<T,Task> fn, int batchSize = 10)
         {

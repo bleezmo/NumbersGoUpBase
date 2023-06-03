@@ -56,7 +56,7 @@ namespace NumbersGoUp.Utils
                      * Debt to Equity Ratio (MRQ),Dividend Yield Forward,EBITDA (TTM),Enterprise Value/EBITDA (TTM),EPS Diluted (TTM)
                      */
                     int? tickerIndex = null, sectorIndex = null, marketCapIndex = null, peRatioIndex = null, currentRatioIndex = null, debtEquityRatioIndex = null, dividendIndex = null, 
-                         ebitdaIndex = null, evebitdaIndex = null, epsIndex = null, priceIndex = null, currentEPSIndex = null, futureEPSIndex = null, sharesIndex = null, evIndex = null, epsGrowthIndex = null;
+                         ebitdaIndex = null, evebitdaIndex = null, epsIndex = null, priceIndex = null, sharesIndex = null, evIndex = null, currentEPSIndex = null, futureEPSIndex = null, epsQoQIndex = null;
                     using (var csv = new CsvReader(sr, CultureInfo.InvariantCulture))
                     {
                         string[] headers = null;
@@ -83,7 +83,7 @@ namespace NumbersGoUp.Utils
                                     if (headers[i] == "EPS Forecast (MRQ)") { futureEPSIndex = i; }
                                     if (headers[i] == "Total Shares Outstanding") { sharesIndex = i; }
                                     if (headers[i] == "Enterprise Value (MRQ)") { evIndex = i; }
-                                    if (headers[i] == "EPS Diluted (TTM YoY Growth)") { epsGrowthIndex = i; }
+                                    if (headers[i] == "EPS Diluted (Quarterly QoQ Growth)") { epsQoQIndex = i; }
                                 }
                             }
                             else
@@ -140,29 +140,34 @@ namespace NumbersGoUp.Utils
                                 }
                                 if (epsIndex.HasValue && double.TryParse(csv[epsIndex.Value], out var eps))
                                 {
-                                    if(eps > 0 && currentEPSIndex.HasValue && double.TryParse(csv[currentEPSIndex.Value], out var currentEPS) &&
+                                    ticker.EPS = eps;
+                                    if (eps > 0 && currentEPSIndex.HasValue && double.TryParse(csv[currentEPSIndex.Value], out var currentEPS) &&
                                         futureEPSIndex.HasValue && double.TryParse(csv[futureEPSIndex.Value], out var futureEPS))
                                     {
-
-                                        var changePerc = currentEPS > 0 ? ((futureEPS - currentEPS) / currentEPS).DoubleReduce(1, -1, 1, -1): -1;
-                                        if (epsGrowthIndex.HasValue && double.TryParse(csv[epsGrowthIndex.Value], out var epsGrowthPerc))
+                                        if (epsQoQIndex.HasValue && double.TryParse(csv[epsQoQIndex.Value], out var epsQoQPerc))
                                         {
-                                            epsGrowthPerc = (epsGrowthPerc / 100).DoubleReduce(1, -1, 1, -1);
-                                            var coeff = epsGrowthPerc.ZeroReduce(0, -1);
-                                            changePerc = Math.Min((coeff * epsGrowthPerc) + ((1 - coeff) * changePerc), 0.5);
+                                            if(epsQoQIndex > -100)
+                                            {
+                                                var pastEPS = currentEPS / Math.Min((epsQoQPerc + 100) / 100, 2);
+                                                var finalQ = new[] { pastEPS, currentEPS, futureEPS }.CalculateRegression(4);
+                                                ticker.EPS = pastEPS + currentEPS + futureEPS + finalQ;
+                                            }
+                                            else
+                                            {
+                                                ticker.EPS = -1;
+                                            }
                                         }
-                                        else
+                                        else //assume semi-annual earnings reports
                                         {
-                                            changePerc = Math.Min(changePerc, 0.2);
+                                            //_logger.LogInformation($"QoQ eps growth not found. Assuming semi-annual earnings. Ticker {ticker.Symbol}");
+                                            ticker.EPS = (1.1 * futureEPS) + (0.9 * currentEPS);
                                         }
-                                        ticker.EPS = Math.Min(eps + (eps * changePerc), futureEPS * 4) * Math.Sqrt(Math.Max(1 + changePerc, 0));
                                     }
                                     else
                                     {
-                                        _logger.LogWarning($"Current and/or future eps not found. Using default eps for {ticker.Symbol}");
-                                        ticker.EPS = eps * 0.75; //add a penalty if we can't get better
+                                        _logger.LogError($"Current and/or future eps not found. Using default eps for {ticker.Symbol}");
                                     }
-                                    if(sharesIndex.HasValue && double.TryParse(csv[sharesIndex.Value], out var shares))
+                                    if (sharesIndex.HasValue && double.TryParse(csv[sharesIndex.Value], out var shares))
                                     {
                                         ticker.Shares = shares;
                                         ticker.Earnings = ticker.EPS * shares;
@@ -175,6 +180,15 @@ namespace NumbersGoUp.Utils
                                 else
                                 {
                                     _logger.LogError($"EPS not found for {ticker.Symbol}");
+                                }
+                                var price = 0.0;
+                                if (priceIndex.HasValue && double.TryParse(csv[priceIndex.Value], out price))
+                                {
+                                    ticker.PERatio = ticker.EPS > 0 ? (price / ticker.EPS) : ticker.PERatio;
+                                }
+                                else
+                                {
+                                    _logger.LogWarning($"EPS not found for {ticker.Symbol}");
                                 }
                                 if (ticker.Earnings > 0)
                                 {
@@ -196,33 +210,29 @@ namespace NumbersGoUp.Utils
                                     if (marketCapIndex.HasValue && double.TryParse(csv[marketCapIndex.Value], out var marketCap))
                                     {
                                         ticker.MarketCap = marketCap;
-                                        if(ev > 0)
-                                        {
-                                            ticker.DebtMinusCash = ev - marketCap;
-                                        }
-                                        else
-                                        {
-                                            ticker.DebtMinusCash = marketCap; //make this large to invalidate ticker
-                                            _logger.LogWarning($"Unable to calculate DebtMinusCash for {ticker.Symbol}. EV not found.");
-                                        }
-
+                                    }
+                                    else if(ticker.Shares > 0 && price > 0)
+                                    {
+                                        _logger.LogWarning($"Market cap not found for {ticker.Symbol}. Deriving from shares*price");
+                                        ticker.MarketCap = ticker.Shares * price;
                                     }
                                     else
                                     {
-                                        _logger.LogError($"Market cap not found for {ticker.Symbol}");
+                                        _logger.LogError($"Market cap not found for {ticker.Symbol} and unable to derive.");
+                                    }
+                                    if (ev > 0)
+                                    {
+                                        ticker.DebtMinusCash = ev - ticker.MarketCap;
+                                    }
+                                    else
+                                    {
+                                        ticker.DebtMinusCash = ticker.MarketCap; //make this large to invalidate ticker
+                                        _logger.LogWarning($"Unable to calculate DebtMinusCash for {ticker.Symbol}. EV not found.");
                                     }
                                 }
-                                else
+                                else if(ticker.Earnings == 0)
                                 {
                                     _logger.LogError($"Earnings ratio unavailable for {ticker.Symbol}. Earnings not found.");
-                                }
-                                if (priceIndex.HasValue && double.TryParse(csv[priceIndex.Value], out var price))
-                                {
-                                    ticker.PERatio = ticker.EPS > 0 ? (price / ticker.EPS) : ticker.PERatio;
-                                }
-                                else
-                                {
-                                    _logger.LogWarning($"EPS not found for {ticker.Symbol}");
                                 }
                                 tickers.Add(ticker);
                             }

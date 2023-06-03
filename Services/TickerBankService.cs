@@ -101,7 +101,7 @@ namespace NumbersGoUp.Services
         }
         private bool BasicCutoff(BankTicker ticker) => !TickerBlacklist.TickerAny(ticker) && ticker.DebtEquityRatio > 0 && ticker.DebtEquityRatio < 1.5 && 
                                                        (ticker.CurrentRatio > (ticker.DebtEquityRatio * 1.2) || ticker.DebtEquityRatio < 0.9) && (ticker.DebtMinusCash / ticker.MarketCap) < 0.5 && 
-                                                       ticker.Earnings > 0 && ticker.DividendYield > 0.005 && ticker.EPS > 0 && ticker.EVEarnings > 0 && ticker.EVEarnings < EarningsMultipleCutoff;
+                                                       ticker.Earnings > 0 && ticker.DividendYield > 0 && ticker.EPS > 0 && ticker.EVEarnings > 0 && ticker.EVEarnings < EarningsMultipleCutoff;
         public async Task CalculatePerformance()
         {
             var now = DateTime.UtcNow;
@@ -123,7 +123,7 @@ namespace NumbersGoUp.Services
                                 t.PERatio = price / t.EPS;
                                 t.MarketCap = price * t.Shares;
                                 if(t.Earnings > 0) { t.EVEarnings = (t.MarketCap + t.DebtMinusCash) / t.Earnings; }
-                                
+
                             }
                         }
                         catch (Exception e)
