@@ -200,12 +200,13 @@ namespace NumbersGoUp.Services
                     }
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
                     Func<Ticker, double, double> EarningsRatiosCalc = (t, maxFractional) => (0.5 * (1 - t.PERatio.DoubleReduce(PERatioCutoff, PERatioCutoff * maxFractional))) + (0.5 * (1 - t.EVEarnings.DoubleReduce(_tickerBankService.EarningsMultipleCutoff, _tickerBankService.EarningsMultipleCutoff * maxFractional)));
+                    Func<Ticker, double, double> DebtCapCalc = (t, lowerBound) => t.MarketCap > 0 ? (1 - (t.DebtMinusCash / t.MarketCap).DoubleReduce(0.5, lowerBound)) : 0.0;
                     Func<Ticker, double> performanceFn1 = (t) => (0.9 * t.MonthTrend) + (0.1 * (1 - t.MaxMonthConsecutiveLosses.DoubleReduce(20, 1)));
                     Func<Ticker, double> performanceFn2 = (t) => t.ProfitLossStDev > 0 ? Math.Pow(t.ProfitLossAvg, 2) / Math.Pow(t.ProfitLossStDev, 2) : 0;
                     Func<Ticker, double> performanceFnRegression = (t) => 1 - t.RegressionAngle.DoubleReduce(45, -45);
-                    Func<Ticker, double> performanceFnEarnings = (t) => Math.Sqrt(t.MarketCap) * 2 * EarningsRatiosCalc(t, 0.4);
+                    Func<Ticker, double> performanceFnEarnings = (t) => Math.Sqrt(t.MarketCap) * 2 * EarningsRatiosCalc(t, 0.4) * DebtCapCalc(t, 0);
                     Func<Ticker, double> performanceFnEarningsRatios = (t) => EarningsRatiosCalc(t, 0);
-                    Func<Ticker, double> performanceFnDebtCap = (t) => t.MarketCap > 0 ? (1 - (t.DebtMinusCash / t.MarketCap).DoubleReduce(0.5, -0.5)) : 0.0;
+                    Func<Ticker, double> performanceFnDebtCap = (t) => DebtCapCalc(t, -0.5);
                     var minmax1 = new MinMaxStore<Ticker>(performanceFn1);
                     var minmax2 = new MinMaxStore<Ticker>(performanceFn2);
                     var minmaxRegression = new MinMaxStore<Ticker>(performanceFnRegression);
@@ -222,9 +223,9 @@ namespace NumbersGoUp.Services
                         minmaxDebtCap.Run(ticker);
                     }
                     Func<Ticker, double> performanceFnTotal = (t) =>
-                                                                  (performanceFnEarnings(t).DoubleReduce(minmaxEarnings.Max, minmaxEarnings.Min) * 25) +
+                                                                  (performanceFnEarnings(t).DoubleReduce(minmaxEarnings.Max, minmaxEarnings.Min) * 30) +
                                                                   (performanceFnEarningsRatios(t).DoubleReduce(minmaxEarningsRatios.Max, minmaxEarningsRatios.Min) * 10) +
-                                                                  (performanceFnDebtCap(t).DoubleReduce(minmaxDebtCap.Max, minmaxDebtCap.Min) * 15) +
+                                                                  (performanceFnDebtCap(t).DoubleReduce(minmaxDebtCap.Max, minmaxDebtCap.Min) * 10) +
                                                                   (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 20) +
                                                                   (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 15) +
                                                                   (performanceFnRegression(t).DoubleReduce(minmaxRegression.Max, minmaxRegression.Min) * 15);
