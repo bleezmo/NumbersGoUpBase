@@ -324,6 +324,7 @@ namespace NumbersGoUp.Services
                     var positions = await _brokerService.GetPositions();
                     var positionSymbols = positions.Select(p => p.Symbol).ToArray();
                     var bankTickerPositions = await stocksContext.TickerBank.Where(t => positionSymbols.Contains(t.Symbol)).ToArrayAsync(_appCancellation.Token);
+                    var count = tickers.Length;
                     foreach (var ticker in tickers)
                     {
                         var bankTicker = bankTickers.FirstOrDefault(t => ticker.Symbol == t.Symbol);
@@ -378,11 +379,13 @@ namespace NumbersGoUp.Services
                         {
                             _logger.LogInformation($"Removing {ticker.Symbol}");
                             stocksContext.Tickers.Remove(ticker);
+                            count--;
                         }
                     }
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
                     foreach (var bankTicker in bankTickers)
                     {
+                        if(count > 200) { break; }
                         if (!tickers.Any(t => t.Symbol == bankTicker.Symbol))
                         {
                             stocksContext.Tickers.Add(new Ticker
@@ -400,6 +403,7 @@ namespace NumbersGoUp.Services
                                 LastCalculated = now.UtcDateTime,
                                 LastCalculatedMillis = nowMillis
                             });
+                            count++;
                         }
                     }
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
