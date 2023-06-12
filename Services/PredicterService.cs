@@ -166,7 +166,7 @@ namespace NumbersGoUp.Services
                 double peRatio = ticker.EPS > 0 ? (barMetrics[0].HistoryBar.Price() / ticker.EPS) : _peratioCutoff;
                 if (_tickerService.TickerWhitelist.TickerAny(ticker))
                 {
-                    peRatio = Math.Min(peRatio, Math.Min(12, _peratioCutoff / 2));
+                    peRatio = Math.Min(peRatio, _peratioCutoff * 0.4);
                 }
                 double pricePrediction;
 
@@ -193,7 +193,7 @@ namespace NumbersGoUp.Services
                     var coeff = barMetrics.Average(b => b.SMASMA).DoubleReduce(ticker.SMASMAAvg, ticker.SMASMAAvg - ticker.SMASMAStDev) * barMetrics.CalculateAvgVelocity(b => b.SMASMA).DoubleReduce(0.5 * ticker.SMAVelStDev, -ticker.SMAVelStDev);
                     pricePrediction = (coeff * bullPricePrediction) + ((1 - coeff) * bearPricePrediction);
                     pricePrediction = pricePrediction.Curve1(3 - ticker.PerformanceVector.DoubleReduce(60, 0, 2, 1));
-                    pricePrediction *= 1 - peRatio.DoubleReduce(_peratioCutoff, Math.Min(12, _peratioCutoff / 2));
+                    pricePrediction *= 1 - peRatio.DoubleReduce(_peratioCutoff, _peratioCutoff * 0.4);
                 }
                 else
                 {

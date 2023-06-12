@@ -160,7 +160,7 @@ namespace NumbersGoUp.Utils
                                         else //assume semi-annual earnings reports
                                         {
                                             //_logger.LogInformation($"QoQ eps growth not found. Assuming semi-annual earnings. Ticker {ticker.Symbol}");
-                                            ticker.EPS = (1.1 * futureEPS) + (0.9 * currentEPS);
+                                            ticker.EPS = Math.Min(currentEPS, futureEPS) * 2;
                                         }
                                     }
                                     else
