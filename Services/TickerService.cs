@@ -186,7 +186,8 @@ namespace NumbersGoUp.Services
                             ticker.LastCalculatedPerformanceMillis = nowMillis;
                             stocksContext.Tickers.Update(ticker);
                         }
-                        else if (ticker.MonthTrend > -1000)
+                        else if (ticker.MonthTrend > -1000 && ticker.PERatio > 0 && ticker.PERatio < PERatioCutoff &&
+                             ticker.EVEarnings > 0 && ticker.EVEarnings < _tickerBankService.EarningsMultipleCutoff)
                         {
                             toUpdate.Add(ticker);
                         }
