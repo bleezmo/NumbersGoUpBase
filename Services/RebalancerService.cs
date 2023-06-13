@@ -123,7 +123,10 @@ namespace NumbersGoUpBase.Services
                                 {
                                     diffPerc *= 2 - sector.Prediction.DoubleReduce(1, 0.6, 1.25, 1);
                                 }
-                                diff *= sellMultiplier.Curve6(1);
+                                if(targetValue > 0)
+                                {
+                                    diff *= sellMultiplier.Curve6(1);
+                                }
                             }
                             if (Math.Abs(diffPerc) > 10)
                             {
