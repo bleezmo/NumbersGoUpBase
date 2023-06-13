@@ -48,7 +48,7 @@ namespace NumbersGoUpBase.Services
             var sectors = await GetSectors(allTickers, day);
             //var tickersPerSector = (int) Math.Ceiling(maxCount / Math.Min(Convert.ToDouble(sectors.Count), maxCount));
             var totalPerformance = 0.0;
-            //var performanceCutoff = sectors.SelectMany(s => s.PerformanceTickers.Select(pt => pt.Ticker.PerformanceVector)).OrderByDescending(pv => pv).Take(100).Last();
+            //var performanceCutoff = sectors.SelectMany(s => s.PerformanceTickers.Select(pt => pt.Ticker.PerformanceVector)).Where(pv => pv > 0).OrderByDescending(pv => pv).Take(100).Last();
             foreach (var sector in sectors)
             {
                 var selectedTickers = sector.PerformanceTickers.Where(t => t.Ticker.PerformanceVector > TickerService.PERFORMANCE_CUTOFF && !_tickerBlacklist.Contains(t.Ticker.Symbol)).ToList();
@@ -102,6 +102,7 @@ namespace NumbersGoUpBase.Services
                         if(marketValue > 0)
                         {
                             var diffPerc = (targetValue - marketValue) * 100.0 / marketValue;
+                            var diff = targetValue - marketValue;
                             if (diffPerc > 0)
                             {
                                 if (performanceTicker.MeetsRequirements && cash > (position.AssetLastPrice ?? 0))
@@ -111,6 +112,7 @@ namespace NumbersGoUpBase.Services
                                     {
                                         diffPerc *= sector.Prediction.DoubleReduce(1, 0.6, 1.25, 1);
                                     }
+                                    diff *= buyMultiplier.Curve6(1);
                                 }
                                 else { diffPerc = 0; }
                             }
@@ -121,10 +123,11 @@ namespace NumbersGoUpBase.Services
                                 {
                                     diffPerc *= 2 - sector.Prediction.DoubleReduce(1, 0.6, 1.25, 1);
                                 }
+                                diff *= sellMultiplier.Curve6(1);
                             }
                             if (Math.Abs(diffPerc) > 10)
                             {
-                                rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, targetValue - marketValue, prediction)
+                                rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, diff, prediction)
                                 {
                                     Position = position
                                 });
