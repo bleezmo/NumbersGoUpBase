@@ -128,7 +128,7 @@ namespace NumbersGoUpBase.Services
                                     diff *= sellMultiplier.Curve6(1);
                                 }
                             }
-                            if (Math.Abs(diffPerc) > 10)
+                            if (Math.Abs(diffPerc) > 15)
                             {
                                 rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, diff, prediction)
                                 {

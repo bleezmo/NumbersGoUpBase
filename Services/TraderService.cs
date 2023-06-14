@@ -248,8 +248,8 @@ namespace NumbersGoUp.Services
                     continue;
                 }
                 var sellAmt = Math.Abs(rebalancer.Diff);
-                var qty = Math.Floor(sellAmt / targetPrice);
                 var currentQty = position.Quantity;
+                var qty = sellAmt == position.MarketValue ? currentQty : Math.Floor(sellAmt / targetPrice);
                 if (qty > currentQty)
                 {
                     qty = currentQty;
