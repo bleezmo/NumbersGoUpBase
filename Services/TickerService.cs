@@ -205,7 +205,7 @@ namespace NumbersGoUp.Services
                     Func<Ticker, double> performanceFn1 = (t) => (0.9 * t.MonthTrend) + (0.1 * (1 - t.MaxMonthConsecutiveLosses.DoubleReduce(20, 1)));
                     Func<Ticker, double> performanceFn2 = (t) => t.ProfitLossStDev > 0 ? Math.Pow(t.ProfitLossAvg, 2) / Math.Pow(t.ProfitLossStDev, 2) : 0;
                     Func<Ticker, double> performanceFnRegression = (t) => 1 - t.RegressionAngle.DoubleReduce(45, -45);
-                    Func<Ticker, double> performanceFnEarnings = (t) => Math.Sqrt(t.MarketCap) * 2 * EarningsRatiosCalc(t, 0.4) * DebtCapCalc(t, 0);
+                    Func<Ticker, double> performanceFnEarnings = (t) => Math.Sqrt(t.MarketCap) * EarningsRatiosCalc(t, 0.4) * DebtCapCalc(t, 0);
                     Func<Ticker, double> performanceFnEarningsRatios = (t) => EarningsRatiosCalc(t, 0);
                     Func<Ticker, double> performanceFnDebtCap = (t) => DebtCapCalc(t, -0.5);
                     var minmax1 = new MinMaxStore<Ticker>(performanceFn1);
