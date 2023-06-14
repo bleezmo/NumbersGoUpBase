@@ -63,7 +63,7 @@ namespace NumbersGoUp.Services
             _contextFactory = contextFactory;
             _runtimeSettings = runtimeSettings;
             _tickerBankService = tickerBankService;
-            PERatioCutoff = tickerBankService.EarningsMultipleCutoff * 2 / 3;
+            PERatioCutoff = tickerBankService.EarningsMultipleCutoff * 0.85;
             TickerBlacklist = tickerBankService.TickerBlacklist;
             TickerWhitelist = tickerBankService.TickerWhitelist;
         }
@@ -227,9 +227,9 @@ namespace NumbersGoUp.Services
                                                                   (performanceFnEarnings(t).DoubleReduce(minmaxEarnings.Max, minmaxEarnings.Min) * 30) +
                                                                   (performanceFnEarningsRatios(t).DoubleReduce(minmaxEarningsRatios.Max, minmaxEarningsRatios.Min) * 10) +
                                                                   (performanceFnDebtCap(t).DoubleReduce(minmaxDebtCap.Max, minmaxDebtCap.Min) * 10) +
-                                                                  (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 20) +
+                                                                  (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 15) +
                                                                   (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 15) +
-                                                                  (performanceFnRegression(t).DoubleReduce(minmaxRegression.Max, minmaxRegression.Min) * 15);
+                                                                  (performanceFnRegression(t).DoubleReduce(minmaxRegression.Max, minmaxRegression.Min) * 20);
 
                     var minmaxTotal = new MinMaxStore<Ticker>(performanceFnTotal);
                     var perfAvg = 0.0;
