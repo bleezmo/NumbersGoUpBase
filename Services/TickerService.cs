@@ -131,7 +131,7 @@ namespace NumbersGoUp.Services
                             {
                                 var currentMin = 0.0;
                                 var slopes = new List<double>();
-                                var monthPeriod = 20;
+                                const int monthPeriod = 20;
                                 var initialPrice = bars[0].Price();
                                 if(initialPrice == 0)
                                 {
