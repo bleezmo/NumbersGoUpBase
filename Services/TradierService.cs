@@ -1,19 +1,10 @@
-﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using NumbersGoUp.Models;
 using NumbersGoUp.Utils;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace NumbersGoUp.Services
 {
@@ -47,6 +38,7 @@ namespace NumbersGoUp.Services
         private string PositionsPath => $"/v1/accounts/{_account.AccountId}/positions";
         private string LookupPath => "/v1/markets/lookup?q={0}";
         private string FinancialsPath => "/beta/markets/fundamentals/financials?symbols={0}";
+        private string AccountHistoryPath => $"/v1/accounts/{_account.AccountId}/history?limit=500&page={{0}}";
 
         public TradierService(ILogger<TradierService> logger, IHostEnvironment environment, IAppCancellation appCancellation, RateLimiter rateLimiter, IHttpClientFactory httpClientFactory, IConfiguration configuration)
         {
@@ -567,6 +559,37 @@ namespace NumbersGoUp.Services
                 response.EnsureSuccessStatusCode();
                 var json = await response.Content.ReadAsStringAsync(_appCancellation.Token);
                 return json;
+            }
+        }
+        public async Task AccountHistoryTest()
+        {
+            _tradierDataClient.BaseAddress = new Uri($"https://{PRODUCTION_URL}");
+            _tradierDataClient.DefaultRequestHeaders.Add("Accept", "application/json");
+            _tradierDataClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_configuration[$"tradier_token:Production"]}");
+
+            var profile = (await GetResponse<JsonModels.TradierProfileWrapper>(ProfilePath)).Profile;
+            _account = new Account
+            {
+                AccountId = profile.Accounts.FirstOrDefault(a => a.Classification == "individual").AccountNumber
+            };
+            var historyEvents = new List<JsonModels.TradierAccountHistoryEvent>();
+            for (var i = 1; i < 10; i++)
+            {
+                var history = await GetResponse<JsonModels.TradierAccountHistory>(string.Format(AccountHistoryPath, i));
+                var eventsPage = history.History?.Events;
+                if (eventsPage != null && eventsPage.Any())
+                {
+                    historyEvents.AddRange(eventsPage);
+                }
+                else
+                {
+                    historyEvents.Reverse();
+                    break;
+                }
+            }
+            foreach(var historyEvent in historyEvents)
+            {
+
             }
         }
 #endif
