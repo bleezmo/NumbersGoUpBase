@@ -57,7 +57,6 @@ namespace NumbersGoUp.Services
                         _logger.LogError("Error retrieving equity value! Shutting down");
                         return;
                     }
-                    _logger.LogInformation($"Total Account Equity: {_account.Balance.LastEquity:C2}");
                     var equity = _account.Balance.TradeableEquity;
                     var cash = _account.Balance.TradableCash;
                     var positions = await _brokerService.GetPositions();
@@ -96,6 +95,7 @@ namespace NumbersGoUp.Services
                     await ExecuteOrders(rebalancers);
                     _logger.LogInformation("Cleaning up");
                     await CleanUp();
+                    await AccountPerformancePrint(positions);
                 }
                 else
                 {
@@ -453,6 +453,72 @@ namespace NumbersGoUp.Services
                 _logger.LogError($"Target price zero when buying bond. Ticker {position.Symbol}");
             }
             return remainingBuyAmount;
+        }
+        private async Task AccountPerformancePrint(IEnumerable<Position> positions)
+        {
+            var (historyEvents, dividends) = await _brokerService.GetAccountHistory();
+            var totalRealizedProfits = new List<(double cost, double profitPerc)>();
+            var totalUnRealizedProfits = new List<(double cost, double profitPerc)>();
+            foreach (var historyEvent in historyEvents)
+            {
+                var events = historyEvent.Value.OrderBy(e => e.Date).ToArray();
+                var eventQueue = new Queue<double>();
+                var profits = new List<(double cost, double profitPerc)>();
+                for (var i = 0; i < events.Length; i++)
+                {
+                    if (events[i].Amount < 0)
+                    {
+                        if (i == 0 || events[i - 1].Date.CompareTo(events[i].Date) != 0 || events[i - 1].Amount < 0)
+                        {
+                            eventQueue.EnqueueEventDetails(events[i]);
+                        }
+                    }
+                    else if (events[i].Amount > 0)
+                    {
+                        var qtySold = Math.Abs(events[i].Qty);
+                        var sellPrice = events[i].Price;
+                        for (var dc = 0; qtySold > 0 && dc < 10000; dc++)
+                        {
+                            qtySold--;
+                            if (eventQueue.Any())
+                            {
+                                var cost = eventQueue.Dequeue();
+                                profits.Add((cost, (sellPrice / cost) - 1));
+                            }
+                        }
+                    }
+                }
+                totalRealizedProfits.Add(TotalProfit(profits));
+            }
+            var (totalRealizedCost, totalRealized) = TotalProfit(totalRealizedProfits);
+            _logger.LogInformation($"Total Realized Cost: {totalRealizedCost:C2} Total Realized Profit: {totalRealized * 100}%");
+            foreach (var position in positions)
+            {
+                if (position.UnrealizedProfitLossPercent.HasValue && !_rebalancerService.BondSymbols.Any(s => s == position.Symbol))
+                {
+                    totalUnRealizedProfits.Add((position.CostBasis, position.UnrealizedProfitLossPercent.Value));
+                }
+            }
+            var (totalUnrealizedCost, totalUnrealized) = TotalProfit(totalUnRealizedProfits);
+            _logger.LogInformation($"Total Unrealized Cost: {totalUnrealizedCost:C2} Total Unrealized Profit: {totalUnrealized * 100}%");
+            var (totalCost, totalProfit) = TotalProfit(new List<(double cost, double profitPerc)>(new[]
+            {
+                (totalRealizedCost, totalRealized),
+                (totalUnrealizedCost, totalUnrealized)
+            }));
+            _logger.LogInformation($"Total Account Equity: {_account.Balance.LastEquity:C2} Total Cost Basis: {totalCost:C2} Total Profit: {totalProfit * 100:0.0000}% Dividends: {dividends:C2}");
+        }
+        private static (double cost, double profitPerc) TotalProfit(List<(double cost, double profitPerc)> profits)
+        {
+            if (!profits.Any()) { return (0, 0); }
+            var totalCost = 0.0;
+            var numerator = 0.0;
+            foreach (var profit in profits)
+            {
+                totalCost += profit.cost;
+                numerator += profit.cost * profit.profitPerc;
+            }
+            return (totalCost, numerator / totalCost);
         }
     }
     public class BuyState

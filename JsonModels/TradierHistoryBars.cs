@@ -13,15 +13,15 @@ namespace NumbersGoUp.JsonModels
     {
         [JsonProperty("history")]
         [JsonConverter(typeof(SafeNullConverter))]
-        public History History { get; set; }
+        public TradierHistory History { get; set; }
     }
-    public class History
+    public class TradierHistory
     {
         [JsonProperty("day")]
         [JsonConverter(typeof(SafeCollectionConverter))]
-        public Bar[] Quotes { get; set; }
+        public TradierBar[] Quotes { get; set; }
     }
-    public class Bar
+    public class TradierBar
     {
         [JsonProperty("date")]
         public string Date { get; set; }

@@ -10,26 +10,26 @@ namespace NumbersGoUp.JsonModels
     public class TradierAccountBalance
     {
         [JsonProperty("balances")]
-        public Balance Balance { get; set; }
+        public TradierBalance Balance { get; set; }
     }
-    public class Balance
+    public class TradierBalance
     {
         [JsonProperty("total_equity")]
         public double Equity { get; set; }
         [JsonProperty("total_cash")]
         public double TotalCash { get; set; }
-        public Cash Cash { get; set; }
-        public Margin Margin { get; set; }
+        public TradierCash Cash { get; set; }
+        public TradierMargin Margin { get; set; }
 
     }
-    public class Cash
+    public class TradierCash
     {
         [JsonProperty("cash_available")]
         public double CashAvailable { get; set; }
         [JsonProperty("unsettled_funds")]
         public double UnsettledFunds { get; set; }
     }
-    public class Margin
+    public class TradierMargin
     {
         [JsonProperty("stock_buying_power")]
         public double BuyingPower { get; set; }

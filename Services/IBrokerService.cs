@@ -45,5 +45,6 @@ namespace NumbersGoUp.Services
         Task<Financials> GetFinancials(string symbol);
 
         Task<IEnumerable<MarketDay>> GetMarketDays(int year, int? month = null);
+        Task<(Dictionary<string, List<AccountHistoryEvent>> trades, double dividends)> GetAccountHistory();
     }
 }

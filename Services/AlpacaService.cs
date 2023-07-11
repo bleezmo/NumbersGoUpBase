@@ -660,5 +660,9 @@ namespace NumbersGoUp.Services
         {
             throw new NotImplementedException();
         }
+        public Task<(Dictionary<string, List<AccountHistoryEvent>> trades, double dividends)> GetAccountHistory()
+        {
+            throw new NotImplementedException();
+        }
     }
 }

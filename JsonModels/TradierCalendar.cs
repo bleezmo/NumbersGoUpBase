@@ -25,9 +25,9 @@ namespace NumbersGoUp.JsonModels
     public class DayWrapper
     {
         [JsonProperty("day")]
-        public MarketDay[] Days { get; set; }
+        public TradierMarketDay[] Days { get; set; }
     }
-    public class MarketDay
+    public class TradierMarketDay
     {
         [JsonProperty("date")]
         public string DateString { get; set; }

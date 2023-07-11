@@ -17,9 +17,9 @@ namespace NumbersGoUp.JsonModels
     {
         [JsonProperty("account")]
         [JsonConverter(typeof(SafeCollectionConverter))]
-        public Account[] Accounts { get; set; }
+        public TradierAccount[] Accounts { get; set; }
     }
-    public class Account
+    public class TradierAccount
     {
         [JsonProperty("account_number")]
         public string AccountNumber { get; set; }

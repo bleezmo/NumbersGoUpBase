@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using NumbersGoUp.Models;
 using NumbersGoUp.Utils;
 using System;
 using System.Collections.Generic;
@@ -23,8 +24,8 @@ namespace NumbersGoUp.JsonModels
     }
     public class TradierAccountHistoryEvent
     {
-        public const string DividendType = "dividend";
-        public const string TradeType = "trade";
+        public const string DividendType = AccountHistoryEvent.DividendType;
+        public const string TradeType = AccountHistoryEvent.TradeType;
 
         public const string ACHType = "ach";
         public const string OptionType = "option";
@@ -61,5 +62,17 @@ namespace NumbersGoUp.JsonModels
         public double Quantity { get; set; }
         [JsonProperty("symbol")]
         public string Symbol { get; set; }
+    }
+    public static class TradierAccountHistoryEventExtension
+    {
+        public static AccountHistoryEvent ToHistoryEvent(this TradierAccountHistoryEvent historyEvent) => new AccountHistoryEvent
+        {
+            Date = historyEvent.Date,
+            Amount = historyEvent.Amount,
+            Price = historyEvent.Details.Price,
+            Qty = historyEvent.Details.Quantity,
+            Symbol = historyEvent.Details.Symbol,
+            TypeStr = historyEvent.TypeStr
+        };
     }
 }

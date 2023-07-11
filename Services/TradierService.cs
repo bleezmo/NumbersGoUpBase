@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using NumbersGoUp.JsonModels;
 using NumbersGoUp.Models;
 using NumbersGoUp.Utils;
 
@@ -69,13 +70,13 @@ namespace NumbersGoUp.Services
             try
             {
                 await _rateLimiter.LimitTradierRate();
-                var profile = (await GetResponse<JsonModels.TradierProfileWrapper>(ProfilePath)).Profile;
+                var profile = (await GetResponse<TradierProfileWrapper>(ProfilePath)).Profile;
                 _account = new Account
                 {
                     AccountId = profile.Accounts.FirstOrDefault(a => a.Classification == "individual").AccountNumber
                 };
                 await _rateLimiter.LimitTradierRate();
-                var balances = await GetResponse<JsonModels.TradierAccountBalance>(AccountPath);
+                var balances = await GetResponse<TradierAccountBalance>(AccountPath);
                 if(balances.Balance.Cash == null && balances.Balance.Margin == null)
                 {
 #if !DEBUG
@@ -140,7 +141,7 @@ namespace NumbersGoUp.Services
         {
             var now = DateTime.Now;
             await _rateLimiter.LimitTradierRate();
-            var calendar = await GetResponse<JsonModels.TradierCalendarWrapper>(string.Format(CalendarPath, month.ToString("00"), year));
+            var calendar = await GetResponse<TradierCalendarWrapper>(string.Format(CalendarPath, month.ToString("00"), year));
             var days = calendar.Calendar.DayWrapper.Days.Where(d => d.Status == "open").Select(day => new MarketDay
             {
                 TradingTimeOpen = day.TradingTimeOpenEST,
@@ -158,8 +159,8 @@ namespace NumbersGoUp.Services
                     else // in this case, we're on first day of month. get previous month and retry
                     {
                         await _rateLimiter.LimitTradierRate();
-                        var previousCalendar = now.Month > 1 ? await GetResponse<JsonModels.TradierCalendarWrapper>(string.Format(CalendarPath, (now.Month - 1).ToString("00"), now.Year)) :
-                                                               await GetResponse<JsonModels.TradierCalendarWrapper>(string.Format(CalendarPath, 12, now.Year - 1));
+                        var previousCalendar = now.Month > 1 ? await GetResponse<TradierCalendarWrapper>(string.Format(CalendarPath, (now.Month - 1).ToString("00"), now.Year)) :
+                                                               await GetResponse<TradierCalendarWrapper>(string.Format(CalendarPath, 12, now.Year - 1));
                         var previousDays = previousCalendar.Calendar.DayWrapper.Days.Where(d => d.Status == "open").Select(day => new MarketDay
                         {
                             TradingTimeOpen = day.TradingTimeOpenEST,
@@ -186,7 +187,7 @@ namespace NumbersGoUp.Services
             try
             {
                 var response = await PostOrder(OrdersPath, postOrder);
-                if (response.OrderStatus == JsonModels.TradierPostOrderResponse.SUCCESS_ORDERSTATUS)
+                if (response.OrderStatus == TradierPostOrderResponse.SUCCESS_ORDERSTATUS)
                 {
                     return new BrokerOrder
                     {
@@ -222,7 +223,7 @@ namespace NumbersGoUp.Services
             try
             {
                 var response = await PostOrder(OrdersPath, postOrder);
-                if (response.OrderStatus == JsonModels.TradierPostOrderResponse.SUCCESS_ORDERSTATUS)
+                if (response.OrderStatus == TradierPostOrderResponse.SUCCESS_ORDERSTATUS)
                 {
                     return new BrokerOrder
                     {
@@ -279,7 +280,7 @@ namespace NumbersGoUp.Services
         {
             await Ready();
             await _rateLimiter.LimitTradierRate();
-            var jsonBars = await GetResponse<JsonModels.TradierHistoryBars>(string.Format(HistoryBarPath, symbol.Replace('.', '/'), from.ToString("yyyy-MM-dd"), _lastMarketDay.TradingTimeClose.ToString("yyyy-MM-dd")));
+            var jsonBars = await GetResponse<TradierHistoryBars>(string.Format(HistoryBarPath, symbol.Replace('.', '/'), from.ToString("yyyy-MM-dd"), _lastMarketDay.TradingTimeClose.ToString("yyyy-MM-dd")));
             return jsonBars?.History?.Quotes?.Where(b => b.Close > 0 && b.Open > 0 && b.Low > 0 && b.High > 0).Select(b => new HistoryBar
             {
                 Symbol = symbol,
@@ -297,8 +298,8 @@ namespace NumbersGoUp.Services
         {
             await Ready();
             await _rateLimiter.LimitTradierRate();
-            var result = await GetResponse<JsonModels.TradierOrdersWrapper>($"{OrdersPath}?includeTags=true");
-            var orders = result?.TradierOrders?.Orders?.Where(o => o.OrderStatus == JsonModels.TradierOrder.FILLED_ORDERSTATUS);
+            var result = await GetResponse<TradierOrdersWrapper>($"{OrdersPath}?includeTags=true");
+            var orders = result?.TradierOrders?.Orders?.Where(o => o.OrderStatus == TradierOrder.FILLED_ORDERSTATUS);
             if (from.HasValue)
             {
                 orders = orders?.Where(o => o.TransactionDate.CompareTo(from.Value) > 0);
@@ -310,7 +311,7 @@ namespace NumbersGoUp.Services
                 ClientOrderId = o.Tag,
                 FilledAt = o.TransactionDate,
                 FilledQuantity = o.Quantity,
-                OrderSide = o.OrderSide == JsonModels.TradierOrder.BUY_ORDERSIDE ? OrderSide.Buy : (o.OrderSide == JsonModels.TradierOrder.SELL_ORDERSIDE ? OrderSide.Sell : throw new Exception("Unknown order side")),
+                OrderSide = o.OrderSide == TradierOrder.BUY_ORDERSIDE ? OrderSide.Buy : (o.OrderSide == TradierOrder.SELL_ORDERSIDE ? OrderSide.Sell : throw new Exception("Unknown order side")),
                 Symbol = o.Symbol.Replace('/','.'),
                 OrderStatus = OrderStatus.FILLED
             }).ToArray() ?? Enumerable.Empty<BrokerOrder>();
@@ -320,7 +321,7 @@ namespace NumbersGoUp.Services
         {
             await Ready();
             await _rateLimiter.LimitTradierRate();
-            var result = await GetResponse<JsonModels.TradierOrderWrapper>(string.Format(OrderPath, orderId));
+            var result = await GetResponse<TradierOrderWrapper>(string.Format(OrderPath, orderId));
             if(result?.Order != null)
             {
                 var order = result.Order;
@@ -328,10 +329,10 @@ namespace NumbersGoUp.Services
                 {
                     BrokerOrderId = order.Id.ToString(),
                     ClientOrderId = order.Tag,
-                    OrderSide = order.OrderSide == JsonModels.TradierOrder.BUY_ORDERSIDE ? OrderSide.Buy : (order.OrderSide == JsonModels.TradierOrder.SELL_ORDERSIDE ? OrderSide.Sell : throw new Exception("Unknown order side")),
+                    OrderSide = order.OrderSide == TradierOrder.BUY_ORDERSIDE ? OrderSide.Buy : (order.OrderSide == TradierOrder.SELL_ORDERSIDE ? OrderSide.Sell : throw new Exception("Unknown order side")),
                     Symbol = order.Symbol.Replace('/', '.')
                 };
-                if (order.OrderStatus == JsonModels.TradierOrder.FILLED_ORDERSTATUS || order.OrderStatus == JsonModels.TradierOrder.PARTIALLYFILLED_ORDERSTATUS)
+                if (order.OrderStatus == TradierOrder.FILLED_ORDERSTATUS || order.OrderStatus == TradierOrder.PARTIALLYFILLED_ORDERSTATUS)
                 {
                     brokerOrder.AverageFillPrice = order.AvgFillPrice;
                     brokerOrder.FilledAt = order.TransactionDate;
@@ -347,21 +348,21 @@ namespace NumbersGoUp.Services
         {
             await Ready();
             await _rateLimiter.LimitTradierRate();
-            var result = await GetResponse<JsonModels.TradierOrdersWrapper>($"{OrdersPath}?includeTags=true");
-            var orders = result?.TradierOrders?.Orders?.Where(o => o.OrderStatus == JsonModels.TradierOrder.OPEN_ORDERSTATUS || o.OrderStatus == JsonModels.TradierOrder.PENDING_ORDERSTATUS || o.OrderStatus == JsonModels.TradierOrder.PARTIALLYFILLED_ORDERSTATUS);
+            var result = await GetResponse<TradierOrdersWrapper>($"{OrdersPath}?includeTags=true");
+            var orders = result?.TradierOrders?.Orders?.Where(o => o.OrderStatus == TradierOrder.OPEN_ORDERSTATUS || o.OrderStatus == TradierOrder.PENDING_ORDERSTATUS || o.OrderStatus == TradierOrder.PARTIALLYFILLED_ORDERSTATUS);
             return orders?.Select(o => new BrokerOrder
             {
                 BrokerOrderId = o.Id.ToString(),
                 ClientOrderId = o.Tag,
-                OrderSide = o.OrderSide == JsonModels.TradierOrder.BUY_ORDERSIDE ? OrderSide.Buy : (o.OrderSide == JsonModels.TradierOrder.SELL_ORDERSIDE ? OrderSide.Sell : throw new Exception("Unknown order side")),
+                OrderSide = o.OrderSide == TradierOrder.BUY_ORDERSIDE ? OrderSide.Buy : (o.OrderSide == TradierOrder.SELL_ORDERSIDE ? OrderSide.Sell : throw new Exception("Unknown order side")),
                 Symbol = o.Symbol.Replace('/', '.')
             }).ToArray() ?? Enumerable.Empty<BrokerOrder>();
         }
 
-        private OrderStatus GetBrokerOrderStatus(JsonModels.TradierOrder order)
+        private OrderStatus GetBrokerOrderStatus(TradierOrder order)
         {
-            if (order.OrderStatus == JsonModels.TradierOrder.FILLED_ORDERSTATUS) return OrderStatus.FILLED;
-            else if (order.OrderStatus == JsonModels.TradierOrder.PARTIALLYFILLED_ORDERSTATUS) return OrderStatus.PARTIALLY_FILLED;
+            if (order.OrderStatus == TradierOrder.FILLED_ORDERSTATUS) return OrderStatus.FILLED;
+            else if (order.OrderStatus == TradierOrder.PARTIALLYFILLED_ORDERSTATUS) return OrderStatus.PARTIALLY_FILLED;
             else return OrderStatus.NOT_FILLED;
         }
 
@@ -369,7 +370,7 @@ namespace NumbersGoUp.Services
         {
             await Ready();
             await _rateLimiter.LimitTradierRate();
-            var response = await GetResponse<JsonModels.TradierQuotesWrapper>(string.Format(QuotesPath, symbol.Replace('.', '/')));
+            var response = await GetResponse<TradierQuotesWrapper>(string.Format(QuotesPath, symbol.Replace('.', '/')));
             var quote = response?.TradierQuotes?.Quotes?.FirstOrDefault();
             if(quote == null)
             {
@@ -388,7 +389,7 @@ namespace NumbersGoUp.Services
         {
             await Ready();
             await _rateLimiter.LimitTradierRate();
-            var response = await GetResponse<JsonModels.TradierQuotesWrapper>(string.Format(QuotesPath, string.Join(',', symbols.Select(s => s.Replace('.', '/')))));
+            var response = await GetResponse<TradierQuotesWrapper>(string.Format(QuotesPath, string.Join(',', symbols.Select(s => s.Replace('.', '/')))));
             var quotes = response?.TradierQuotes?.Quotes;
             if (quotes == null)
             {
@@ -426,7 +427,7 @@ namespace NumbersGoUp.Services
             if(month.HasValue)
             {
                 await _rateLimiter.LimitTradierRate();
-                var calendar = await GetResponse<JsonModels.TradierCalendarWrapper>(string.Format(CalendarPath, month.Value.ToString("00"), year));
+                var calendar = await GetResponse<TradierCalendarWrapper>(string.Format(CalendarPath, month.Value.ToString("00"), year));
                 return calendar.Calendar.DayWrapper.Days.Where(d => d.Status == "open").Select(day => new MarketDay
                 {
                     TradingTimeOpen = day.TradingTimeOpenEST,
@@ -439,7 +440,7 @@ namespace NumbersGoUp.Services
                 for(var i = 1; i < 13; i++)
                 {
                     await _rateLimiter.LimitTradierRate();
-                    var calendar = await GetResponse<JsonModels.TradierCalendarWrapper>(string.Format(CalendarPath, i.ToString("00"), year));
+                    var calendar = await GetResponse<TradierCalendarWrapper>(string.Format(CalendarPath, i.ToString("00"), year));
                     days.AddRange(calendar.Calendar.DayWrapper.Days.Where(d => d.Status == "open").Select(day => new MarketDay
                     {
                         TradingTimeOpen = day.TradingTimeOpenEST,
@@ -456,7 +457,7 @@ namespace NumbersGoUp.Services
         {
             await Ready();
             await _rateLimiter.LimitTradierRate();
-            var jmodelPositions = (await GetResponse<JsonModels.TradierPositionsWrapper>(PositionsPath))?.TradierPositions?.Positions;
+            var jmodelPositions = (await GetResponse<TradierPositionsWrapper>(PositionsPath))?.TradierPositions?.Positions;
             if(jmodelPositions != null && jmodelPositions.Length > 0)
             {
                 var positions = new List<Position>();
@@ -496,7 +497,7 @@ namespace NumbersGoUp.Services
             try
             {
                 var tradierSymbol = symbol.Replace('.', '/');
-                var securities = (await GetResponse<JsonModels.TradierSecuritiesWrapper>(string.Format(LookupPath, tradierSymbol)))?.TradierSecurities?.Securities;
+                var securities = (await GetResponse<TradierSecuritiesWrapper>(string.Format(LookupPath, tradierSymbol)))?.TradierSecurities?.Securities;
                 if (securities != null && securities.Any())
                 {
                     var security = securities.FirstOrDefault(s => s.Symbol == tradierSymbol);
@@ -520,6 +521,44 @@ namespace NumbersGoUp.Services
                 _logger.LogError(ex, $"TickerInfo exception for {symbol}");
             }
             return null;
+        }
+        public async Task<(Dictionary<string, List<AccountHistoryEvent>> trades, double dividends)> GetAccountHistory()
+        {
+            await Ready();
+            await _rateLimiter.LimitTradierRate();
+            var historyEvents = new Dictionary<string, List<AccountHistoryEvent>>();
+            var dividends = 0.0;
+            for (var i = 1; i < 100; i++)
+            {
+                var history = await GetResponse<TradierAccountHistory>(string.Format(AccountHistoryPath, i));
+                var eventsPage = history.History?.Events;
+                if (eventsPage != null && eventsPage.Any())
+                {
+                    foreach (var historyEvent in eventsPage)
+                    {
+                        if (historyEvent.TypeStr == TradierAccountHistoryEvent.TradeType)
+                        {
+                            if (historyEvents.TryGetValue(historyEvent.Details.Symbol, out var events))
+                            {
+                                events.Add(historyEvent.ToHistoryEvent());
+                            }
+                            else
+                            {
+                                historyEvents.Add(historyEvent.Details.Symbol, new List<AccountHistoryEvent>(new[] { historyEvent.ToHistoryEvent() }));
+                            }
+                        }
+                        else if (historyEvent.TypeStr == TradierAccountHistoryEvent.DividendType)
+                        {
+                            dividends += historyEvent.Amount;
+                        }
+                    }
+                }
+                else
+                {
+                    break;
+                }
+            }
+            return (historyEvents, dividends);
         }
         public async Task<Financials> GetFinancials(string symbol)
         {
@@ -561,36 +600,81 @@ namespace NumbersGoUp.Services
                 return json;
             }
         }
-        public async Task AccountHistoryTest()
+        public async Task AccountHistoryTest(string[] ignoreSymbols = null)
         {
             _tradierDataClient.BaseAddress = new Uri($"https://{PRODUCTION_URL}");
             _tradierDataClient.DefaultRequestHeaders.Add("Accept", "application/json");
             _tradierDataClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_configuration[$"tradier_token:Production"]}");
-
-            var profile = (await GetResponse<JsonModels.TradierProfileWrapper>(ProfilePath)).Profile;
+            var profile = (await GetResponse<TradierProfileWrapper>(ProfilePath)).Profile;
             _account = new Account
             {
                 AccountId = profile.Accounts.FirstOrDefault(a => a.Classification == "individual").AccountNumber
             };
-            var historyEvents = new List<JsonModels.TradierAccountHistoryEvent>();
-            for (var i = 1; i < 10; i++)
+            _startTask = Task.CompletedTask;
+            var (historyEvents, dividends) = await GetAccountHistory();
+            var totalRealizedProfits = new List<(double cost, double profitPerc)>();
+            var totalUnRealizedProfits = new List<(double cost, double profitPerc)>();
+            foreach (var historyEvent in historyEvents)
             {
-                var history = await GetResponse<JsonModels.TradierAccountHistory>(string.Format(AccountHistoryPath, i));
-                var eventsPage = history.History?.Events;
-                if (eventsPage != null && eventsPage.Any())
+                var events = historyEvent.Value.OrderBy(e => e.Date).ToArray();
+                var eventQueue = new Queue<double>();
+                var profits = new List<(double cost, double profitPerc)>();
+                for(var i = 0; i < events.Length; i++)
                 {
-                    historyEvents.AddRange(eventsPage);
+                    if(events[i].Amount < 0)
+                    {
+                        if (i == 0 || events[i - 1].Date.CompareTo(events[i].Date) != 0 || events[i-1].Amount < 0)
+                        {
+                            eventQueue.EnqueueEventDetails(events[i]);
+                        }
+                    }
+                    else if (events[i].Amount > 0)
+                    {
+                        var qtySold = Math.Abs(events[i].Qty);
+                        var sellPrice = events[i].Price;
+                        for(var dc = 0; qtySold > 0 && dc < 10000; dc++)
+                        {
+                            qtySold--;
+                            if(eventQueue.Any())
+                            {
+                                var cost = eventQueue.Dequeue();
+                                profits.Add((cost, (sellPrice / cost) - 1));
+                            }
+                        }
+                    }
                 }
-                else
+                totalRealizedProfits.Add(TotalProfit(profits));
+            }
+            var (totalRealizedCost, totalRealized) = TotalProfit(totalRealizedProfits);
+            _logger.LogInformation($"Total Realized Cost: {totalRealizedCost:C2} Total Realized Profit: {totalRealized * 100}%");
+            var positions = await GetPositions();
+            foreach (var position in positions)
+            {
+                if (position.UnrealizedProfitLossPercent.HasValue && (ignoreSymbols == null || !ignoreSymbols.Any(s => s == position.Symbol)))
                 {
-                    historyEvents.Reverse();
-                    break;
+                    totalUnRealizedProfits.Add((position.CostBasis, position.UnrealizedProfitLossPercent.Value));
                 }
             }
-            foreach(var historyEvent in historyEvents)
+            var (totalUnrealizedCost, totalUnrealized) = TotalProfit(totalUnRealizedProfits);
+            _logger.LogInformation($"Total Unrealized Cost: {totalUnrealizedCost:C2} Total Unrealized Profit: {totalUnrealized * 100}%");
+            var (totalCost, totalProfit) = TotalProfit(new List<(double cost, double profitPerc)>(new[]
             {
-
+                (totalRealizedCost, totalRealized),
+                (totalUnrealizedCost, totalUnrealized)
+            }));
+            _logger.LogInformation($"Total Cost Basis: {totalCost:C2} Total Profit: {totalProfit * 100:0.0000}% Dividends: {dividends:C2}");
+        }
+        private static (double cost, double profitPerc) TotalProfit(List<(double cost, double profitPerc)> profits)
+        {
+            if (!profits.Any()) { return (0, 0); }
+            var totalCost = 0.0;
+            var numerator = 0.0;
+            foreach (var profit in profits)
+            {
+                totalCost += profit.cost;
+                numerator += profit.cost * profit.profitPerc;
             }
+            return (totalCost, numerator / totalCost);
         }
 #endif
         private async Task<T> GetResponse<T>(string path)
@@ -605,18 +689,18 @@ namespace NumbersGoUp.Services
             }
             return objResponse;
         }
-        private async Task<JsonModels.TradierPostOrderResponse> PostOrder(string path, TradierPostOrder order)
+        private async Task<TradierPostOrderResponse> PostOrder(string path, TradierPostOrder order)
         {
             using var response = await _tradierOrderClient.PostAsync(path, order.HttpContent(), _appCancellation.Token);
             response.EnsureSuccessStatusCode();
             var json = await response.Content.ReadAsStringAsync(_appCancellation.Token);
-            var objResponse = JsonConvert.DeserializeObject<JsonModels.TradierPostOrderResponseWrapper>(json).Order;
+            var objResponse = JsonConvert.DeserializeObject<TradierPostOrderResponseWrapper>(json).Order;
             if(objResponse != null)
             {
                 return objResponse;
             }
             _logger.LogError($"Deserialization of order response failed. Content: {json}");
-            return new JsonModels.TradierPostOrderResponse
+            return new TradierPostOrderResponse
             {
                 OrderStatus = "Rejected"
             };
