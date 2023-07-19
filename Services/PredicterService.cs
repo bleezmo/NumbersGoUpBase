@@ -36,7 +36,7 @@ namespace NumbersGoUp.Services
             _tickerService = tickerService;
             _mlService = mlService;
         }
-        public Task InitML(DateTime date, bool forceRefresh) => Task.CompletedTask;// _mlService.Init(date, forceRefresh);
+        public Task InitML(DateTime date, bool forceRefresh) => _mlService.Init(date, forceRefresh);
         public async Task<Prediction> Predict(string symbol)
         {
             BarMetric[] barMetricsFull;
@@ -94,20 +94,20 @@ namespace NumbersGoUp.Services
             var cutoff = new DateTimeOffset(day.Date).ToUnixTimeMilliseconds();
             try
             {
-                var historyCount = FEATURE_HISTORY_DAY;// Math.Max(FEATURE_HISTORY_DAY, MLService.FEATURE_HISTORY);
+                var historyCount = Math.Max(FEATURE_HISTORY_DAY, MLService.FEATURE_HISTORY);
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
                     barMetricsFull = await stocksContext.BarMetrics.Where(p => p.Symbol == symbol && p.BarDayMilliseconds <= cutoff)
                                         .OrderByDescending(b => b.BarDayMilliseconds).Take(historyCount).Include(b => b.HistoryBar).ToArrayAsync(_appCancellation.Token);
                 }
                 var barMetrics = barMetricsFull.Take(FEATURE_HISTORY_DAY).ToArray();
-                //var (mlBuyPredict, mlSellPredict) = await _mlService.BarPredict(barMetricsFull.Reverse().ToArray());
+                var (mlBuyPredict, mlSellPredict) = await _mlService.BarPredict(barMetricsFull.Reverse().ToArray());
                 return new Prediction
                 {
                     BuyMultiplier = Predict(ticker, barMetrics, true),
                     SellMultiplier = Predict(ticker, barMetrics, false),
-                    MLBuyPrediction = null,//mlBuyPredict,
-                    MLSellPrediction = null,//mlSellPredict,
+                    MLBuyPrediction = mlBuyPredict,
+                    MLSellPrediction = mlSellPredict,
                     Day = barMetrics[0].BarDay
                 };
             }
