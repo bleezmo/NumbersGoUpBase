@@ -65,17 +65,17 @@ namespace NumbersGoUp.Utils
         public static double VTailCurve(this double x, int peaks = 1) => (-0.5 * Math.Cos(((peaks * 2) + 1) * Math.PI * x)) + 0.5;
         public static double VTailExpCurve(this double x, int peaks = 1) => (-0.5 * Math.Cos(((peaks * 2) + 1) * Math.PI * x)) + 0.5;
         public static bool TickerAny(this string[] symbols, ITicker t) => symbols.Any(s => string.Equals(s, t.Symbol, StringComparison.InvariantCultureIgnoreCase));
-        public static double ApplyAlma<T>(this T[] objs, Func<T, double> objFn, double[] gaussianWeights = null) => objs.Select(o => objFn(o)).ToArray().ApplyAlma(gaussianWeights);
-        public static double ApplyAlma(this double[] values, double[] gaussianWeights = null)
+        public static double ApplyAlma<T>(this T[] objsDesc, Func<T, double> objFn, double[] gaussianWeights = null) => objsDesc.Select(o => objFn(o)).ToArray().ApplyAlma(gaussianWeights);
+        public static double ApplyAlma(this double[] valuesDesc, double[] gaussianWeights = null)
         {
             if (gaussianWeights == null)
             {
-                gaussianWeights = GaussianWeights(values.Length);
+                gaussianWeights = GaussianWeights(valuesDesc.Length);
             }
             double WtdSum = 0, WtdNorm = 0;
-            for (int i = 0; i < values.Length; i++)
+            for (int i = 0; i < valuesDesc.Length; i++)
             {
-                WtdSum = WtdSum + (gaussianWeights[i] * values[i]);
+                WtdSum = WtdSum + (gaussianWeights[i] * valuesDesc[i]);
                 WtdNorm = WtdNorm + gaussianWeights[i];
             }
             return WtdSum / WtdNorm;
@@ -129,32 +129,45 @@ namespace NumbersGoUp.Utils
             }
             return Math.Sqrt(sum / (barsDesc.Length - 1));
         }
+        public static double[] CalculateVelocities<T>(this T[] barsDesc, Func<T, double> valueFn)
+        {
+            var velocities = new double[barsDesc.Length - 1];
+            for(var i = 0; i < velocities.Length; i++)
+            {
+                velocities[i] = valueFn(barsDesc[i]) - valueFn(barsDesc[i + 1]);
+            }
+            return velocities;
+        }
         public static double CalculateAcceleration<T>(this IEnumerable<T> barsDesc, Func<T, double> angleValueFn)
         {
             var size = barsDesc.Count();
             if (size < 3) { throw new Exception("Length does not meet minimum requirements to calculate acceleration"); }
             return (angleValueFn(barsDesc.First()) - angleValueFn(barsDesc.Skip(size / 2).First())) - (angleValueFn(barsDesc.Skip(size / 2).First()) - angleValueFn(barsDesc.Last()));
         }
-        public static (double slope, double yintercept) CalculateRegression(this double[] itemsAsc)
+        public static double PercChange(this double currentValue, double futureValue) => (futureValue / currentValue) - 1;
+        public static (double slope, double yintercept) CalculateRegression<T>(this T[] itemsAsc, Func<T, double> valueFn)
         {
             double x = 0.0, y = 0.0, xsqr = 0.0, xy = 0.0;
             for (var i = 1; i <= itemsAsc.Length; i++)
             {
-                y += itemsAsc[i-1];
+                y += valueFn(itemsAsc[i - 1]);
                 x += i;
                 xsqr += Math.Pow(i, 2);
-                xy += itemsAsc[i-1] * i;
+                xy += valueFn(itemsAsc[i - 1]) * i;
             }
             var regressionDenom = (itemsAsc.Length * xsqr) - Math.Pow(x, 2);
             var regressionSlope = regressionDenom != 0 ? ((itemsAsc.Length * xy) - (x * y)) / regressionDenom : 0.0;
             var yintercept = (y - (regressionSlope * x)) / itemsAsc.Length;
             return (regressionSlope, yintercept);
         }
-        public static double CalculateRegression(this double[] itemsAsc, int index)
+        public static double CalculateFutureRegression<T>(this T[] itemsAsc, Func<T, double> valueFn, int offset)
         {
-            var (slope, yintercept) = itemsAsc.CalculateRegression();
+            int index = itemsAsc.Length + offset;
+            var (slope, yintercept) = itemsAsc.CalculateRegression(valueFn);
             return (slope * index) + yintercept;
         }
+        public static (double slope, double yintercept) CalculateRegression(this double[] itemsAsc) => itemsAsc.CalculateRegression((x) => x);
+        public static double CalculateFutureRegression(this double[] itemsAsc, int offset) => itemsAsc.CalculateFutureRegression((x) => x, offset);
 
         public static async Task<int> BatchJobs<T>(this IEnumerable<T> data, Func<T,Task> fn, int batchSize = 10)
         {

@@ -19,6 +19,10 @@ namespace NumbersGoUp.Models
         public double AlmaSMA1 { get; set; }
         public double AlmaSMA2 { get; set; }
         public double AlmaSMA3 { get; set; }
+        public double OpenAlmaSMA3 { get; set; }
+        public double HighAlmaSMA3 { get; set; }
+        public double LowAlmaSMA3 { get; set; }
+        public double CloseAlmaSMA3 { get; set; }
         public double PriceSMA1 { get; set; }
         public double PriceSMA2 { get; set; }
         public double PriceSMA3 { get; set; }

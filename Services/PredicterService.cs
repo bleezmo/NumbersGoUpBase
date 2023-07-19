@@ -14,19 +14,18 @@ namespace NumbersGoUp.Services
     public class PredicterService
     {
         public const int FEATURE_HISTORY_DAY = 5;
-        public const int LOOKAHEAD_DAYS = 1;
-        public const int LOOKAHEAD_DAYS_LONG = 15;
-        public const int FEATURE_HISTORY_INTRADAY = 10;
         private readonly ILogger<PredicterService> _logger;
         private readonly IAppCancellation _appCancellation;
         private readonly IBrokerService _brokerService;
         private readonly IStocksContextFactory _contextFactory;
         private readonly double _peratioCutoff;
         private readonly TickerService _tickerService;
+        private readonly MLService _mlService;
 
         public double EncouragementMultiplier { get; }
 
-        public PredicterService(IAppCancellation appCancellation, ILogger<PredicterService> logger, IBrokerService brokerService, TickerService tickerService, IStocksContextFactory contextFactory, IConfiguration configuration)
+        public PredicterService(IAppCancellation appCancellation, ILogger<PredicterService> logger, IBrokerService brokerService, TickerService tickerService, 
+                                IStocksContextFactory contextFactory, IConfiguration configuration, MLService mlService)
         {
             _logger = logger;
             _appCancellation = appCancellation;
@@ -35,13 +34,16 @@ namespace NumbersGoUp.Services
             EncouragementMultiplier = Math.Min(Math.Max(double.TryParse(configuration["EncouragementMultiplier"], out var encouragementMultiplier) ? encouragementMultiplier : 0, -1), 1);
             _peratioCutoff = tickerService.PERatioCutoff;
             _tickerService = tickerService;
+            _mlService = mlService;
         }
+        public Task InitML(DateTime date, bool forceRefresh) => Task.CompletedTask;// _mlService.Init(date, forceRefresh);
         public async Task<Prediction> Predict(string symbol)
         {
-            BarMetric[] barMetrics;
+            BarMetric[] barMetricsFull;
             Ticker ticker;
             try
             {
+                var historyCount = Math.Max(FEATURE_HISTORY_DAY, MLService.FEATURE_HISTORY);
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
                     ticker = await stocksContext.Tickers.Where(t => t.Symbol == symbol).FirstOrDefaultAsync(_appCancellation.Token);
@@ -50,12 +52,12 @@ namespace NumbersGoUp.Services
                         _logger.LogCritical($"Ticker {symbol} not found. Manual intervention required");
                         return null;
                     }
-                    barMetrics = await stocksContext.BarMetrics.Where(p => p.Symbol == symbol).OrderByDescending(b => b.BarDayMilliseconds).Take(FEATURE_HISTORY_DAY).Include(b => b.HistoryBar).ToArrayAsync(_appCancellation.Token);
+                    barMetricsFull = await stocksContext.BarMetrics.Where(p => p.Symbol == symbol).OrderByDescending(b => b.BarDayMilliseconds).Take(historyCount).Include(b => b.HistoryBar).ToArrayAsync(_appCancellation.Token);
                 }
-                if (barMetrics.Length != FEATURE_HISTORY_DAY)
+                if (barMetricsFull.Length != historyCount)
                 {
-                    _logger.LogError($"BarMetrics for {symbol} did not return the required history (retrieved {barMetrics.Length} results). returning default prediction");
-                    if (barMetrics.Length == 0)
+                    _logger.LogError($"BarMetrics for {symbol} did not return the required history (retrieved {barMetricsFull.Length} results). returning default prediction");
+                    if (barMetricsFull.Length == 0)
                     {
                         _logger.LogError($"BarMetrics for {symbol} did not return any history. Assume ticker is no longer valid.");
                         return null;
@@ -63,15 +65,19 @@ namespace NumbersGoUp.Services
                     return null;
                 }
                 var lastMarketDay = await _brokerService.GetLastMarketDay();
+                var barMetrics = barMetricsFull.Take(FEATURE_HISTORY_DAY).ToArray();
                 if (barMetrics[0].BarDay.CompareTo(lastMarketDay.Date.AddDays(-1)) < 0)
                 {
                     _logger.LogError($"BarMetrics data for {symbol} isn't up to date! Returning default prediction.");
                     return null;
                 }
+                var (mlBuyPredict, mlSellPredict) = await _mlService.BarPredict(barMetricsFull.Reverse().ToArray());
                 return new Prediction
                 {
                     BuyMultiplier = Predict(ticker, barMetrics, true),
                     SellMultiplier = Predict(ticker, barMetrics, false),
+                    MLBuyPrediction = mlBuyPredict,
+                    MLSellPrediction = mlSellPredict,
                     Day = barMetrics[0].BarDay
                 };
             }
@@ -80,56 +86,28 @@ namespace NumbersGoUp.Services
                 _logger.LogError(ex, $"Error retrieving metrics for {symbol}");
             }
             return null;
-        }
-        public async Task<double> SectorPredict(string sector)
-        {
-            SectorMetric[] sectorMetrics;
-            try
-            {
-                using (var stocksContext = _contextFactory.CreateDbContext())
-                {
-                    sectorMetrics = await stocksContext.SectorMetrics.Where(p => p.Sector == sector).OrderByDescending(b => b.BarDayMilliseconds).Take(FEATURE_HISTORY_DAY).ToArrayAsync(_appCancellation.Token);
-                }
-                if (sectorMetrics.Length != FEATURE_HISTORY_DAY)
-                {
-                    _logger.LogError($"SectorMetrics for {sector} did not return the required history (retrieved {sectorMetrics.Length} results). returning default prediction");
-                    if (sectorMetrics.Length == 0)
-                    {
-                        _logger.LogError($"SectorMetrics for {sector} did not return any history. Assume sector is no longer valid.");
-                        return 0.5;
-                    }
-                    return 0.5;
-                }
-                var lastMarketDay = await _brokerService.GetLastMarketDay();
-                if (sectorMetrics[0].BarDay.CompareTo(lastMarketDay.Date.AddDays(-1)) < 0)
-                {
-                    _logger.LogError($"SectorMetrics data for {sector} isn't up to date! Returning default prediction.");
-                    return 0.5;
-                }
-                return Predict(sectorMetrics);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error retrieving metrics for {sector}");
-            }
-            return 0.5;
         }
         public async Task<Prediction> Predict(Ticker ticker, DateTime day)
         {
             var symbol = ticker.Symbol;
-            BarMetric[] barMetrics;
+            BarMetric[] barMetricsFull;
             var cutoff = new DateTimeOffset(day.Date).ToUnixTimeMilliseconds();
             try
             {
+                var historyCount = FEATURE_HISTORY_DAY;// Math.Max(FEATURE_HISTORY_DAY, MLService.FEATURE_HISTORY);
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
-                    barMetrics = await stocksContext.BarMetrics.Where(p => p.Symbol == symbol && p.BarDayMilliseconds <= cutoff)
-                                        .OrderByDescending(b => b.BarDayMilliseconds).Take(FEATURE_HISTORY_DAY).Include(b => b.HistoryBar).ToArrayAsync(_appCancellation.Token);
+                    barMetricsFull = await stocksContext.BarMetrics.Where(p => p.Symbol == symbol && p.BarDayMilliseconds <= cutoff)
+                                        .OrderByDescending(b => b.BarDayMilliseconds).Take(historyCount).Include(b => b.HistoryBar).ToArrayAsync(_appCancellation.Token);
                 }
+                var barMetrics = barMetricsFull.Take(FEATURE_HISTORY_DAY).ToArray();
+                //var (mlBuyPredict, mlSellPredict) = await _mlService.BarPredict(barMetricsFull.Reverse().ToArray());
                 return new Prediction
                 {
                     BuyMultiplier = Predict(ticker, barMetrics, true),
                     SellMultiplier = Predict(ticker, barMetrics, false),
+                    MLBuyPrediction = null,//mlBuyPredict,
+                    MLSellPrediction = null,//mlSellPredict,
                     Day = barMetrics[0].BarDay
                 };
             }
@@ -138,31 +116,11 @@ namespace NumbersGoUp.Services
                 _logger.LogError(ex, $"Error retrieving metrics for {symbol}");
             }
             return null;
-        }
-        public async Task<double> SectorPredict(string sector, DateTime day)
-        {
-            SectorMetric[] sectorMetrics;
-            var cutoff = new DateTimeOffset(day.Date).ToUnixTimeMilliseconds();
-            try
-            {
-                using (var stocksContext = _contextFactory.CreateDbContext())
-                {
-                    sectorMetrics = await stocksContext.SectorMetrics.Where(p => p.Sector == sector && p.BarDayMilliseconds <= cutoff)
-                                        .OrderByDescending(b => b.BarDayMilliseconds).Take(FEATURE_HISTORY_DAY).ToArrayAsync(_appCancellation.Token);
-                }
-                return Predict(sectorMetrics);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error retrieving metrics for {sector}");
-            }
-            return 0.5;
         }
         private double Predict(Ticker ticker, BarMetric[] barMetrics, bool buy)
         {
             if (barMetrics.Length == FEATURE_HISTORY_DAY)
             {
-                const double sellCutoff = 50 / 3;
                 double peRatio = ticker.EPS > 0 ? (barMetrics[0].HistoryBar.Price() / ticker.EPS) : _peratioCutoff;
                 if (_tickerService.TickerWhitelist.TickerAny(ticker))
                 {
@@ -236,21 +194,13 @@ namespace NumbersGoUp.Services
             }
             return 0.0;
         }
-        private double Predict(SectorMetric[] sectorMetrics)
-        {
-            if (sectorMetrics.Length == FEATURE_HISTORY_DAY)
-            {
-                return (sectorMetrics[0].SMASMA.DoubleReduce(20, -10) * 0.4) +
-                       (sectorMetrics.CalculateAvgVelocity(b => b.SMASMA).DoubleReduce(1, -1) * 0.3) + 
-                       (sectorMetrics.CalculateAvgVelocity(b => b.AlmaSMA3).DoubleReduce(2, -2) * 0.3);
-            }
-            return 0.5;
-        }
     }
     public class Prediction
     {
         public double SellMultiplier { get; set; }
         public double BuyMultiplier { get; set; }
+        public MLPrediction MLBuyPrediction { get; set; }
+        public MLPrediction MLSellPrediction { get; set; }
         public DateTime Day { get; set; }
     }
 }

@@ -21,6 +21,8 @@ namespace NumbersGoUp.Services
     {
         private const string EARNINGS_MULTIPLE_CUTOFF_KEY = "EarningsMultipleCutoff";
 
+        private static readonly double[] _gaussianWeights = Utils.Utils.GaussianWeights(DataService.LOOKBACK_YEARS * 4);
+
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<TickerBankService> _logger;
@@ -150,7 +152,7 @@ namespace NumbersGoUp.Services
                         }
                     }
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
-                    Func<BankTicker, double> performanceFn1 = (t) => Math.Sqrt(t.Earnings) * 2;
+                    Func<BankTicker, double> performanceFn1 = (t) => Math.Sqrt(t.Earnings);
                     Func<BankTicker, double> performanceFn2 = (t) => t.PriceChangeAvg;
                     Func<BankTicker, double> performanceFn3 = (t) => Math.Min(t.DividendYield, 0.06);
                     Func<BankTicker, double> performanceFn4 = (t) => 1 - t.EVEarnings.DoubleReduce(EarningsMultipleCutoff, 0);
@@ -199,10 +201,11 @@ namespace NumbersGoUp.Services
             {
                 var from = datePointer;
                 var to = datePointer.AddMonths(6);
-                var priceWindow = bars.Where(b => b.BarDay.CompareTo(from) > 0 && b.BarDay.CompareTo(to) < 0).OrderByDescending(b => b.BarDayMilliseconds).ToArray();
+                var priceWindow = bars.Where(b => b.BarDay.CompareTo(from) > 0 && b.BarDay.CompareTo(to) < 0).OrderBy(b => b.BarDayMilliseconds).ToArray();
                 if (priceWindow.Length > 2 && priceWindow.Last().Price() > 0)
                 {
-                    priceChanges.Add((priceWindow.First().Price() - priceWindow.Last().Price()) * 100 / priceWindow.Last().Price());
+                    var futurePrice = priceWindow.CalculateFutureRegression((b) => b.Price(), 1);
+                    priceChanges.Add(priceWindow[0].Price().PercChange(futurePrice));
                 }
                 datePointer = to;
             }

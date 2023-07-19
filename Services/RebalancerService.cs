@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using CsvHelper.Configuration.Attributes;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using NumbersGoUp.Models;
 using NumbersGoUp.Services;
@@ -31,6 +32,21 @@ namespace NumbersGoUpBase.Services
             _predicterService = predicterService;
             _tickerBlacklist = tickerService.TickerBlacklist;
         }
+        private double PerformanceValue(PerformanceTicker performanceTicker)
+        {
+            var performanceValue = Math.Pow(performanceTicker.Ticker.PerformanceVector, 2);
+            var mlBuyPrediction = performanceTicker.TickerPrediction.MLBuyPrediction;
+            var mlSellPrediction = performanceTicker.TickerPrediction.MLBuyPrediction;
+            if (mlBuyPrediction != null)
+            {
+                performanceValue *= 1 + Convert.ToDouble(mlBuyPrediction.Probability).Curve6(6);
+            }
+            if(mlSellPrediction != null)
+            {
+                performanceValue *= 1 - Convert.ToDouble(mlSellPrediction.Probability).Curve2(6);
+            }
+            return performanceValue;
+        }
         public async Task<IEnumerable<IRebalancer>> Rebalance(IEnumerable<Position> positions, Balance balance) => await Rebalance(positions, balance, DateTime.Now);
         public async Task<IEnumerable<IRebalancer>> Rebalance(IEnumerable<Position> positions, Balance balance, DateTime day)
         {
@@ -45,106 +61,122 @@ namespace NumbersGoUpBase.Services
                 }
             }
             var maxCount = Math.Min(allTickers.Count(), 100.0);
-            var sectors = await GetSectors(allTickers, day);
+            //var sectors = await GetSectors(allTickers, day);
             //var tickersPerSector = (int) Math.Ceiling(maxCount / Math.Min(Convert.ToDouble(sectors.Count), maxCount));
             var totalPerformance = 0.0;
             //var performanceCutoff = sectors.SelectMany(s => s.PerformanceTickers.Select(pt => pt.Ticker.PerformanceVector)).Where(pv => pv > 0).OrderByDescending(pv => pv).Take(100).Last();
-            foreach (var sector in sectors)
-            {
-                var selectedTickers = sector.PerformanceTickers.Where(t => t.Ticker.PerformanceVector > TickerService.PERFORMANCE_CUTOFF && !_tickerBlacklist.Contains(t.Ticker.Symbol)).ToList();
-                //if (selectedTickers.Count > tickersPerSector) 
-                //{
-                //    selectedTickers = selectedTickers.OrderByDescending(t => t.Ticker.PerformanceVector).Take(tickersPerSector).ToList();
-                //}
-                foreach (var performanceTicker in sector.PerformanceTickers)
-                {
-                    if(selectedTickers.Any(t => t.Ticker.Symbol == performanceTicker.Ticker.Symbol))
-                    {
-                        performanceTicker.MeetsRequirements = true;
-                    }
-                    else if(positions.Any(p => p.Symbol == performanceTicker.Ticker.Symbol))
-                    {
-                        selectedTickers.Add(performanceTicker); //still have to pull in the ones we have positions for
-                    }
-                }
-                sector.PerformanceTickers = selectedTickers;
 
-                foreach(var performanceTicker in sector.PerformanceTickers)
+            var selectedTickers = new List<PerformanceTicker>();
+            foreach(var ticker in allTickers)
+            {
+                if(ticker.PerformanceVector > TickerService.PERFORMANCE_CUTOFF && !_tickerBlacklist.Contains(ticker.Symbol))
                 {
-                    performanceTicker.TickerPrediction = await _predicterService.Predict(performanceTicker.Ticker, day);
-                    performanceTicker.Position = positions.FirstOrDefault(p => p.Symbol == performanceTicker.Ticker.Symbol);
-                    totalPerformance += Math.Pow(performanceTicker.Ticker.PerformanceVector, 2);
+                    selectedTickers.Add(new PerformanceTicker
+                    {
+                        Ticker = ticker,
+                        MeetsRequirements = true
+                    });
+                }
+                else if (positions.Any(p => p.Symbol == ticker.Symbol))
+                {
+                    //still have to pull in the ones we have positions for
+                    selectedTickers.Add(new PerformanceTicker
+                    {
+                        Ticker = ticker
+                    });
                 }
             }
-            var rebalancers = new List<IRebalancer>();
-            foreach(var sector in sectors)
+            //if (selectedTickers.Count > tickersPerSector) 
+            //{
+            //    selectedTickers = selectedTickers.OrderByDescending(t => t.Ticker.PerformanceVector).Take(tickersPerSector).ToList();
+            //}
+            //foreach (var performanceTicker in sector.PerformanceTickers)
+            //{
+            //    if (selectedTickers.Any(t => t.Ticker.Symbol == performanceTicker.Ticker.Symbol))
+            //    {
+            //        performanceTicker.MeetsRequirements = true;
+            //    }
+            //    else if (positions.Any(p => p.Symbol == performanceTicker.Ticker.Symbol))
+            //    {
+            //        selectedTickers.Add(performanceTicker); //still have to pull in the ones we have positions for
+            //    }
+            //}
+            //sector.PerformanceTickers = selectedTickers;
+
+            foreach (var performanceTicker in selectedTickers)
             {
-                var performanceTickers = sector.PerformanceTickers;
-                foreach (var performanceTicker in performanceTickers)
+                performanceTicker.TickerPrediction = await _predicterService.Predict(performanceTicker.Ticker, day);
+                performanceTicker.Position = positions.FirstOrDefault(p => p.Symbol == performanceTicker.Ticker.Symbol);
+                totalPerformance += PerformanceValue(performanceTicker);
+            }
+            var rebalancers = new List<IRebalancer>();
+
+            foreach (var performanceTicker in selectedTickers)
+            {
+                var prediction = performanceTicker.TickerPrediction;
+                if (prediction == null)
                 {
-                    var prediction = performanceTicker.TickerPrediction;
-                    if (prediction == null)
+                    continue;
+                }
+                var buyMultiplier = FinalBuyMultiplier(Math.Max(cash / equity, 0), prediction.BuyMultiplier);
+                var sellMultiplier = FinalSellMultiplier(Math.Max(cash / equity, 0), prediction.SellMultiplier);
+                var buyPredict = prediction.MLBuyPrediction?.Positive ?? false;
+                var sellPredict = prediction.MLSellPrediction?.Positive ?? false;
+                var calculatedPerformance = equity * PerformanceValue(performanceTicker) * performanceTicker.PerformanceMultiplier() * _predicterService.EncouragementMultiplier.DoubleReduce(0, -1) * _stockBondPerc;
+                var targetValue = totalPerformance > 0 ? (calculatedPerformance / totalPerformance) : 0.0;
+                var position = performanceTicker.Position;
+                if (position == null && targetValue > 0 && performanceTicker.MeetsRequirements && cash > 0)
+                {
+                    rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, targetValue * buyMultiplier, prediction));
+                }
+                else if (position != null && position.MarketValue.HasValue)
+                {
+                    var marketValue = position.MarketValue.Value;
+                    if (marketValue > 0)
                     {
-                        continue;
-                    }
-                    var buyMultiplier = FinalBuyMultiplier(Math.Max(cash / equity, 0), prediction.BuyMultiplier);
-                    var sellMultiplier = FinalSellMultiplier(Math.Max(cash / equity, 0), prediction.SellMultiplier);
-                    var calculatedPerformance = equity * Math.Pow(performanceTicker.Ticker.PerformanceVector, 2) * performanceTicker.PerformanceMultiplier() * _predicterService.EncouragementMultiplier.DoubleReduce(0, -1) * _stockBondPerc;
-                    var targetValue = totalPerformance > 0 ? (calculatedPerformance / totalPerformance) : 0.0;
-                    var position = performanceTicker.Position;
-                    if (position == null && targetValue > 0 && performanceTicker.MeetsRequirements && cash > 0)
-                    {
-                        rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, targetValue * buyMultiplier, prediction));
-                    }
-                    else if (position != null && position.MarketValue.HasValue)
-                    {
-                        var marketValue = position.MarketValue.Value;
-                        if(marketValue > 0)
+                        var diffPerc = (targetValue - marketValue) * 100.0 / marketValue;
+                        var diff = targetValue - marketValue;
+                        if (diffPerc > 0)
                         {
-                            var diffPerc = (targetValue - marketValue) * 100.0 / marketValue;
-                            var diff = targetValue - marketValue;
-                            if (diffPerc > 0)
+                            if (performanceTicker.MeetsRequirements && cash > (position.AssetLastPrice ?? 0))
                             {
-                                if (performanceTicker.MeetsRequirements && cash > (position.AssetLastPrice ?? 0))
-                                {
-                                    diffPerc = diffPerc * buyMultiplier;
-                                    if (sector.PerformanceTickers.Count > 2)
-                                    {
-                                        diffPerc *= sector.Prediction.DoubleReduce(1, 0.6, 1.25, 1);
-                                    }
-                                    diff *= buyMultiplier.Curve6(1);
-                                }
-                                else { diffPerc = 0; }
+                                diffPerc *= buyPredict ? ((buyMultiplier + prediction.MLBuyPrediction.Probability) / 2.0) : buyMultiplier;
+                                //if (sector.PerformanceTickers.Count > 2)
+                                //{
+                                //    diffPerc *= sector.Prediction.DoubleReduce(1, 0.6, 1.25, 1);
+                                //}
+                                diff *= buyMultiplier.Curve6(1);
                             }
-                            else if (diffPerc < 0)
+                            else { diffPerc = 0; }
+                        }
+                        else if (diffPerc < 0)
+                        {
+                            diffPerc *= sellPredict ? ((sellMultiplier + prediction.MLSellPrediction.Probability) / 2.0) : sellMultiplier;
+                            //if (sector.PerformanceTickers.Count > 2)
+                            //{
+                            //    diffPerc *= 2 - sector.Prediction.DoubleReduce(1, 0.6, 1.25, 1);
+                            //}
+                            if (targetValue > 0)
                             {
-                                diffPerc = diffPerc * sellMultiplier;
-                                if(sector.PerformanceTickers.Count > 2)
-                                {
-                                    diffPerc *= 2 - sector.Prediction.DoubleReduce(1, 0.6, 1.25, 1);
-                                }
-                                if(targetValue > 0)
-                                {
-                                    diff *= sellMultiplier.Curve6(1);
-                                }
-                            }
-                            if (Math.Abs(diffPerc) > 12)
-                            {
-                                rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, diff, prediction)
-                                {
-                                    Position = position
-                                });
+                                diff *= sellMultiplier.Curve6(1);
                             }
                         }
-                        else
+                        if (Math.Abs(diffPerc) > 12)
                         {
-                            _logger.LogError($"Stupid market value not positive, which is impossible. Ticker {position.Symbol}");
+                            rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, diff, prediction)
+                            {
+                                Position = position
+                            });
                         }
                     }
-                    else if(cash > 0)
+                    else if (cash > 0)
                     {
-                        _logger.LogError($"Unable to rebalance {performanceTicker.Ticker.Symbol}. Position unavailable");
+                        _logger.LogError($"Stupid market value not positive, which is impossible. Ticker {position.Symbol}");
                     }
+                }
+                else
+                {
+                    _logger.LogError($"Unable to rebalance {performanceTicker.Ticker.Symbol}. Position unavailable");
                 }
             }
             var bondPerc = 1 - _stockBondPerc;
@@ -186,37 +218,37 @@ namespace NumbersGoUpBase.Services
             }
             return rebalancers;
         }
-        private async Task<List<SectorInfo>> GetSectors(IEnumerable<Ticker> allTickers, DateTime day)
-        {
-            var sectorDict = new Dictionary<string, List<Ticker>>();
-            foreach (var ticker in allTickers)
-            {
-                if (sectorDict.TryGetValue(ticker.Sector, out var sectorTickers))
-                {
-                    sectorTickers.Add(ticker);
-                }
-                else
-                {
-                    sectorDict.Add(ticker.Sector, new List<Ticker>(new[] { ticker }));
-                }
-            }
-            var sectors = new List<SectorInfo>();
-            foreach (var (sector, sectorTickers) in sectorDict.Select(kv => (kv.Key, kv.Value)))
-            {
-                var prediction = sectorTickers.Count > 2 ? await _predicterService.SectorPredict(sector, day) : 0.5;
-                sectors.Add(new SectorInfo
-                {
-                    Sector = sector,
-                    PerformanceTickers = sectorTickers.Select(t => new PerformanceTicker
-                    {
-                        Ticker = t,
-                        SectorPrediction = prediction
-                    }).ToList(),
-                    Prediction = prediction
-                });
-            }
-            return sectors;
-        }
+        //private async Task<List<PerformanceTicker>> GetSectors(IEnumerable<Ticker> allTickers, DateTime day)
+        //{
+        //    var sectorDict = new Dictionary<string, List<Ticker>>();
+        //    foreach (var ticker in allTickers)
+        //    {
+        //        if (sectorDict.TryGetValue(ticker.Sector, out var sectorTickers))
+        //        {
+        //            sectorTickers.Add(ticker);
+        //        }
+        //        else
+        //        {
+        //            sectorDict.Add(ticker.Sector, new List<Ticker>(new[] { ticker }));
+        //        }
+        //    }
+        //    var sectors = new List<SectorInfo>();
+        //    foreach (var (sector, sectorTickers) in sectorDict.Select(kv => (kv.Key, kv.Value)))
+        //    {
+        //        var prediction = sectorTickers.Count > 2 ? await _predicterService.SectorPredict(sector, day) : 0.5;
+        //        sectors.Add(new SectorInfo
+        //        {
+        //            Sector = sector,
+        //            PerformanceTickers = sectorTickers.Select(t => new PerformanceTicker
+        //            {
+        //                Ticker = t,
+        //                SectorPrediction = prediction
+        //            }).ToList(),
+        //            Prediction = prediction
+        //        });
+        //    }
+        //    return sectors;
+        //}
 
         private static double FinalSellMultiplier(double cashEquityRatio, double sellMultiplier) => sellMultiplier;//.Curve1(cashEquityRatio.DoubleReduce(0.3, 0, 3, 1));
         private static double FinalBuyMultiplier(double cashEquityRatio, double buyMultiplier) => buyMultiplier;//.Curve3((1 - cashEquityRatio).DoubleReduce(1, 0.7, 4, 2));
@@ -226,7 +258,7 @@ namespace NumbersGoUpBase.Services
         public Ticker Ticker { get; set; }
         public Prediction TickerPrediction { get; set; }
         public Position Position { get; set; }
-        public double SectorPrediction { get; set; }
+        //public double SectorPrediction { get; set; }
         public bool MeetsRequirements { get; set; }
 
         public double PerformanceMultiplier()
@@ -236,8 +268,9 @@ namespace NumbersGoUpBase.Services
             {
                 var predictionMax = MeetsRequirements ? 1.1 : 1.0;
                 var equityPercMultiplier = 1 + (TickerPrediction.BuyMultiplier * (predictionMax - 1)) + (TickerPrediction.SellMultiplier * (predictionMax - 1.2));
-                var sectorMultiplier = SectorPrediction.DoubleReduce(1, 0, predictionMax, predictionMax - 0.2);
-                performanceMultiplier = (0.8 * equityPercMultiplier) + (0.2 * sectorMultiplier);
+                //var sectorMultiplier = SectorPrediction.DoubleReduce(1, 0, predictionMax, predictionMax - 0.2);
+                //performanceMultiplier = (0.8 * equityPercMultiplier) + (0.2 * sectorMultiplier);
+                performanceMultiplier = equityPercMultiplier;
             }
             if (Position != null && Position.UnrealizedProfitLossPercent.HasValue && Position.UnrealizedProfitLossPercent.Value > 0)
             {

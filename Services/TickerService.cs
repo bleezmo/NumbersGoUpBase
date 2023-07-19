@@ -20,6 +20,7 @@ namespace NumbersGoUp.Services
     {
         public const int MAX_TICKERS = 100;
         public const int PERFORMANCE_CUTOFF = 25;
+        public const int MAX_BANK_TICKERS = 200;
 
         private const string POLYGON_API_KEY = "polygon_api_key";
         private const string FINNHUB_API_KEY = "finnhub_api_key";
@@ -309,7 +310,6 @@ namespace NumbersGoUp.Services
                 }
             }
         }
-
         public async Task Load()
         {
             var now = DateTimeOffset.UtcNow;
@@ -320,8 +320,8 @@ namespace NumbersGoUp.Services
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
                     var tickers = await stocksContext.Tickers.ToArrayAsync(_appCancellation.Token);
-                    var bankTickers = await stocksContext.TickerBank.Where(t => t.PerformanceVector > 0).OrderByDescending(t => t.PerformanceVector).Take(200).ToArrayAsync(_appCancellation.Token);
-                    bankTickers = bankTickers.Where(t => t.PERatio < PERatioCutoff || TickerWhitelist.Any(symbol => symbol == t.Symbol)).ToArray();
+                    var bankTickers = await stocksContext.TickerBank.Where(t => t.PerformanceVector > 0).ToArrayAsync(_appCancellation.Token);
+                    bankTickers = GetFilteredBankTickers(bankTickers).Where(t => t.PERatio < PERatioCutoff || TickerWhitelist.Any(symbol => symbol == t.Symbol)).ToArray();
                     var positions = await _brokerService.GetPositions();
                     var positionSymbols = positions.Select(p => p.Symbol).ToArray();
                     var bankTickerPositions = await stocksContext.TickerBank.Where(t => positionSymbols.Contains(t.Symbol)).ToArrayAsync(_appCancellation.Token);
@@ -410,6 +410,34 @@ namespace NumbersGoUp.Services
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
                 }
             }
+        }
+        private static IEnumerable<BankTicker> GetFilteredBankTickers(BankTicker[] bankTickersFull)
+        {
+            var sectorDict = new Dictionary<string, List<BankTicker>>();
+            foreach (var ticker in bankTickersFull)
+            {
+                if (sectorDict.TryGetValue(ticker.Sector, out var sectorTickers))
+                {
+                    sectorTickers.Add(ticker);
+                }
+                else
+                {
+                    sectorDict.Add(ticker.Sector, new List<BankTicker>(new[] { ticker }));
+                }
+            }
+            var sectorIterator = sectorDict.Select(kv => KeyValuePair.Create(kv.Key, kv.Value.OrderByDescending(t => t.PerformanceVector).ToArray()));
+            var filteredBankTickers = new List<BankTicker>();
+            for (var i = 0; filteredBankTickers.Count <= MAX_BANK_TICKERS && i < bankTickersFull.Length; i++)
+            {
+                foreach (var sector in sectorIterator)
+                {
+                    if (i < sector.Value.Length)
+                    {
+                        filteredBankTickers.Add(sector.Value[i]);
+                    }
+                }
+            }
+            return filteredBankTickers;
         }
     }
 }

@@ -149,7 +149,7 @@ namespace NumbersGoUp.Utils
                                             if(epsQoQIndex > -100)
                                             {
                                                 var pastEPS = currentEPS / Math.Min((epsQoQPerc + 100) / 100, 2);
-                                                var finalQ = new[] { pastEPS, currentEPS, futureEPS }.CalculateRegression(4);
+                                                var finalQ = new[] { pastEPS, currentEPS, futureEPS }.CalculateFutureRegression(1);
                                                 ticker.EPS = pastEPS + currentEPS + futureEPS + finalQ;
                                             }
                                             else
