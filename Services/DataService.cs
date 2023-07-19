@@ -50,8 +50,6 @@ namespace NumbersGoUp.Services
                 _logger.LogInformation("Done collecting bar history");
                 await GenerateMetrics(tickers);
                 _logger.LogInformation($"Completed metrics generation");
-                //await GenerateSectorMetrics(tickers);
-                //_logger.LogInformation($"Completed sector metrics generation");
                 await CleanUp();
                 _logger.LogInformation($"Completed clean up");
                 await _tickerService.ApplyAverages();
@@ -84,10 +82,6 @@ namespace NumbersGoUp.Services
                     stocksContext.HistoryBars.RemoveRange(bars);
                     var removed = await stocksContext.SaveChangesAsync(_appCancellation.Token);
                     _logger.LogInformation($"Removed {removed} old records from history bars");
-                    //var metrics = await stocksContext.SectorMetrics.Where(b => b.BarDayMilliseconds < cutoff).ToListAsync(_appCancellation.Token);
-                    //stocksContext.SectorMetrics.RemoveRange(metrics);
-                    //removed = await stocksContext.SaveChangesAsync(_appCancellation.Token);
-                    //_logger.LogInformation($"Removed {removed} old records from sector metrics");
                 }
             }
         }
@@ -356,7 +350,6 @@ namespace NumbersGoUp.Services
         {
             var tickers = await _tickerService.GetFullTickerList();
             await GenerateMetrics(tickers);
-            //await GenerateSectorMetrics(tickers);
         }
 #endif
     }

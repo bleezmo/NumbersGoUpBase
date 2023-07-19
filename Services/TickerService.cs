@@ -427,7 +427,7 @@ namespace NumbersGoUp.Services
             }
             var sectorIterator = sectorDict.Select(kv => KeyValuePair.Create(kv.Key, kv.Value.OrderByDescending(t => t.PerformanceVector).ToArray()));
             var filteredBankTickers = new List<BankTicker>();
-            for (var i = 0; filteredBankTickers.Count <= MAX_BANK_TICKERS && i < bankTickersFull.Length; i++)
+            for (var i = 0; filteredBankTickers.Count < MAX_BANK_TICKERS && i < bankTickersFull.Length; i++)
             {
                 foreach (var sector in sectorIterator)
                 {
@@ -437,7 +437,7 @@ namespace NumbersGoUp.Services
                     }
                 }
             }
-            return filteredBankTickers;
+            return filteredBankTickers.OrderByDescending(t => t.PerformanceVector).Take(MAX_BANK_TICKERS);
         }
     }
 }
