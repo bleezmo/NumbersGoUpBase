@@ -16,8 +16,6 @@
 		</PackageReference>
 		<PackageReference Include="Microsoft.Extensions.Hosting" Version="6.0.1" />
 		<PackageReference Include="Microsoft.Extensions.Http" Version="6.0.0" />
-		<PackageReference Include="Microsoft.ML.LightGbm" Version="2.0.1" />
-		<PackageReference Include="Microsoft.ML.Mkl.Components" Version="2.0.1" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
 		<PackageReference Include="System.Linq" Version="4.3.0" />
 	</ItemGroup>

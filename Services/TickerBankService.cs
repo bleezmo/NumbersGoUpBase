@@ -205,7 +205,7 @@ namespace NumbersGoUp.Services
                 if (priceWindow.Length > 2 && priceWindow.Last().Price() > 0)
                 {
                     var futurePrice = priceWindow.CalculateFutureRegression((b) => b.Price(), 1);
-                    priceChanges.Add(priceWindow[0].Price().PercChange(futurePrice));
+                    priceChanges.Add(priceWindow[0].Price().PercChange(futurePrice) * 100);
                 }
                 datePointer = to;
             }

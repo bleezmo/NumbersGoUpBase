@@ -20,12 +20,11 @@ namespace NumbersGoUp.Services
         private readonly IStocksContextFactory _contextFactory;
         private readonly double _peratioCutoff;
         private readonly TickerService _tickerService;
-        private readonly MLService _mlService;
 
         public double EncouragementMultiplier { get; }
 
         public PredicterService(IAppCancellation appCancellation, ILogger<PredicterService> logger, IBrokerService brokerService, TickerService tickerService, 
-                                IStocksContextFactory contextFactory, IConfiguration configuration, MLService mlService)
+                                IStocksContextFactory contextFactory, IConfiguration configuration)
         {
             _logger = logger;
             _appCancellation = appCancellation;
@@ -34,16 +33,13 @@ namespace NumbersGoUp.Services
             EncouragementMultiplier = Math.Min(Math.Max(double.TryParse(configuration["EncouragementMultiplier"], out var encouragementMultiplier) ? encouragementMultiplier : 0, -1), 1);
             _peratioCutoff = tickerService.PERatioCutoff;
             _tickerService = tickerService;
-            _mlService = mlService;
         }
-        public Task InitML(DateTime date, bool forceRefresh) => _mlService.Init(date, forceRefresh);
         public async Task<Prediction> Predict(string symbol)
         {
             BarMetric[] barMetricsFull;
             Ticker ticker;
             try
             {
-                var historyCount = Math.Max(FEATURE_HISTORY_DAY, MLService.FEATURE_HISTORY);
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
                     ticker = await stocksContext.Tickers.Where(t => t.Symbol == symbol).FirstOrDefaultAsync(_appCancellation.Token);
@@ -52,9 +48,9 @@ namespace NumbersGoUp.Services
                         _logger.LogCritical($"Ticker {symbol} not found. Manual intervention required");
                         return null;
                     }
-                    barMetricsFull = await stocksContext.BarMetrics.Where(p => p.Symbol == symbol).OrderByDescending(b => b.BarDayMilliseconds).Take(historyCount).Include(b => b.HistoryBar).ToArrayAsync(_appCancellation.Token);
+                    barMetricsFull = await stocksContext.BarMetrics.Where(p => p.Symbol == symbol).OrderByDescending(b => b.BarDayMilliseconds).Take(FEATURE_HISTORY_DAY).Include(b => b.HistoryBar).ToArrayAsync(_appCancellation.Token);
                 }
-                if (barMetricsFull.Length != historyCount)
+                if (barMetricsFull.Length != FEATURE_HISTORY_DAY)
                 {
                     _logger.LogError($"BarMetrics for {symbol} did not return the required history (retrieved {barMetricsFull.Length} results). returning default prediction");
                     if (barMetricsFull.Length == 0)
@@ -71,13 +67,10 @@ namespace NumbersGoUp.Services
                     _logger.LogError($"BarMetrics data for {symbol} isn't up to date! Returning default prediction.");
                     return null;
                 }
-                var (mlBuyPredict, mlSellPredict) = await _mlService.BarPredict(barMetricsFull.Reverse().ToArray());
                 return new Prediction
                 {
                     BuyMultiplier = Predict(ticker, barMetrics, true),
                     SellMultiplier = Predict(ticker, barMetrics, false),
-                    MLBuyPrediction = mlBuyPredict,
-                    MLSellPrediction = mlSellPredict,
                     Day = barMetrics[0].BarDay
                 };
             }
@@ -90,24 +83,19 @@ namespace NumbersGoUp.Services
         public async Task<Prediction> Predict(Ticker ticker, DateTime day)
         {
             var symbol = ticker.Symbol;
-            BarMetric[] barMetricsFull;
+            BarMetric[] barMetrics;
             var cutoff = new DateTimeOffset(day.Date).ToUnixTimeMilliseconds();
             try
             {
-                var historyCount = Math.Max(FEATURE_HISTORY_DAY, MLService.FEATURE_HISTORY);
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
-                    barMetricsFull = await stocksContext.BarMetrics.Where(p => p.Symbol == symbol && p.BarDayMilliseconds <= cutoff)
-                                        .OrderByDescending(b => b.BarDayMilliseconds).Take(historyCount).Include(b => b.HistoryBar).ToArrayAsync(_appCancellation.Token);
+                    barMetrics = await stocksContext.BarMetrics.Where(p => p.Symbol == symbol && p.BarDayMilliseconds <= cutoff)
+                                        .OrderByDescending(b => b.BarDayMilliseconds).Take(FEATURE_HISTORY_DAY).Include(b => b.HistoryBar).ToArrayAsync(_appCancellation.Token);
                 }
-                var barMetrics = barMetricsFull.Take(FEATURE_HISTORY_DAY).ToArray();
-                var (mlBuyPredict, mlSellPredict) = await _mlService.BarPredict(barMetricsFull.Reverse().ToArray());
                 return new Prediction
                 {
                     BuyMultiplier = Predict(ticker, barMetrics, true),
                     SellMultiplier = Predict(ticker, barMetrics, false),
-                    MLBuyPrediction = mlBuyPredict,
-                    MLSellPrediction = mlSellPredict,
                     Day = barMetrics[0].BarDay
                 };
             }
@@ -199,8 +187,6 @@ namespace NumbersGoUp.Services
     {
         public double SellMultiplier { get; set; }
         public double BuyMultiplier { get; set; }
-        public MLPrediction MLBuyPrediction { get; set; }
-        public MLPrediction MLSellPrediction { get; set; }
         public DateTime Day { get; set; }
     }
 }
