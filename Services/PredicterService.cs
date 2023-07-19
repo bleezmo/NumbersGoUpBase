@@ -36,7 +36,7 @@ namespace NumbersGoUp.Services
         }
         public async Task<Prediction> Predict(string symbol)
         {
-            BarMetric[] barMetricsFull;
+            BarMetric[] barMetrics;
             Ticker ticker;
             try
             {
@@ -48,12 +48,12 @@ namespace NumbersGoUp.Services
                         _logger.LogCritical($"Ticker {symbol} not found. Manual intervention required");
                         return null;
                     }
-                    barMetricsFull = await stocksContext.BarMetrics.Where(p => p.Symbol == symbol).OrderByDescending(b => b.BarDayMilliseconds).Take(FEATURE_HISTORY_DAY).Include(b => b.HistoryBar).ToArrayAsync(_appCancellation.Token);
+                    barMetrics = await stocksContext.BarMetrics.Where(p => p.Symbol == symbol).OrderByDescending(b => b.BarDayMilliseconds).Take(FEATURE_HISTORY_DAY).Include(b => b.HistoryBar).ToArrayAsync(_appCancellation.Token);
                 }
-                if (barMetricsFull.Length != FEATURE_HISTORY_DAY)
+                if (barMetrics.Length != FEATURE_HISTORY_DAY)
                 {
-                    _logger.LogError($"BarMetrics for {symbol} did not return the required history (retrieved {barMetricsFull.Length} results). returning default prediction");
-                    if (barMetricsFull.Length == 0)
+                    _logger.LogError($"BarMetrics for {symbol} did not return the required history (retrieved {barMetrics.Length} results). returning default prediction");
+                    if (barMetrics.Length == 0)
                     {
                         _logger.LogError($"BarMetrics for {symbol} did not return any history. Assume ticker is no longer valid.");
                         return null;
@@ -61,7 +61,6 @@ namespace NumbersGoUp.Services
                     return null;
                 }
                 var lastMarketDay = await _brokerService.GetLastMarketDay();
-                var barMetrics = barMetricsFull.Take(FEATURE_HISTORY_DAY).ToArray();
                 if (barMetrics[0].BarDay.CompareTo(lastMarketDay.Date.AddDays(-1)) < 0)
                 {
                     _logger.LogError($"BarMetrics data for {symbol} isn't up to date! Returning default prediction.");
