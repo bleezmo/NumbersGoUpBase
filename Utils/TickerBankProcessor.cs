@@ -17,7 +17,7 @@ namespace NumbersGoUp.Utils
 {
     public interface ITickerBankProcessor
     {
-        Task<List<BankTicker>> DownloadTickers(bool alwaysProcessData = false);
+        Task<TickerBankProcessorResult> DownloadTickers(bool alwaysProcessData = false);
         void UpdateBankTicker(BankTicker src, BankTicker dest);
     }
 
@@ -35,7 +35,7 @@ namespace NumbersGoUp.Utils
             _tickerHash = tickerHash;
             _tickerFile = tickerFile;
         }
-        public async Task<List<BankTicker>> DownloadTickers(bool alwaysProcessData = false)
+        public async Task<TickerBankProcessorResult> DownloadTickers(bool alwaysProcessData = false)
         {
             var oldHash = await _tickerHash.GetCurrentHash();
             var currentHash = string.Empty;
@@ -46,7 +46,7 @@ namespace NumbersGoUp.Utils
                     currentHash = Convert.ToBase64String(md5.ComputeHash(stream));
                 }
             }
-            List<BankTicker> tickers = new List<BankTicker>();
+            List<ProcessorBankTicker> tickers = new List<ProcessorBankTicker>();
             if (oldHash != currentHash || alwaysProcessData)
             {
                 using (var sr = new StreamReader(await _tickerFile.OpenRead()))
@@ -55,8 +55,9 @@ namespace NumbersGoUp.Utils
                      * Ticker,Description,Volume,Market Capitalization,Price to Earnings Ratio (TTM),Sector,Current Ratio (MRQ),
                      * Debt to Equity Ratio (MRQ),Dividend Yield Forward,EBITDA (TTM),Enterprise Value/EBITDA (TTM),EPS Diluted (TTM)
                      */
-                    int? tickerIndex = null, sectorIndex = null, marketCapIndex = null, peRatioIndex = null, currentRatioIndex = null, debtEquityRatioIndex = null, dividendIndex = null, 
-                         ebitdaIndex = null, evebitdaIndex = null, epsIndex = null, priceIndex = null, sharesIndex = null, evIndex = null, currentEPSIndex = null, futureEPSIndex = null, epsQoQIndex = null;
+                    int? tickerIndex = null, sectorIndex = null, marketCapIndex = null, peRatioIndex = null, currentRatioIndex = null, debtEquityRatioIndex = null, 
+                         dividendIndex = null, ebitdaIndex = null, evebitdaIndex = null, epsIndex = null, priceIndex = null, sharesIndex = null, evIndex = null, 
+                         currentEPSIndex = null, futureEPSIndex = null, epsQoQIndex = null, epsGrowthIndex = null, recentEarningsIndex = null;
                     using (var csv = new CsvReader(sr, CultureInfo.InvariantCulture))
                     {
                         string[] headers = null;
@@ -84,14 +85,16 @@ namespace NumbersGoUp.Utils
                                     if (headers[i] == "Total Shares Outstanding") { sharesIndex = i; }
                                     if (headers[i] == "Enterprise Value (MRQ)") { evIndex = i; }
                                     if (headers[i] == "EPS Diluted (Quarterly QoQ Growth)") { epsQoQIndex = i; }
+                                    if (headers[i] == "EPS Diluted (TTM YoY Growth)") { epsGrowthIndex = i; }
+                                    if (headers[i] == "Recent Earnings Date") { recentEarningsIndex = i; }
                                 }
                             }
                             else
                             {
-                                var ticker = new BankTicker();
+                                var ticker = new ProcessorBankTicker();
                                 if (tickerIndex.HasValue)
                                 {
-                                    ticker.Symbol = csv[tickerIndex.Value];
+                                    ticker.Ticker.Symbol = csv[tickerIndex.Value];
                                 }
                                 else
                                 {
@@ -100,23 +103,23 @@ namespace NumbersGoUp.Utils
                                 }
                                 if (sectorIndex.HasValue)
                                 {
-                                    ticker.Sector = csv[sectorIndex.Value];
+                                    ticker.Ticker.Sector = csv[sectorIndex.Value];
                                 }
                                 else
                                 {
-                                    _logger.LogWarning($"Sector not found for {ticker.Symbol}");
+                                    _logger.LogError($"Sector not found for {ticker.Ticker.Symbol}");
                                 }
                                 if (peRatioIndex.HasValue && double.TryParse(csv[peRatioIndex.Value], out var peRatio))
                                 {
-                                    ticker.PERatio = peRatio;
+                                    ticker.Ticker.PERatio = peRatio;
                                 }
                                 else
                                 {
-                                    _logger.LogWarning($"PE Ratio not found for {ticker.Symbol}");
+                                    //_logger.LogWarning($"PE Ratio not found for {ticker.Ticker.Symbol}");
                                 }
                                 if (currentRatioIndex.HasValue && double.TryParse(csv[currentRatioIndex.Value], out var currentRatio))
                                 {
-                                    ticker.CurrentRatio = currentRatio;
+                                    ticker.Ticker.CurrentRatio = currentRatio;
                                 }
                                 else
                                 {
@@ -124,115 +127,133 @@ namespace NumbersGoUp.Utils
                                 }
                                 if (debtEquityRatioIndex.HasValue && double.TryParse(csv[debtEquityRatioIndex.Value], out var debtEquityRatio))
                                 {
-                                    ticker.DebtEquityRatio = debtEquityRatio;
+                                    ticker.Ticker.DebtEquityRatio = debtEquityRatio;
                                 }
                                 else
                                 {
-                                    _logger.LogWarning($"Debt Equity Ratio not found for {ticker.Symbol}");
+                                    //_logger.LogWarning($"Debt Equity Ratio not found for {ticker.Ticker.Symbol}");
                                 }
                                 if (dividendIndex.HasValue && double.TryParse(csv[dividendIndex.Value], out var dividend))
                                 {
-                                    ticker.DividendYield = dividend / 100;
+                                    ticker.Ticker.DividendYield = dividend / 100;
                                 }
                                 else
                                 {
-                                    _logger.LogWarning($"Dividend not found for {ticker.Symbol}");
+                                    _logger.LogWarning($"Dividend not found for {ticker.Ticker.Symbol}");
                                 }
-                                if (epsIndex.HasValue && double.TryParse(csv[epsIndex.Value], out var eps))
+                                if(epsIndex.HasValue && double.TryParse(csv[epsIndex.Value], out var eps))
                                 {
-                                    ticker.EPS = eps;
-                                    if (eps > 0 && currentEPSIndex.HasValue && double.TryParse(csv[currentEPSIndex.Value], out var currentEPS) &&
-                                        futureEPSIndex.HasValue && double.TryParse(csv[futureEPSIndex.Value], out var futureEPS))
+                                    if (currentEPSIndex.HasValue && double.TryParse(csv[currentEPSIndex.Value], out var currentEPS) &&
+                                        futureEPSIndex.HasValue && double.TryParse(csv[futureEPSIndex.Value], out var futureEPS) &&
+                                        epsQoQIndex.HasValue && double.TryParse(csv[epsQoQIndex.Value], out var epsQoQGrowth))
                                     {
-                                        if (epsQoQIndex.HasValue && double.TryParse(csv[epsQoQIndex.Value], out var epsQoQPerc))
+                                        if (epsQoQGrowth > -100 && epsQoQGrowth < 300)
                                         {
-                                            if(epsQoQIndex > -100)
+                                            epsQoQGrowth = (epsQoQGrowth + 100) / 100;
+                                            var pastEPS = currentEPS / epsQoQGrowth;
+                                            var finalQ = new[] { pastEPS, currentEPS, futureEPS }.CalculateFutureRegression(1);
+                                            var calculatedEPS = finalQ > 0 ? (pastEPS + currentEPS + futureEPS + finalQ) : -1;
+                                            if(calculatedEPS > 0)
                                             {
-                                                var pastEPS = currentEPS / Math.Min((epsQoQPerc + 100) / 100, 2);
-                                                var finalQ = new[] { pastEPS, currentEPS, futureEPS }.CalculateFutureRegression(1);
-                                                ticker.EPS = pastEPS + currentEPS + futureEPS + finalQ;
+                                                var coeff = (calculatedEPS / eps).DoubleReduce(2, 1);
+                                                ticker.Ticker.EPS = (coeff * eps) + ((1 - coeff) * calculatedEPS);
+                                            }
+                                        }
+                                    }
+                                    else if (epsGrowthIndex.HasValue && double.TryParse(csv[epsGrowthIndex.Value], out var epsGrowth))
+                                    {
+                                        epsGrowth = (epsGrowth + 100) / 100;
+                                        if (epsGrowth > 0 && epsGrowth < 4)
+                                        {
+                                            if (epsGrowth < 1)
+                                            {
+                                                var coeff = epsGrowth;
+                                                ticker.Ticker.EPS = ((1 - coeff) * eps) + (coeff * eps * epsGrowth);
                                             }
                                             else
                                             {
-                                                ticker.EPS = -1;
+                                                var previousEPS = eps / epsGrowth;
+                                                ticker.Ticker.EPS = (eps + previousEPS) / 2;
                                             }
                                         }
-                                        else //assume semi-annual earnings reports
-                                        {
-                                            //_logger.LogInformation($"QoQ eps growth not found. Assuming semi-annual earnings. Ticker {ticker.Symbol}");
-                                            ticker.EPS = Math.Min(currentEPS, futureEPS) * 2;
-                                        }
-                                    }
-                                    else
-                                    {
-                                        _logger.LogError($"Current and/or future eps not found. Using default eps for {ticker.Symbol}");
-                                    }
-                                    if (sharesIndex.HasValue && double.TryParse(csv[sharesIndex.Value], out var shares))
-                                    {
-                                        ticker.Shares = shares;
-                                        ticker.Earnings = ticker.EPS * shares;
-                                    }
-                                    else
-                                    {
-                                        _logger.LogError($"No shares outstanding for {ticker.Symbol} to calculate earnings.");
                                     }
                                 }
                                 else
                                 {
-                                    _logger.LogError($"EPS not found for {ticker.Symbol}");
+                                    //_logger.LogError($"Current and/or future eps not found. Using default eps for {ticker.Ticker.Symbol}");
                                 }
-                                var price = 0.0;
-                                if (priceIndex.HasValue && double.TryParse(csv[priceIndex.Value], out price))
+                                if (sharesIndex.HasValue && double.TryParse(csv[sharesIndex.Value], out var shares))
                                 {
-                                    ticker.PERatio = ticker.EPS > 0 ? (price / ticker.EPS) : ticker.PERatio;
+                                    ticker.Ticker.Shares = shares;
+                                    if(ticker.Ticker.EPS > 0)
+                                    {
+                                        ticker.Ticker.Earnings = ticker.Ticker.EPS * shares;
+                                    }
                                 }
                                 else
                                 {
-                                    _logger.LogWarning($"EPS not found for {ticker.Symbol}");
+                                    _logger.LogError($"No shares outstanding for {ticker.Ticker.Symbol} to calculate earnings.");
                                 }
-                                if (ticker.Earnings > 0)
+                                if (priceIndex.HasValue && double.TryParse(csv[priceIndex.Value], out var price))
                                 {
-                                    double ev = 0;
-                                    if (evIndex.HasValue && double.TryParse(csv[evIndex.Value], out ev))
+                                    ticker.Price = price;
+                                    ticker.Ticker.PERatio = ticker.Ticker.EPS > 0 ? (price / ticker.Ticker.EPS) : ticker.Ticker.PERatio;
+                                }
+                                else
+                                {
+                                    //_logger.LogWarning($"Price not found for {ticker.Ticker.Symbol}");
+                                }
+                                if(recentEarningsIndex.HasValue && DateTime.TryParse(csv[recentEarningsIndex.Value], out var recentEarningsDate))
+                                {
+                                    ticker.RecentEarningsDate = recentEarningsDate;
+                                }
+                                else
+                                {
+                                    _logger.LogWarning($"Recent Earnings Date not found for {ticker.Ticker.Symbol}");
+                                }
+                                if (ticker.Ticker.Earnings > 0)
+                                {
+                                    if (evIndex.HasValue && double.TryParse(csv[evIndex.Value], out var ev))
                                     {
-                                        ticker.EVEarnings = ev / ticker.Earnings;
+                                        ticker.EV = ev;
+                                        ticker.Ticker.EVEarnings = ev / ticker.Ticker.Earnings;
                                     }
                                     else if (evebitdaIndex.HasValue && double.TryParse(csv[evebitdaIndex.Value], out var evebitda) &&
                                              ebitdaIndex.HasValue && double.TryParse(csv[ebitdaIndex.Value], out var ebitda))
                                     {
-                                        ev = evebitda * ebitda;
-                                        ticker.EVEarnings = ev / ticker.Earnings;
+                                        ticker.EV = evebitda * ebitda;
+                                        ticker.Ticker.EVEarnings = ticker.EV / ticker.Ticker.Earnings;
                                     }
                                     else
                                     {
-                                        _logger.LogWarning($"EV EBITDA ratio unavailable for {ticker.Symbol}. Could not calculate EV.");
+                                        //_logger.LogWarning($"EV EBITDA ratio unavailable for {ticker.Ticker.Symbol}. Could not calculate EV.");
                                     }
                                     if (marketCapIndex.HasValue && double.TryParse(csv[marketCapIndex.Value], out var marketCap))
                                     {
-                                        ticker.MarketCap = marketCap;
+                                        ticker.Ticker.MarketCap = marketCap;
                                     }
-                                    else if(ticker.Shares > 0 && price > 0)
+                                    else if(ticker.Ticker.Shares > 0 && ticker.Price > 0)
                                     {
-                                        _logger.LogWarning($"Market cap not found for {ticker.Symbol}. Deriving from shares*price");
-                                        ticker.MarketCap = ticker.Shares * price;
-                                    }
-                                    else
-                                    {
-                                        _logger.LogError($"Market cap not found for {ticker.Symbol} and unable to derive.");
-                                    }
-                                    if (ev > 0)
-                                    {
-                                        ticker.DebtMinusCash = ev - ticker.MarketCap;
+                                        _logger.LogWarning($"Market cap not found for {ticker.Ticker.Symbol}. Deriving from shares*price");
+                                        ticker.Ticker.MarketCap = ticker.Ticker.Shares * ticker.Price;
                                     }
                                     else
                                     {
-                                        ticker.DebtMinusCash = ticker.MarketCap; //make this large to invalidate ticker
-                                        _logger.LogWarning($"Unable to calculate DebtMinusCash for {ticker.Symbol}. EV not found.");
+                                        _logger.LogError($"Market cap not found for {ticker.Ticker.Symbol} and unable to derive.");
+                                    }
+                                    if (ticker.EV > 0)
+                                    {
+                                        ticker.Ticker.DebtMinusCash = ticker.EV - ticker.Ticker.MarketCap;
+                                    }
+                                    else
+                                    {
+                                        ticker.Ticker.DebtMinusCash = ticker.Ticker.MarketCap; //make this large to invalidate ticker
+                                        //_logger.LogWarning($"Unable to calculate DebtMinusCash for {ticker.Ticker.Symbol}. EV not found.");
                                     }
                                 }
-                                else if(ticker.Earnings == 0)
+                                else if(ticker.Ticker.Earnings == 0)
                                 {
-                                    _logger.LogError($"Earnings ratio unavailable for {ticker.Symbol}. Earnings not found.");
+                                    //_logger.LogError($"Earnings ratio unavailable for {ticker.Ticker.Symbol}. Earnings not found.");
                                 }
                                 tickers.Add(ticker);
                             }
@@ -241,9 +262,47 @@ namespace NumbersGoUp.Utils
                 }
                 await _tickerHash.WriteNewHash(currentHash);
             }
-            return tickers;
+            return new TickerBankProcessorResult
+            {
+                LastModified = await _tickerFile.GetLastModified(),
+                BankTickers = tickers.ToArray()
+            };
         }
-        
+        //private static ProcessorBankTicker[] FinalCalc(List<ProcessorBankTicker> tickers)
+        //{
+        //    if(tickers.Count == 0) { return new ProcessorBankTicker[] { }; }
+        //    var orderedTickers = tickers.OrderByDescending(t => t.Ticker.MarketCap).ToArray();
+        //    for (var i = 0; i < orderedTickers.Length; i++)
+        //    {
+        //        var ticker = orderedTickers[i];
+        //        var eps = ticker.Ticker.EPS;
+        //        if (ticker.EPSGrowth.HasValue && eps > 0)
+        //        {
+        //            var epsGrowth = (ticker.EPSGrowth.Value + 100) / 100;
+        //            var previousEPS = eps / epsGrowth;
+        //            var avgEPS = (eps + previousEPS) / 2;
+        //            if (epsGrowth < 0)
+        //            {
+        //                var curveExp = 2 + (Convert.ToDouble(i * 8) / orderedTickers.Length);
+        //                var epsRatio = eps / avgEPS;
+        //                var epsMultiplier = epsRatio.Curve4(curveExp);
+        //                eps *= epsMultiplier;
+        //            }
+        //            else 
+        //            {
+        //                var curveExp = 1 + (Convert.ToDouble(i) / orderedTickers.Length);
+        //                var epsRatio = (avgEPS - ticker.CurrentEPS) / ticker.CurrentEPS;
+        //                var epsMultiplier = epsRatio.Curve1(curveExp) + 1;
+        //                eps *= epsMultiplier;
+        //            }
+        //            ticker.Ticker.EPS = eps;
+        //            ticker.Ticker.Earnings = eps * ticker.Ticker.Shares;
+        //            ticker.Ticker.PERatio = ticker.Price / eps;
+        //            ticker.Ticker.EVEarnings = ticker.EV / ticker.Ticker.Earnings;
+        //        }
+        //    }
+        //    return orderedTickers;
+        //}
         public void UpdateBankTicker(BankTicker dest, BankTicker src)
         {
             dest.Sector = src.Sector;
@@ -259,5 +318,22 @@ namespace NumbersGoUp.Utils
             dest.DebtMinusCash = src.DebtMinusCash;
             dest.Shares = src.Shares;
         }
+    }
+    public class TickerBankProcessorResult
+    {
+        public DateTimeOffset? LastModified { get; set; }
+        public ProcessorBankTicker[] BankTickers { get; set; }
+    }
+    public class ProcessorBankTicker
+    {
+        public ProcessorBankTicker()
+        {
+            Ticker = new BankTicker();
+        }
+        //public double? EPSGrowth { get; set; }
+        public double Price { get; set; }
+        public double EV { get; set; }
+        public DateTime? RecentEarningsDate { get; set; }
+        public BankTicker Ticker { get; }
     }
 }

@@ -109,10 +109,6 @@ namespace NumbersGoUp.Services
             if (barMetrics.Length == FEATURE_HISTORY_DAY)
             {
                 double peRatio = ticker.EPS > 0 ? (barMetrics[0].HistoryBar.Price() / ticker.EPS) : _peratioCutoff;
-                if (_tickerService.TickerWhitelist.TickerAny(ticker))
-                {
-                    peRatio = Math.Min(peRatio, _peratioCutoff * 0.4);
-                }
                 double pricePrediction;
 
                 if (buy)

@@ -16,6 +16,7 @@ namespace NumbersGoUp.Utils
 {
     public interface ITickerFile
     {
+        Task<DateTimeOffset?> GetLastModified();
         public Task<Stream> OpenRead();
     }
     public interface ITickerHash

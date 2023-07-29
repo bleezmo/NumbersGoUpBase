@@ -46,7 +46,6 @@ namespace NumbersGoUp.Services
         private readonly IStocksContextFactory _contextFactory;
         private readonly IRuntimeSettings _runtimeSettings;
         private readonly TickerBankService _tickerBankService;
-        public string[] TickerWhitelist { get; }
         public string[] TickerBlacklist { get; }
 
         public double PERatioCutoff { get; }
@@ -66,7 +65,6 @@ namespace NumbersGoUp.Services
             _tickerBankService = tickerBankService;
             PERatioCutoff = tickerBankService.EarningsMultipleCutoff * 0.85;
             TickerBlacklist = tickerBankService.TickerBlacklist;
-            TickerWhitelist = tickerBankService.TickerWhitelist;
         }
         public async Task<IEnumerable<Ticker>> GetTickers()
         {
@@ -180,14 +178,7 @@ namespace NumbersGoUp.Services
                     var toUpdate = new List<Ticker>();
                     foreach (var ticker in tickers)
                     {
-                        if (TickerWhitelist.TickerAny(ticker))
-                        {
-                            ticker.PerformanceVector = 100;
-                            ticker.LastCalculatedPerformance = now.UtcDateTime;
-                            ticker.LastCalculatedPerformanceMillis = nowMillis;
-                            stocksContext.Tickers.Update(ticker);
-                        }
-                        else if (ticker.MonthTrend > -1000 && ticker.PERatio > 0 && ticker.PERatio < PERatioCutoff &&
+                        if (ticker.MonthTrend > -1000 && ticker.PERatio > 0 && ticker.PERatio < PERatioCutoff &&
                              ticker.EVEarnings > 0 && ticker.EVEarnings < _tickerBankService.EarningsMultipleCutoff)
                         {
                             toUpdate.Add(ticker);
@@ -321,7 +312,7 @@ namespace NumbersGoUp.Services
                 {
                     var tickers = await stocksContext.Tickers.ToArrayAsync(_appCancellation.Token);
                     var bankTickers = await stocksContext.TickerBank.Where(t => t.PerformanceVector > 0).ToArrayAsync(_appCancellation.Token);
-                    bankTickers = GetFilteredBankTickers(bankTickers).Where(t => t.PERatio < PERatioCutoff || TickerWhitelist.Any(symbol => symbol == t.Symbol)).ToArray();
+                    bankTickers = GetFilteredBankTickers(bankTickers).Where(t => t.PERatio < PERatioCutoff).ToArray();
                     var positions = await _brokerService.GetPositions();
                     var positionSymbols = positions.Select(p => p.Symbol).ToArray();
                     var bankTickerPositions = await stocksContext.TickerBank.Where(t => positionSymbols.Contains(t.Symbol)).ToArrayAsync(_appCancellation.Token);
