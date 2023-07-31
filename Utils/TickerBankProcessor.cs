@@ -145,42 +145,47 @@ namespace NumbersGoUp.Utils
                                 {
                                     if (currentEPSIndex.HasValue && double.TryParse(csv[currentEPSIndex.Value], out var currentEPS) &&
                                         futureEPSIndex.HasValue && double.TryParse(csv[futureEPSIndex.Value], out var futureEPS) &&
-                                        epsQoQIndex.HasValue && double.TryParse(csv[epsQoQIndex.Value], out var epsQoQGrowth))
+                                        epsQoQIndex.HasValue && double.TryParse(csv[epsQoQIndex.Value], out var epsQoQGrowth) &&
+                                        epsQoQGrowth > -100 && epsQoQGrowth < 100)
                                     {
-                                        if (epsQoQGrowth > -100 && epsQoQGrowth < 300)
+                                        epsQoQGrowth = (epsQoQGrowth + 100) / 100;
+                                        var pastEPS = currentEPS / epsQoQGrowth;
+                                        var quarters = new[] { pastEPS, currentEPS, futureEPS };
+                                        var finalQ = quarters.CalculateFutureRegression(1);
+                                        var calculatedEPS = pastEPS + currentEPS + futureEPS + finalQ;
+                                        if (finalQ > 0 && finalQ > quarters.Min() && eps > 0)
                                         {
-                                            epsQoQGrowth = (epsQoQGrowth + 100) / 100;
-                                            var pastEPS = currentEPS / epsQoQGrowth;
-                                            var finalQ = new[] { pastEPS, currentEPS, futureEPS }.CalculateFutureRegression(1);
-                                            var calculatedEPS = finalQ > 0 ? (pastEPS + currentEPS + futureEPS + finalQ) : -1;
-                                            if(calculatedEPS > 0)
-                                            {
-                                                var coeff = (calculatedEPS / eps).DoubleReduce(2, 1);
-                                                ticker.Ticker.EPS = (coeff * eps) + ((1 - coeff) * calculatedEPS);
-                                            }
+                                            var coeff = (calculatedEPS / eps).DoubleReduce(2, 1);
+                                            ticker.Ticker.EPS = (coeff * eps) + ((1 - coeff) * calculatedEPS);
+                                        }
+                                        else
+                                        {
+                                            ticker.Ticker.EPS = Math.Min(eps, calculatedEPS * 0.7);
                                         }
                                     }
-                                    else if (epsGrowthIndex.HasValue && double.TryParse(csv[epsGrowthIndex.Value], out var epsGrowth))
+                                    else if (epsGrowthIndex.HasValue && double.TryParse(csv[epsGrowthIndex.Value], out var epsGrowth) && 
+                                             epsGrowth > -100 && epsGrowth < 300)
                                     {
                                         epsGrowth = (epsGrowth + 100) / 100;
-                                        if (epsGrowth > 0 && epsGrowth < 4)
+                                        if (epsGrowth < 1)
                                         {
-                                            if (epsGrowth < 1)
-                                            {
-                                                var coeff = epsGrowth;
-                                                ticker.Ticker.EPS = ((1 - coeff) * eps) + (coeff * eps * epsGrowth);
-                                            }
-                                            else
-                                            {
-                                                var previousEPS = eps / epsGrowth;
-                                                ticker.Ticker.EPS = (eps + previousEPS) / 2;
-                                            }
+                                            var coeff = epsGrowth;
+                                            ticker.Ticker.EPS = ((1 - coeff) * eps) + (coeff * eps * epsGrowth);
                                         }
+                                        else
+                                        {
+                                            var previousEPS = Math.Min(eps, eps / epsGrowth);
+                                            ticker.Ticker.EPS = (eps + previousEPS) / 2;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        ticker.Ticker.EPS = Math.Min(eps, eps * 0.5);
                                     }
                                 }
                                 else
                                 {
-                                    //_logger.LogError($"Current and/or future eps not found. Using default eps for {ticker.Ticker.Symbol}");
+                                    //_logger.LogError($"EPS not found for {ticker.Ticker.Symbol}");
                                 }
                                 if (sharesIndex.HasValue && double.TryParse(csv[sharesIndex.Value], out var shares))
                                 {

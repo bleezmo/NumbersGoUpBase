@@ -311,51 +311,36 @@ namespace NumbersGoUp.Services
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
                     var tickers = await stocksContext.Tickers.ToArrayAsync(_appCancellation.Token);
-                    var bankTickers = await stocksContext.TickerBank.Where(t => t.PerformanceVector > 0).ToArrayAsync(_appCancellation.Token);
-                    bankTickers = GetFilteredBankTickers(bankTickers).Where(t => t.PERatio < PERatioCutoff).ToArray();
+                    var bankTickersFull = await stocksContext.TickerBank.ToArrayAsync(_appCancellation.Token);
+                    var filteredBankTickers = GetFilteredBankTickers(bankTickersFull).ToArray();
                     var positions = await _brokerService.GetPositions();
-                    var positionSymbols = positions.Select(p => p.Symbol).ToArray();
-                    var bankTickerPositions = await stocksContext.TickerBank.Where(t => positionSymbols.Contains(t.Symbol)).ToArrayAsync(_appCancellation.Token);
                     var count = tickers.Length;
                     foreach (var ticker in tickers)
                     {
-                        var bankTicker = bankTickers.FirstOrDefault(t => ticker.Symbol == t.Symbol);
-                        if (bankTicker != null)
+                        var bankTicker = filteredBankTickers.FirstOrDefault(t => ticker.Symbol == t.Symbol);
+                        var hasPosition = positions.Any(p => p.Symbol == ticker.Symbol);
+                        if (bankTicker != null && (bankTicker.PERatio < PERatioCutoff || hasPosition))
                         {
-                            ticker.Sector = bankTicker.Sector;
-                            ticker.PERatio = bankTicker.PERatio;
-                            ticker.EVEarnings = bankTicker.EVEarnings;
-                            ticker.EPS = bankTicker.EPS;
-                            ticker.Earnings = bankTicker.Earnings;
-                            ticker.DividendYield = bankTicker.DividendYield;
-                            ticker.DebtMinusCash = bankTicker.DebtMinusCash;
-                            ticker.Shares = bankTicker.Shares;
-                            ticker.MarketCap = bankTicker.MarketCap;
+                            TickerCopy(ticker, bankTicker);
                             ticker.LastCalculated = now.UtcDateTime;
                             ticker.LastCalculatedMillis = nowMillis;
                             stocksContext.Tickers.Update(ticker);
                         }
-                        else if (bankTickers.Length < 100 && ticker.PerformanceVector > 50) //keep some tickers if the bank size is to small
+                        else if (filteredBankTickers.Length < 100 && ticker.PerformanceVector > 50) //keep some tickers if the bank size is to small
                         {
                             ticker.LastCalculated = now.UtcDateTime;
                             ticker.LastCalculatedMillis = nowMillis;
                             stocksContext.Tickers.Update(ticker);
                         }
-                        else if (positions.Any(p => p.Symbol == ticker.Symbol))
+                        else if (hasPosition)
                         {
                             _logger.LogWarning($"Could not remove {ticker.Symbol}. Position exists. Modifying properties to encourage selling.");
-                            var bankTickerPosition = bankTickerPositions.FirstOrDefault(t => t.Symbol == ticker.Symbol);
+                            var bankTickerPosition = bankTickersFull.FirstOrDefault(t => t.Symbol == ticker.Symbol);
                             if (bankTickerPosition != null)
                             {
-                                ticker.Sector = bankTickerPosition.Sector;
-                                ticker.PERatio = bankTickerPosition.PERatio;
-                                ticker.EVEarnings = bankTickerPosition.EVEarnings;
-                                ticker.EPS = Math.Min(bankTickerPosition.EPS, ticker.EPS) * 2 / 3;
-                                ticker.Earnings = Math.Min(bankTickerPosition.Earnings, ticker.EPS) * 2 / 3;
-                                ticker.DividendYield = bankTickerPosition.DividendYield;
-                                ticker.DebtMinusCash = bankTickerPosition.DebtMinusCash;
-                                ticker.Shares = bankTickerPosition.Shares;
-                                ticker.MarketCap = bankTickerPosition.MarketCap;
+                                TickerCopy(ticker, bankTickerPosition);
+                                ticker.EPS = Math.Min(bankTickerPosition.EPS, ticker.EPS) * 0.75;
+                                ticker.Earnings = Math.Min(bankTickerPosition.Earnings, ticker.EPS) * 0.75;
                             }
                             else
                             {
@@ -375,26 +360,17 @@ namespace NumbersGoUp.Services
                         }
                     }
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
-                    foreach (var bankTicker in bankTickers)
+                    foreach (var bankTicker in filteredBankTickers)
                     {
                         if(count > 200) { break; }
                         if (!tickers.Any(t => t.Symbol == bankTicker.Symbol))
                         {
-                            stocksContext.Tickers.Add(new Ticker
+                            stocksContext.Tickers.Add(TickerCopy(new Ticker
                             {
                                 Symbol = bankTicker.Symbol,
-                                Sector = bankTicker.Sector,
-                                PERatio = bankTicker.PERatio,
-                                EPS = bankTicker.EPS,
-                                Earnings = bankTicker.Earnings,
-                                EVEarnings = bankTicker.EVEarnings,
-                                DividendYield = bankTicker.DividendYield,
-                                DebtMinusCash = bankTicker.DebtMinusCash,
-                                Shares = bankTicker.Shares,
-                                MarketCap = bankTicker.MarketCap,
                                 LastCalculated = now.UtcDateTime,
                                 LastCalculatedMillis = nowMillis
-                            });
+                            }, bankTicker));
                             count++;
                         }
                     }
@@ -405,7 +381,7 @@ namespace NumbersGoUp.Services
         private static IEnumerable<BankTicker> GetFilteredBankTickers(BankTicker[] bankTickersFull)
         {
             var sectorDict = new Dictionary<string, List<BankTicker>>();
-            foreach (var ticker in bankTickersFull)
+            foreach (var ticker in bankTickersFull.Where(t => t.PerformanceVector > 0))
             {
                 if (sectorDict.TryGetValue(ticker.Sector, out var sectorTickers))
                 {
@@ -429,6 +405,19 @@ namespace NumbersGoUp.Services
                 }
             }
             return filteredBankTickers.OrderByDescending(t => t.PerformanceVector).Take(MAX_BANK_TICKERS);
+        }
+        private static Ticker TickerCopy(Ticker ticker, BankTicker bankTicker)
+        {
+            ticker.Sector = bankTicker.Sector;
+            ticker.PERatio = bankTicker.PERatio;
+            ticker.EVEarnings = bankTicker.EVEarnings;
+            ticker.EPS = bankTicker.EPS;
+            ticker.Earnings = bankTicker.Earnings;
+            ticker.DividendYield = bankTicker.DividendYield;
+            ticker.DebtMinusCash = bankTicker.DebtMinusCash;
+            ticker.Shares = bankTicker.Shares;
+            ticker.MarketCap = bankTicker.MarketCap;
+            return ticker;
         }
     }
 }

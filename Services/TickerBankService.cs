@@ -66,6 +66,7 @@ namespace NumbersGoUp.Services
                 {
                     var dbTickers = await stocksContext.TickerBank.ToArrayAsync(_appCancellation.Token);
                     List<BankTicker> toUpdate = new List<BankTicker>(), toAdd = new List<BankTicker>(), toRemove = new List<BankTicker>();
+                    DateTime now = DateTime.UtcNow;
                     foreach (var processorTicker in processorTickers)
                     {
                         var ticker = processorTicker.Ticker;
@@ -74,7 +75,7 @@ namespace NumbersGoUp.Services
                         var lastModified = result.LastModified.HasValue ? result.LastModified.Value.DateTime : DateTime.UtcNow;
                         var isCarryover = !isBlacklisted && IsCarryover(processorTicker, lastModified);
                         var passCutoff = !isBlacklisted && BasicCutoff(ticker);
-                        if (!isBlacklisted && processorTicker.RecentEarningsDate.Value.Date.CompareTo(lastModified.Date) == 0) 
+                        if (!isBlacklisted && processorTicker.RecentEarningsDate.HasValue && processorTicker.RecentEarningsDate.Value.Date.CompareTo(lastModified.Date) == 0)
                         {
                             _logger.LogInformation($"Ignoring {ticker.Symbol}. Recent Earnings Date matches last modified.");
                         }
@@ -89,16 +90,23 @@ namespace NumbersGoUp.Services
                                     if (isCarryover)
                                     {
                                         _logger.LogInformation($"Missing values due to recent earnings update for {ticker.Symbol}. Using old values.");
-                                        dbTicker.PriceChangeAvg = priceChangeAvg;
+                                        dbTicker.PriceChangeAvg = priceChangeAvg ?? 0.0;
                                     }
                                     else
                                     {
-                                        ticker.PriceChangeAvg = priceChangeAvg;
+                                        ticker.PriceChangeAvg = priceChangeAvg ?? 0.0;
                                         _tickerProcessor.UpdateBankTicker(dbTicker, ticker);
                                     }
+                                    dbTicker.LastCalculatedFinancials = now;
+                                    dbTicker.LastCalculatedFinancialsMillis = new DateTimeOffset(now).ToUnixTimeMilliseconds();
                                     toUpdate.Add(dbTicker);
                                 }
-                                else if(passCutoff){ toAdd.Add(ticker); }
+                                else if(passCutoff)
+                                {
+                                    ticker.LastCalculatedFinancials = now.Date;
+                                    ticker.LastCalculatedFinancialsMillis = new DateTimeOffset(now).ToUnixTimeMilliseconds();
+                                    toAdd.Add(ticker); 
+                                }
                             }
                             catch (Exception e)
                             {
@@ -106,6 +114,13 @@ namespace NumbersGoUp.Services
                             }
                         }
                         else if(dbTicker != null)
+                        {
+                            toRemove.Add(dbTicker);
+                        }
+                    }
+                    foreach(var dbTicker in dbTickers)
+                    {
+                        if(!processorTickers.Any(t => t.Ticker.Symbol == dbTicker.Symbol))
                         {
                             toRemove.Add(dbTicker);
                         }
@@ -144,12 +159,26 @@ namespace NumbersGoUp.Services
                         {
                             if (t.EPS > 0)
                             {
-                                var currentBar = await stocksContext.HistoryBars.Where(b => b.Symbol == t.Symbol).OrderByDescending(b => b.BarDayMilliseconds).FirstOrDefaultAsync(_appCancellation.Token);
+                                HistoryBar currentBar = null;
+                                if(!t.LastCalculatedFinancials.HasValue || t.LastCalculatedFinancials.Value.CompareTo(now.AddDays(-7)) < 0)
+                                {
+                                    var bars = await stocksContext.HistoryBars.Where(b => b.Symbol == t.Symbol).OrderByDescending(b => b.BarDayMilliseconds).ToArrayAsync(_appCancellation.Token);
+                                    if(bars.Length > 0)
+                                    {
+                                        t.PriceChangeAvg = CalculatePriceChangeAvg(bars) ?? t.PriceChangeAvg;
+                                        currentBar = bars[0];
+                                    }
+                                }
+                                else
+                                {
+                                    currentBar = await stocksContext.HistoryBars.Where(b => b.Symbol == t.Symbol).OrderByDescending(b => b.BarDayMilliseconds).FirstOrDefaultAsync(_appCancellation.Token);
+                                }
                                 var price = currentBar != null ? currentBar.ClosePrice : (await _brokerService.GetLastTrade(t.Symbol)).Price;
                                 t.PERatio = price / t.EPS;
                                 t.MarketCap = price * t.Shares;
                                 if(t.Earnings > 0) { t.EVEarnings = (t.MarketCap + t.DebtMinusCash) / t.Earnings; }
-
+                                t.LastCalculatedFinancials = now;
+                                t.LastCalculatedFinancialsMillis = new DateTimeOffset(now).ToUnixTimeMilliseconds();
                             }
                         }
                         catch (Exception e)
@@ -208,9 +237,9 @@ namespace NumbersGoUp.Services
                 }
             }
         }
-        private double CalculatePriceChangeAvg(HistoryBar[] bars)
+        private double? CalculatePriceChangeAvg(HistoryBar[] bars)
         {
-            if(bars == null || bars.Length == 0) { return 0.0; }
+            if(bars == null || bars.Length == 0) { return null; }
             var now = DateTime.Now;
             var datePointer = _lookbackDate;
             var priceChanges = new List<double>();
@@ -238,13 +267,13 @@ namespace NumbersGoUp.Services
                 else
                 {
                     _logger.LogWarning($"Standard deviation was zero for some reason. Symbol {bars[0].Symbol}");
-                    return 0.0;
+                    return avg;
                 }
             }
             else
             {
                 _logger.LogDebug($"Insufficient price information for {bars[0].Symbol}");
-                return 0.0;
+                return null;
             }
         }
     }
