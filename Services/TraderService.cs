@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NumbersGoUp.Models;
@@ -9,14 +10,10 @@ namespace NumbersGoUp.Services
 {
     public class TraderService
     {
-        public const double MAX_SECURITY_BUY = 0.02;
-        public const double MAX_SECURITY_SELL = MAX_SECURITY_BUY * 2 / 3;
         public const double MAX_DAILY_BUY = 0.1;
-        public const double MAX_DAILY_SELL = 0.1;
-        public const double MULTIPLIER_BUY_THRESHOLD = 0.2;
-        public const double MULTIPLIER_SELL_THRESHOLD = 0.4;
         public const double MAX_COOLDOWN_DAYS = 10;
-        public const bool USE_MARGIN = false;
+        private const string DISABLE_SELLS = "DisableSells";
+        private const string DISABLE_BUYS = "DisableBuys";
 
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<TraderService> _logger;
@@ -26,10 +23,12 @@ namespace NumbersGoUp.Services
         private readonly DataService _dataService;
         private readonly string _environmentName;
         private readonly IStocksContextFactory _contextFactory;
+        private readonly bool _disableBuys;
+        private readonly bool _disableSells;
         private Account _account;
         private double _cashEquityRatio;
 
-        public TraderService(IAppCancellation appCancellation, IHostEnvironment environment, ILogger<TraderService> logger, TickerService tickerService, 
+        public TraderService(IConfiguration configuration, IAppCancellation appCancellation, IHostEnvironment environment, ILogger<TraderService> logger, TickerService tickerService, 
                              IBrokerService brokerService, RebalancerService rebalancerService, DataService dataService, IStocksContextFactory contextFactory)
         {
             _appCancellation = appCancellation;
@@ -40,6 +39,8 @@ namespace NumbersGoUp.Services
             _dataService = dataService;
             _environmentName = environment.EnvironmentName;
             _contextFactory = contextFactory;
+            _disableBuys = bool.TryParse(configuration[DISABLE_BUYS], out var disableBuys) ? disableBuys : false;
+            _disableSells = bool.TryParse(configuration[DISABLE_SELLS], out var disableSells) ? disableSells : false;
         }
         public async Task Run()
         {
@@ -225,6 +226,7 @@ namespace NumbersGoUp.Services
         }
         private async Task ExecuteSells(StockRebalancer[] rebalancers)
         {
+            if (_disableSells) { return; }
             var now = DateTime.UtcNow;
             var equity = _account.Balance.TradeableEquity;
             foreach (var rebalancer in rebalancers)
@@ -295,6 +297,7 @@ namespace NumbersGoUp.Services
         private double priorityOrdering(BuyState bss) => bss.Rebalancer.Ticker.PerformanceVector * bss.ProfitLossPerc.ZeroReduce(bss.Rebalancer.Ticker.ProfitLossAvg + bss.Rebalancer.Ticker.ProfitLossStDev, (bss.Rebalancer.Ticker.ProfitLossAvg + bss.Rebalancer.Ticker.ProfitLossStDev) * -1);
         private async Task ExecuteBuys(StockRebalancer[] rebalancers, double remainingBuyAmount)
         {
+            if (_disableBuys) { return; }
             var now = DateTime.UtcNow;
             var equity = _account.Balance.TradeableEquity;
             var buys = new List<BuyState>();
