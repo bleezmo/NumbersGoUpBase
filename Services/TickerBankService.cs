@@ -142,7 +142,9 @@ namespace NumbersGoUp.Services
                                                        (ticker.CurrentRatio > (ticker.DebtEquityRatio * 1.2) || ticker.DebtEquityRatio < 0.9) && (ticker.DebtMinusCash / ticker.MarketCap) < 0.5 && 
                                                        ticker.Earnings > 0 && ticker.DividendYield > 0 && ticker.EPS > 0 && ticker.EVEarnings > 0 && ticker.EVEarnings < EarningsMultipleCutoff;
         private bool IsCarryover(ProcessorBankTicker ticker, DateTime lastDownloaded) => ticker.RecentEarningsDate.HasValue && ticker.RecentEarningsDate.Value.CompareTo(lastDownloaded.AddDays(-15)) > 0 && 
-                                                                          ((ticker.Ticker.CurrentRatio == 0 && ticker.Ticker.DebtEquityRatio == 0) || ticker.Ticker.EVEarnings == 0 || ticker.Ticker.EPS == 0);
+                                                                          ((ticker.Ticker.CurrentRatio == 0 && ticker.Ticker.DebtEquityRatio == 0) || 
+                                                                            ticker.Ticker.EVEarnings == 0 || ticker.Ticker.EPS == 0 || 
+                                                                            (!ticker.QoQEPSGrowth.HasValue && !ticker.YoYEPSGrowth.HasValue));
         public async Task CalculatePerformance()
         {
             var now = DateTime.UtcNow;

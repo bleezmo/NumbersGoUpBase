@@ -148,6 +148,7 @@ namespace NumbersGoUp.Utils
                                         epsQoQIndex.HasValue && double.TryParse(csv[epsQoQIndex.Value], out var epsQoQGrowth) &&
                                         epsQoQGrowth > -100 && epsQoQGrowth < 100)
                                     {
+                                        ticker.QoQEPSGrowth = epsQoQGrowth;
                                         epsQoQGrowth = (epsQoQGrowth + 100) / 100;
                                         var pastEPS = currentEPS / epsQoQGrowth;
                                         var quarters = new[] { pastEPS, currentEPS, futureEPS };
@@ -166,6 +167,7 @@ namespace NumbersGoUp.Utils
                                     else if (epsGrowthIndex.HasValue && double.TryParse(csv[epsGrowthIndex.Value], out var epsGrowth) && 
                                              epsGrowth > -100 && epsGrowth < 300)
                                     {
+                                        ticker.YoYEPSGrowth = epsGrowth;
                                         epsGrowth = (epsGrowth + 100) / 100;
                                         if (epsGrowth < 1)
                                         {
@@ -335,7 +337,8 @@ namespace NumbersGoUp.Utils
         {
             Ticker = new BankTicker();
         }
-        //public double? EPSGrowth { get; set; }
+        public double? QoQEPSGrowth { get; set; }
+        public double? YoYEPSGrowth { get; set; }
         public double Price { get; set; }
         public double EV { get; set; }
         public DateTime? RecentEarningsDate { get; set; }
