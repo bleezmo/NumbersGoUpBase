@@ -37,6 +37,11 @@ namespace NumbersGoUpBase.Services
         {
             var equity = balance.TradeableEquity;
             var cash = balance.TradableCash;
+            if(equity < 1)
+            {
+                _logger.LogError($"No equity available! Skipping rebalance.");
+                return Enumerable.Empty<IRebalancer>();
+            }
             var allTickers = await _tickerService.GetFullTickerList();
             foreach(var position in positions.Where(p => !BondSymbols.Contains(p.Symbol)))
             {
@@ -113,7 +118,13 @@ namespace NumbersGoUpBase.Services
                                 diff *= prediction.SellMultiplier.Curve6(1);
                             }
                         }
-                        if (Math.Abs(diffPerc) > 12)
+                        var diffCutoff = 12.0;
+                        if(diff < 0)
+                        {
+                            var gain = position.MarketValue.Value - position.CostBasis;
+                            diffCutoff = (gain / equity).DoubleReduce(0.1, 0, 50, diffCutoff);
+                        }
+                        if (Math.Abs(diffPerc) > diffCutoff)
                         {
                             rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, diff, prediction)
                             {

@@ -226,7 +226,11 @@ namespace NumbersGoUp.Services
         }
         private async Task ExecuteSells(StockRebalancer[] rebalancers)
         {
-            if (_disableSells) { return; }
+            if (_disableSells) 
+            {
+                _logger.LogInformation("Sells disabled.");
+                return; 
+            }
             var now = DateTime.UtcNow;
             var equity = _account.Balance.TradeableEquity;
             foreach (var rebalancer in rebalancers)
@@ -297,7 +301,11 @@ namespace NumbersGoUp.Services
         private double priorityOrdering(BuyState bss) => bss.Rebalancer.Ticker.PerformanceVector * bss.ProfitLossPerc.ZeroReduce(bss.Rebalancer.Ticker.ProfitLossAvg + bss.Rebalancer.Ticker.ProfitLossStDev, (bss.Rebalancer.Ticker.ProfitLossAvg + bss.Rebalancer.Ticker.ProfitLossStDev) * -1);
         private async Task ExecuteBuys(StockRebalancer[] rebalancers, double remainingBuyAmount)
         {
-            if (_disableBuys) { return; }
+            if (_disableBuys) 
+            {
+                _logger.LogInformation("Buys disabled.");
+                return; 
+            }
             var now = DateTime.UtcNow;
             var equity = _account.Balance.TradeableEquity;
             var buys = new List<BuyState>();

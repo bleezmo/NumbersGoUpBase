@@ -349,6 +349,7 @@ namespace NumbersGoUp.Services
         public async Task GenerateMetricsExternal()
         {
             var tickers = await _tickerService.GetFullTickerList();
+            await StartCollection(tickers);
             await GenerateMetrics(tickers);
         }
 #endif

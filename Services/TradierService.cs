@@ -140,6 +140,7 @@ namespace NumbersGoUp.Services
         private async Task LoadMarketDays(int month, int year)
         {
             var now = DateTime.Now;
+            if(now.Hour > 12) { now = now.AddHours(9 - now.Hour); }
             await _rateLimiter.LimitTradierRate();
             var calendar = await GetResponse<TradierCalendarWrapper>(string.Format(CalendarPath, month.ToString("00"), year));
             var days = calendar.Calendar.DayWrapper.Days.Where(d => d.Status == "open").Select(day => new MarketDay
