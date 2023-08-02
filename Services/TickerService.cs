@@ -122,7 +122,10 @@ namespace NumbersGoUp.Services
                     foreach (var ticker in tickers) //filter any positions we currently hold in case we find we want to remove them
                     {
                         ticker.MonthTrend = -1000; //default if ticker is invalid
-                                                     //var nowTestMillis = new DateTimeOffset(now.AddYears(-5)).ToUnixTimeMilliseconds();
+                        if(TickerBlacklist.Any(s => s == ticker.Symbol))
+                        {
+                            continue;
+                        }
                         var bars = await stocksContext.HistoryBars.Where(bar => bar.Symbol == ticker.Symbol && bar.BarDayMilliseconds > lookback).OrderBy(b => b.BarDayMilliseconds).ToArrayAsync(_appCancellation.Token);
                         if (bars.Any())
                         {

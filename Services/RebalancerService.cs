@@ -184,7 +184,7 @@ namespace NumbersGoUpBase.Services
 
         private static double PerformanceValue(PerformanceTicker performanceTicker)
         {
-            var performanceValue = Math.Pow(performanceTicker.Ticker.PerformanceVector, 2);
+            var performanceValue = performanceTicker.Ticker.PerformanceVector;
             return performanceValue;
         }
     }
