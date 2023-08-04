@@ -10,10 +10,10 @@ namespace NumbersGoUp.Services
 {
     public class TraderService
     {
-        public const double MAX_DAILY_BUY = 0.1;
         public const double MAX_COOLDOWN_DAYS = 10;
         private const string DISABLE_SELLS = "DisableSells";
         private const string DISABLE_BUYS = "DisableBuys";
+        public const string MAX_DAILY_BUY = "MaxDailyBuy";
 
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<TraderService> _logger;
@@ -25,6 +25,7 @@ namespace NumbersGoUp.Services
         private readonly IStocksContextFactory _contextFactory;
         private readonly bool _disableBuys;
         private readonly bool _disableSells;
+        private readonly double _maxDailyBuy;
         private Account _account;
         private double _cashEquityRatio;
 
@@ -41,6 +42,7 @@ namespace NumbersGoUp.Services
             _contextFactory = contextFactory;
             _disableBuys = bool.TryParse(configuration[DISABLE_BUYS], out var disableBuys) ? disableBuys : false;
             _disableSells = bool.TryParse(configuration[DISABLE_SELLS], out var disableSells) ? disableSells : false;
+            _maxDailyBuy = double.TryParse(configuration[MAX_DAILY_BUY], out var maxBuy) ? maxBuy : 2000;
         }
         public async Task Run()
         {
@@ -207,7 +209,7 @@ namespace NumbersGoUp.Services
             rebalancers = rebalancers.Where(r => !currentOrders.Any(o => o.Symbol == r.Symbol));
             var (stocks, bonds) = (rebalancers.Where(r => r.IsStock).Select(r => r as StockRebalancer), rebalancers.Where(r => r.IsBond).Select(r => r as BondRebalancer));
 
-            var remainingBuyAmount = Math.Min(_account.Balance.TradeableEquity * MAX_DAILY_BUY, _account.Balance.TradableCash);
+            var remainingBuyAmount = Math.Min(_maxDailyBuy, _account.Balance.TradableCash);
 
             remainingBuyAmount -= currentOrders.Select(o => o.Side == OrderSide.Buy ? o.AppliedAmt : 0).Sum();
             _logger.LogInformation($"Starting balance {_account.Balance.TradableCash:C2} and remaining buy amount {remainingBuyAmount:C2}");
