@@ -79,7 +79,7 @@ namespace NumbersGoUpBase.Services
                 totalPerformance += PerformanceValue(performanceTicker);
             }
             var rebalancers = new List<IRebalancer>();
-
+            var tickerEquity = equity * Convert.ToDouble(selectedTickers.Count).DoubleReduce(50, 0);
             foreach (var performanceTicker in selectedTickers)
             {
                 var prediction = performanceTicker.TickerPrediction;
@@ -87,7 +87,7 @@ namespace NumbersGoUpBase.Services
                 {
                     continue;
                 }
-                var calculatedPerformance = equity * PerformanceValue(performanceTicker) * performanceTicker.PerformanceMultiplier() * _predicterService.EncouragementMultiplier.DoubleReduce(0, -1) * _stockBondPerc;
+                var calculatedPerformance = tickerEquity * PerformanceValue(performanceTicker) * performanceTicker.PerformanceMultiplier() * _predicterService.EncouragementMultiplier.DoubleReduce(0, -1) * _stockBondPerc;
                 var targetValue = totalPerformance > 0 ? (calculatedPerformance / totalPerformance) : 0.0;
                 var position = performanceTicker.Position;
                 if (position == null && targetValue > 0 && performanceTicker.MeetsRequirements && cash > 0)

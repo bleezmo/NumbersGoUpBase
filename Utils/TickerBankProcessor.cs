@@ -57,7 +57,7 @@ namespace NumbersGoUp.Utils
                      */
                     int? tickerIndex = null, sectorIndex = null, marketCapIndex = null, peRatioIndex = null, currentRatioIndex = null, debtEquityRatioIndex = null, 
                          dividendIndex = null, ebitdaIndex = null, evebitdaIndex = null, epsIndex = null, priceIndex = null, sharesIndex = null, evIndex = null, 
-                         currentEPSIndex = null, futureEPSIndex = null, epsQoQIndex = null, epsGrowthIndex = null, recentEarningsIndex = null;
+                         currentEPSIndex = null, futureEPSIndex = null, epsQoQIndex = null, epsGrowthIndex = null, recentEarningsIndex = null, revenueGrowthIndex = null, incomeIndex = null;
                     using (var csv = new CsvReader(sr, CultureInfo.InvariantCulture))
                     {
                         string[] headers = null;
@@ -87,6 +87,8 @@ namespace NumbersGoUp.Utils
                                     if (headers[i] == "EPS Diluted (Quarterly QoQ Growth)") { epsQoQIndex = i; }
                                     if (headers[i] == "EPS Diluted (TTM YoY Growth)") { epsGrowthIndex = i; }
                                     if (headers[i] == "Recent Earnings Date") { recentEarningsIndex = i; }
+                                    if (headers[i] == "Revenue (TTM YoY Growth)") { revenueGrowthIndex = i; }
+                                    if (headers[i] == "Net Income (FY)") { incomeIndex = i; }
                                 }
                             }
                             else
@@ -95,6 +97,11 @@ namespace NumbersGoUp.Utils
                                 if (tickerIndex.HasValue)
                                 {
                                     ticker.Ticker.Symbol = csv[tickerIndex.Value];
+                                    if (ticker.Ticker.Symbol.Contains('.'))
+                                    {
+                                        _logger.LogInformation($"Excluding {ticker.Ticker.Symbol}");
+                                        continue;
+                                    }
                                 }
                                 else
                                 {
@@ -108,6 +115,14 @@ namespace NumbersGoUp.Utils
                                 else
                                 {
                                     _logger.LogError($"Sector not found for {ticker.Ticker.Symbol}");
+                                }
+                                if(revenueGrowthIndex.HasValue && double.TryParse(csv[revenueGrowthIndex.Value] ,out var revenueGrowth))
+                                {
+                                    ticker.RevenueGrowth = revenueGrowth;
+                                }
+                                if(incomeIndex.HasValue && double.TryParse(csv[incomeIndex.Value], out var income))
+                                {
+                                    ticker.Income = income;
                                 }
                                 if (peRatioIndex.HasValue && double.TryParse(csv[peRatioIndex.Value], out var peRatio))
                                 {
@@ -337,6 +352,8 @@ namespace NumbersGoUp.Utils
         {
             Ticker = new BankTicker();
         }
+        public double? RevenueGrowth { get; set; }
+        public double? Income { get; set; }
         public double? QoQEPSGrowth { get; set; }
         public double? YoYEPSGrowth { get; set; }
         public double Price { get; set; }
