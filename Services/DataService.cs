@@ -7,7 +7,11 @@ namespace NumbersGoUp.Services
 {
     public class DataService
     {
+#if DEBUG
+        public const int LOOKBACK_YEARS = 12;
+#else
         public const int LOOKBACK_YEARS = 6;
+#endif
 
         private const int VOLEMA_LENGTH = 8;
         private const int SMA_LENGTH = 40;
@@ -18,7 +22,6 @@ namespace NumbersGoUp.Services
         private static readonly int _barLength = new int[] { VOLEMA_LENGTH, ALMA_LENGTH, SMA2_LENGTH, RSI_LENGTH, SMA_LENGTH, SMA3_LENGTH }.Max();
         private const long MILLIS_PER_HOUR = 60 * 60 * 1000;
         private const long MILLIS_PER_DAY = 24 * MILLIS_PER_HOUR;
-        private static readonly double[] _gaussianWeights = GaussianWeights(100);
 
         private readonly IBrokerService _brokerService;
         private readonly ILogger<DataService> _logger;
@@ -275,19 +278,19 @@ namespace NumbersGoUp.Services
                 var (sma2, sma2Upper, sma2Lower) = BollingerBands(bars.Take(SMA2_LENGTH).ToArray(), DefaultBarFn);
                 var (sma3, sma3Upper, sma3Lower) = BollingerBands(bars.Take(SMA3_LENGTH).ToArray(), DefaultBarFn);
                 var almaBars = bars.Take(ALMA_LENGTH).ToArray();
-                var alma = ApplyAlma(almaBars, DefaultBarFn);
-                barMetric.AlmaSMA1 = GetAngle(alma - sma, smaUpper - sma);
-                barMetric.AlmaSMA2 = GetAngle(alma - sma2, sma2Upper - sma2);
-                barMetric.AlmaSMA3 = GetAngle(alma - sma3, sma3Upper - sma3);
-                barMetric.PriceSMA1 = GetAngle(bars[0].Price() - sma, smaUpper - sma);
-                barMetric.PriceSMA2 = GetAngle(bars[0].Price() - sma2, sma2Upper - sma2);
-                barMetric.PriceSMA3 = GetAngle(bars[0].Price() - sma3, sma3Upper - sma3);
-                barMetric.SMASMA = GetAngle(sma - sma3, sma3Upper - sma3);
+                var alma = almaBars.ApplyAlma(DefaultBarFn);
+                barMetric.AlmaSMA1 = GetPerc(alma - sma, smaUpper - sma);
+                barMetric.AlmaSMA2 = GetPerc(alma - sma2, sma2Upper - sma2);
+                barMetric.AlmaSMA3 = GetPerc(alma - sma3, sma3Upper - sma3);
+                barMetric.PriceSMA1 = GetPerc(bars[0].Price() - sma, smaUpper - sma);
+                barMetric.PriceSMA2 = GetPerc(bars[0].Price() - sma2, sma2Upper - sma2);
+                barMetric.PriceSMA3 = GetPerc(bars[0].Price() - sma3, sma3Upper - sma3);
+                barMetric.SMASMA = GetPerc(sma - sma3, sma3Upper - sma3);
                 barMetric.ProfitLossPerc = (bars.First().Price() - bars.Last().Price()) * 100 / bars.Last().Price();
                 barMetric.WeekTrend = GetWeekTrend(bars.Take(SMA2_LENGTH).Reverse().ToArray());
-                var volAlma = ApplyAlma(almaBars, (bar) => Convert.ToDouble(bar.Volume));
+                var volAlma = almaBars.ApplyAlma((bar) => Convert.ToDouble(bar.Volume));
                 var (volSma, volSmaUpper, volSmaLower) = BollingerBands(bars.Take(SMA_LENGTH).ToArray(), (bar) => Convert.ToDouble(bar.Volume));
-                barMetric.VolAlmaSMA = GetAngle(volAlma - volSma, volSmaUpper - volSma);
+                barMetric.VolAlmaSMA = GetPerc(volAlma - volSma, volSmaUpper - volSma);
                 stocksContext.BarMetrics.Add(barMetric);
             }
             await stocksContext.SaveChangesAsync(_appCancellation.Token);
@@ -305,7 +308,7 @@ namespace NumbersGoUp.Services
                 slopes.Add(min - currentMin);
                 currentMin = min;
             }
-            return slopes.Reverse<double>().ToArray().ApplyAlma(_gaussianWeights);
+            return slopes.Reverse<double>().ToArray().ApplyAlma();
         }
 
         private static double DefaultBarFn(HistoryBar bar) => bar.Price();
@@ -317,39 +320,20 @@ namespace NumbersGoUp.Services
             var smaLower = sma - (stdev * 2.5);
             return (sma, smaUpper, smaLower);
         }
-        private static double GetAngle(double num, double denom)
+        private static double GetPerc(double num, double denom)
         {
             if (denom == 0) { return 0.0; }
             var perc = num / denom;
-            return Math.Asin(perc > 1 ? 1 : (perc < -1 ? -1 : perc)) * (180 / Math.PI);
-        }
-        private static double ApplyAlma(HistoryBar[] bars, Func<HistoryBar, double> barFn)
-        {
-            double WtdSum = 0, WtdNorm = 0;
-            for (int i = 0; i < bars.Length; i++)
-            {
-                WtdSum = WtdSum + (_gaussianWeights[i] * barFn(bars[i]));
-                WtdNorm = WtdNorm + _gaussianWeights[i];
-            }
-            return WtdSum / WtdNorm;
-        }
-        private static double[] GaussianWeights(int size)
-        {
-            double sigma = 6;
-            double offset = 0.85;
-            var weights = new double[size];
-            for (int i = 0; i < size; i++)
-            {
-                double eq = -1 * (Math.Pow((i + 1) - offset, 2) / Math.Pow(sigma, 2));
-                weights[i] = Math.Exp(eq);
-            }
-            return weights;
+            return perc * 100;
         }
 #if DEBUG
-        public async Task GenerateMetricsExternal()
+        public async Task GenerateMetricsExternal(bool collectHistory = true)
         {
             var tickers = await _tickerService.GetFullTickerList();
-            await StartCollection(tickers);
+            if (collectHistory)
+            {
+                await StartCollection(tickers);
+            }
             await GenerateMetrics(tickers);
         }
 #endif

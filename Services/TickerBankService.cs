@@ -21,8 +21,6 @@ namespace NumbersGoUp.Services
     {
         private const string EARNINGS_MULTIPLE_CUTOFF_KEY = "EarningsMultipleCutoff";
 
-        private static readonly double[] _gaussianWeights = Utils.Utils.GaussianWeights(DataService.LOOKBACK_YEARS * 4);
-
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<TickerBankService> _logger;
@@ -76,6 +74,7 @@ namespace NumbersGoUp.Services
                         var lastModified = result.LastModified.HasValue ? result.LastModified.Value.DateTime : DateTime.UtcNow;
                         var isCarryover = !isBlacklisted && IsCarryover(processorTicker, lastModified);
                         var passCutoff = !isBlacklisted && LoadCutoff(processorTicker);
+                        var hasPosition = dbTicker != null && positions.Any(p => p.Symbol == dbTicker.Symbol);
                         if (!isBlacklisted && processorTicker.RecentEarningsDate.HasValue && processorTicker.RecentEarningsDate.Value.Date.CompareTo(lastModified.Date) == 0)
                         {
                             _logger.LogInformation($"Ignoring {ticker.Symbol}. Recent Earnings Date matches last modified.");
@@ -83,35 +82,27 @@ namespace NumbersGoUp.Services
                         }
                         try
                         {
-                            if (dbTicker != null)
+                            if (isCarryover)
                             {
-                                dbTicker.LastCalculatedFinancials = now;
-                                dbTicker.LastCalculatedFinancialsMillis = new DateTimeOffset(now).ToUnixTimeMilliseconds();
-                                if (isCarryover)
+                                if(dbTicker != null) _logger.LogInformation($"Missing values due to recent earnings update for {ticker.Symbol}. Using old values.");
+                            }
+                            else if (passCutoff || hasPosition)
+                            {
+                                var bars = await stocksContext.HistoryBars.Where(b => b.Symbol == ticker.Symbol).ToArrayAsync(_appCancellation.Token);
+                                var priceChangeAvg = CalculatePriceChangeAvg(bars.Length > 0 ? bars : (await _brokerService.GetBarHistoryDay(ticker.Symbol, _lookbackDate)).ToArray());
+                                ticker.PriceChangeAvg = priceChangeAvg ?? 0.0;
+                                ticker.LastCalculatedFinancials = now;
+                                ticker.LastCalculatedFinancialsMillis = new DateTimeOffset(now).ToUnixTimeMilliseconds();
+                                if (dbTicker != null)
                                 {
-                                    _logger.LogInformation($"Missing values due to recent earnings update for {ticker.Symbol}. Using old values.");
-                                }
-                                else if(passCutoff || positions.Any(p => p.Symbol == dbTicker.Symbol))
-                                {
-                                    if (!ticker.LastCalculatedFinancials.HasValue || ticker.LastCalculatedFinancials.Value.CompareTo(now.AddDays(-7)) < 0)
-                                    {
-                                        var bars = await stocksContext.HistoryBars.Where(b => b.Symbol == ticker.Symbol).ToArrayAsync(_appCancellation.Token);
-                                        var priceChangeAvg = CalculatePriceChangeAvg(bars.Length > 0 ? bars : (await _brokerService.GetBarHistoryDay(ticker.Symbol, _lookbackDate)).ToArray());
-                                        ticker.PriceChangeAvg = priceChangeAvg ?? 0.0;
-                                    }
                                     _tickerProcessor.UpdateBankTicker(dbTicker, ticker);
                                     toUpdate.Add(dbTicker);
                                 }
-                                else
-                                {
-                                    toRemove.Add(dbTicker);
-                                }
+                                else { toAdd.Add(ticker); }
                             }
-                            else if(passCutoff)
+                            else if (dbTicker != null)
                             {
-                                ticker.LastCalculatedFinancials = now.Date;
-                                ticker.LastCalculatedFinancialsMillis = new DateTimeOffset(now).ToUnixTimeMilliseconds();
-                                toAdd.Add(ticker);
+                                toRemove.Add(dbTicker);
                             }
                         }
                         catch (Exception e)
@@ -138,6 +129,7 @@ namespace NumbersGoUp.Services
             {
                 _logger.LogError(e, "Error occurred when loading ticker bank data");
             }
+            await CalculatePerformance();
         }
         private bool LoadCutoff(ProcessorBankTicker ticker) => ticker.Income > 50000000 && ticker.RevenueGrowth > -15 && BasicCutoff(ticker.Ticker);
         private bool BasicCutoff(BankTicker ticker) => (ticker.CurrentRatio > 1 || ticker.DebtEquityRatio > 0) && 
@@ -148,99 +140,82 @@ namespace NumbersGoUp.Services
                                                                             ticker.Ticker.EVEarnings == 0 || ticker.Ticker.EPS == 0 || 
                                                                             (!ticker.QoQEPSGrowth.HasValue && !ticker.YoYEPSGrowth.HasValue) ||
                                                                             !ticker.RevenueGrowth.HasValue || !ticker.Income.HasValue);
-        public async Task CalculatePerformance()
+        private async Task CalculatePerformance()
         {
             var now = DateTime.UtcNow;
-            if (_runtimeSettings.ForceDataCollection || now.DayOfWeek == DayOfWeek.Monday) //don't need to check every day
+            var nowMillis = new DateTimeOffset(now).ToUnixTimeMilliseconds();
+            using (var stocksContext = _contextFactory.CreateDbContext())
             {
-                var nowMillis = new DateTimeOffset(now).ToUnixTimeMilliseconds();
-                using (var stocksContext = _contextFactory.CreateDbContext())
+                var dbTickers = await stocksContext.TickerBank.ToArrayAsync(_appCancellation.Token);
+                var tickers = new List<BankTicker>();
+                foreach (var t in dbTickers)
                 {
-                    var dbTickers = await stocksContext.TickerBank.ToArrayAsync(_appCancellation.Token);
-                    var tickers = new List<BankTicker>();
-                    foreach (var t in dbTickers)
+                    //try
+                    //{
+                    //    if (passCutoff)
+                    //    {
+                    //        var currentBar = await stocksContext.HistoryBars.Where(b => b.Symbol == t.Symbol).OrderByDescending(b => b.BarDayMilliseconds).FirstOrDefaultAsync(_appCancellation.Token);
+                    //        var price = currentBar != null ? currentBar.ClosePrice : (await _brokerService.GetLastTrade(t.Symbol)).Price;
+                    //        t.PERatio = price / t.EPS;
+                    //        t.MarketCap = price * t.Shares;
+                    //        if(t.Earnings > 0) { t.EVEarnings = (t.MarketCap + t.DebtMinusCash) / t.Earnings; }
+                    //        t.LastCalculatedFinancials = now;
+                    //        t.LastCalculatedFinancialsMillis = new DateTimeOffset(now).ToUnixTimeMilliseconds();
+                    //    }
+                    //}
+                    //catch (Exception e)
+                    //{
+                    //    _logger.LogError(e, $"Error retrieving latest price info for bank ticker {t.Symbol}");
+                    //}
+                    if (!TickerBlacklist.TickerAny(t) && BasicCutoff(t) && t.PERatio < EarningsMultipleCutoff && t.PERatio > 1 && t.PriceChangeAvg > 0)
                     {
-                        var passCutoff = BasicCutoff(t);
-                        try
-                        {
-                            if (passCutoff)
-                            {
-                                HistoryBar currentBar = null;
-                                if(!t.LastCalculatedFinancials.HasValue || t.LastCalculatedFinancials.Value.CompareTo(now.AddDays(-7)) < 0)
-                                {
-                                    var bars = await stocksContext.HistoryBars.Where(b => b.Symbol == t.Symbol).OrderByDescending(b => b.BarDayMilliseconds).ToArrayAsync(_appCancellation.Token);
-                                    if(bars.Length > 0)
-                                    {
-                                        t.PriceChangeAvg = CalculatePriceChangeAvg(bars) ?? t.PriceChangeAvg;
-                                        currentBar = bars[0];
-                                    }
-                                }
-                                else
-                                {
-                                    currentBar = await stocksContext.HistoryBars.Where(b => b.Symbol == t.Symbol).OrderByDescending(b => b.BarDayMilliseconds).FirstOrDefaultAsync(_appCancellation.Token);
-                                }
-                                var price = currentBar != null ? currentBar.ClosePrice : (await _brokerService.GetLastTrade(t.Symbol)).Price;
-                                t.PERatio = price / t.EPS;
-                                t.MarketCap = price * t.Shares;
-                                if(t.Earnings > 0) { t.EVEarnings = (t.MarketCap + t.DebtMinusCash) / t.Earnings; }
-                                t.LastCalculatedFinancials = now;
-                                t.LastCalculatedFinancialsMillis = new DateTimeOffset(now).ToUnixTimeMilliseconds();
-                            }
-                        }
-                        catch (Exception e)
-                        {
-                            _logger.LogError(e, $"Error retrieving latest price info for bank ticker {t.Symbol}");
-                        }
-                        if (!TickerBlacklist.TickerAny(t) && passCutoff && t.PERatio < EarningsMultipleCutoff && t.PERatio > 1 && t.PriceChangeAvg > 0)
-                        {
-                            tickers.Add(t);
-                        }
-                        else
-                        {
-                            t.LastCalculatedPerformance = now;
-                            t.LastCalculatedPerformanceMillis = nowMillis;
-                            t.PerformanceVector = 0;
-                            stocksContext.TickerBank.Update(t);
-                        }
+                        tickers.Add(t);
                     }
-                    await stocksContext.SaveChangesAsync(_appCancellation.Token);
-                    Func<BankTicker, double> performanceFn1 = (t) => Math.Sqrt(t.Earnings);
-                    Func<BankTicker, double> performanceFn2 = (t) => t.PriceChangeAvg;
-                    Func<BankTicker, double> performanceFn3 = (t) => Math.Min(t.DividendYield, 0.06);
-                    Func<BankTicker, double> performanceFn4 = (t) => 1 - t.EVEarnings.DoubleReduce(EarningsMultipleCutoff, 0);
-                    Func<BankTicker, double> performanceFn5 = (t) => 1 - (t.DebtMinusCash / t.MarketCap).DoubleReduce(0.5, -0.5);
-                    var minmax1 = new MinMaxStore<BankTicker>(performanceFn1);
-                    var minmax2 = new MinMaxStore<BankTicker>(performanceFn2);
-                    var minmax3 = new MinMaxStore<BankTicker>(performanceFn3);
-                    var minmax4 = new MinMaxStore<BankTicker>(performanceFn4);
-                    var minmax5 = new MinMaxStore<BankTicker>(performanceFn5);
-                    foreach (var ticker in tickers)
+                    else
                     {
-                        minmax1.Run(ticker);
-                        minmax2.Run(ticker);
-                        minmax3.Run(ticker);
-                        minmax4.Run(ticker);
-                        minmax5.Run(ticker);
+                        t.LastCalculatedPerformance = now;
+                        t.LastCalculatedPerformanceMillis = nowMillis;
+                        t.PerformanceVector = 0;
+                        stocksContext.TickerBank.Update(t);
                     }
-                    Func<BankTicker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 50) +
-                                                                         (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 15) +
-                                                                         (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 5) +
-                                                                         (performanceFn4(t).DoubleReduce(minmax4.Max, minmax4.Min) * 15) + 
-                                                                         (performanceFn5(t).DoubleReduce(minmax5.Max, minmax5.Min) * 15);
-                    var minmaxTotal = new MinMaxStore<BankTicker>(performanceFnTotal);
-                    foreach (var ticker in tickers)
-                    {
-                        minmaxTotal.Run(ticker);
-                    }
-                    foreach (var ticker in tickers)
-                    {
-                        ticker.LastCalculatedPerformance = now;
-                        ticker.LastCalculatedPerformanceMillis = nowMillis;
-                        ticker.PerformanceVector = performanceFnTotal(ticker).DoubleReduce(minmaxTotal.Max, minmaxTotal.Min) * 100;
-                        stocksContext.TickerBank.Update(ticker);
-                    }
-                    await stocksContext.SaveChangesAsync(_appCancellation.Token);
                 }
+                await stocksContext.SaveChangesAsync(_appCancellation.Token);
+                Func<BankTicker, double> performanceFn1 = (t) => Math.Sqrt(t.Earnings);
+                Func<BankTicker, double> performanceFn2 = (t) => t.PriceChangeAvg;
+                Func<BankTicker, double> performanceFn3 = (t) => Math.Min(t.DividendYield, 0.06);
+                Func<BankTicker, double> performanceFn4 = (t) => 1 - t.EVEarnings.DoubleReduce(EarningsMultipleCutoff, 0);
+                Func<BankTicker, double> performanceFn5 = (t) => 1 - (t.DebtMinusCash / t.MarketCap).DoubleReduce(0.5, -0.5);
+                var minmax1 = new MinMaxStore<BankTicker>(performanceFn1);
+                var minmax2 = new MinMaxStore<BankTicker>(performanceFn2);
+                var minmax3 = new MinMaxStore<BankTicker>(performanceFn3);
+                var minmax4 = new MinMaxStore<BankTicker>(performanceFn4);
+                var minmax5 = new MinMaxStore<BankTicker>(performanceFn5);
+                foreach (var ticker in tickers)
+                {
+                    minmax1.Run(ticker);
+                    minmax2.Run(ticker);
+                    minmax3.Run(ticker);
+                    minmax4.Run(ticker);
+                    minmax5.Run(ticker);
+                }
+                Func<BankTicker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 50) +
+                                                                     (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 15) +
+                                                                     (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 5) +
+                                                                     (performanceFn4(t).DoubleReduce(minmax4.Max, minmax4.Min) * 15) +
+                                                                     (performanceFn5(t).DoubleReduce(minmax5.Max, minmax5.Min) * 15);
+                var minmaxTotal = new MinMaxStore<BankTicker>(performanceFnTotal);
+                foreach (var ticker in tickers)
+                {
+                    minmaxTotal.Run(ticker);
+                }
+                foreach (var ticker in tickers)
+                {
+                    ticker.LastCalculatedPerformance = now;
+                    ticker.LastCalculatedPerformanceMillis = nowMillis;
+                    ticker.PerformanceVector = performanceFnTotal(ticker).DoubleReduce(minmaxTotal.Max, minmaxTotal.Min) * 100;
+                    stocksContext.TickerBank.Update(ticker);
+                }
+                await stocksContext.SaveChangesAsync(_appCancellation.Token);
             }
         }
         private double? CalculatePriceChangeAvg(HistoryBar[] bars)

@@ -20,7 +20,10 @@ namespace NumbersGoUp.Utils
         public static double DoubleReduce(this double value, double max = 1.0, double min = 0.0)
         {
             if (max == min) throw new DivideByZeroException();
-            if (max < min) throw new ArgumentOutOfRangeException("max must be greater than min");
+            if (max < min)
+            {
+                throw new ArgumentOutOfRangeException("max must be greater than min");
+            }
             if (value < min) { value = min; }
             if (value > max) { value = max; }
             return (value - min) / (max - min);
@@ -65,38 +68,35 @@ namespace NumbersGoUp.Utils
         public static double VTailCurve(this double x, int peaks = 1) => (-0.5 * Math.Cos(((peaks * 2) + 1) * Math.PI * x)) + 0.5;
         public static double VTailExpCurve(this double x, int peaks = 1) => (-0.5 * Math.Cos(((peaks * 2) + 1) * Math.PI * x)) + 0.5;
         public static bool TickerAny(this string[] symbols, ITicker t) => symbols.Any(s => string.Equals(s, t.Symbol, StringComparison.InvariantCultureIgnoreCase));
-        public static double ApplyAlma<T>(this T[] objsDesc, Func<T, double> objFn, double[] gaussianWeights = null) => objsDesc.Select(o => objFn(o)).ToArray().ApplyAlma(gaussianWeights);
-        public static double ApplyAlma(this double[] valuesDesc, double[] gaussianWeights = null)
+        public static double ApplyAlma<T>(this T[] objsDesc, Func<T, double> objFn, double? sigma = null) where T:class
         {
-            if (gaussianWeights == null)
-            {
-                gaussianWeights = GaussianWeights(valuesDesc.Length);
-            }
             double WtdSum = 0, WtdNorm = 0;
-            for (int i = 0; i < valuesDesc.Length; i++)
+            if (!sigma.HasValue)
             {
-                WtdSum = WtdSum + (gaussianWeights[i] * valuesDesc[i]);
-                WtdNorm = WtdNorm + gaussianWeights[i];
+                sigma = objsDesc.Length * 0.6;
+            }
+            for (int i = 0; i < objsDesc.Length; i++)
+            {
+                double eq = Math.Exp(-1 * (Math.Pow(i, 2) / Math.Pow(sigma.Value, 2)));
+                WtdSum = WtdSum + (eq * objFn(objsDesc[i]));
+                WtdNorm = WtdNorm + eq;
             }
             return WtdSum / WtdNorm;
         }
-        public static double[] GaussianWeights(int size)
+        public static double ApplyAlma(this double[] valuesDesc, double? sigma = null)
         {
-            double sigma = 6;
-            double offset = 0.85;
-            var weights = new double[size];
-            for (int i = 0; i < size; i++)
+            double WtdSum = 0, WtdNorm = 0;
+            if (!sigma.HasValue)
             {
-                double eq = -1 * (Math.Pow((i + 1) - offset, 2) / Math.Pow(sigma, 2));
-                weights[i] = Math.Exp(eq);
+                sigma = valuesDesc.Length * 0.6;
             }
-            return weights;
-        }
-        public static double GetAngle(double num, double denom)
-        {
-            if (denom == 0) { return 0.0; }
-            var perc = num / denom;
-            return Math.Asin(perc > 1 ? 1 : (perc < -1 ? -1 : perc)) * (180 / Math.PI);
+            for (int i = 0; i < valuesDesc.Length; i++)
+            {
+                double eq = Math.Exp(-1 * (Math.Pow(i, 2) / Math.Pow(sigma.Value, 2)));
+                WtdSum = WtdSum + (eq * valuesDesc[i]);
+                WtdNorm = WtdNorm + eq;
+            }
+            return WtdSum / WtdNorm;
         }
         public static double CalculateVelocity<T>(this IEnumerable<T> barsDesc, Func<T, double> angleValueFn)
         {
@@ -143,6 +143,17 @@ namespace NumbersGoUp.Utils
             var size = barsDesc.Count();
             if (size < 3) { throw new Exception("Length does not meet minimum requirements to calculate acceleration"); }
             return (angleValueFn(barsDesc.First()) - angleValueFn(barsDesc.Skip(size / 2).First())) - (angleValueFn(barsDesc.Skip(size / 2).First()) - angleValueFn(barsDesc.Last()));
+        }
+        public static double CalculateAvgAcceleration<T>(this T[] barsDesc, Func<T, double> valueFn)
+        {
+            var size = barsDesc.Length - 2;
+            if (size < 1) { throw new Exception("Length does not meet minimum requirements to calculate acceleration"); }
+            double sum = 0;
+            for (var i = 0; i < size; i++)
+            {
+                sum += valueFn(barsDesc[i]) - valueFn(barsDesc[i + 1]) - valueFn(barsDesc[i + 1]) + valueFn(barsDesc[i + 2]);
+            }
+            return sum / size;
         }
         public static double PercChange(this double currentValue, double futureValue) => (futureValue / currentValue) - 1;
         public static (double slope, double yintercept) CalculateRegression<T>(this T[] itemsAsc, Func<T, double> valueFn)

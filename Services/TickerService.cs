@@ -96,10 +96,10 @@ namespace NumbersGoUp.Services
             _logger.LogInformation($"Using PE Ratio cutoff as {PERatioCutoff}");
             try
             {
-                await _tickerBankService.Load();
-                _logger.LogInformation("Loaded bank tickers");
-                await _tickerBankService.CalculatePerformance();
-                _logger.LogInformation("Completed bank ticker performance calculations");
+                //await _tickerBankService.Load();
+                //_logger.LogInformation("Loaded bank tickers");
+                //await _tickerBankService.CalculatePerformance();
+                //_logger.LogInformation("Completed bank ticker performance calculations");
                 await Load();
             }
             catch (Exception e)
@@ -117,7 +117,6 @@ namespace NumbersGoUp.Services
                 {
                     var nowMillis = now.ToUnixTimeMilliseconds();
                     var lookback = now.AddYears(-DataService.LOOKBACK_YEARS).ToUnixTimeMilliseconds();
-                    var gaussianWeights = Utils.Utils.GaussianWeights(24 * DataService.LOOKBACK_YEARS);
                     var tickers = await stocksContext.Tickers.ToListAsync(_appCancellation.Token);
                     foreach (var ticker in tickers) //filter any positions we currently hold in case we find we want to remove them
                     {
@@ -165,15 +164,15 @@ namespace NumbersGoUp.Services
                                     return Math.Pow(perc - regression, 2);
                                 }).Sum() / bars.Length) * 2;
                                 var currentRegression = (regressionSlope * (bars.Length - 1)) + yintercept;
-                                var currentPerc = (bars[bars.Length - 1].Price() - initialPrice) * 100 / initialPrice;
-                                ticker.RegressionAngle = Utils.Utils.GetAngle(currentPerc - currentRegression, regressionStDev) * regressionSlope;
+                                var currentPerc = (bars[bars.Length - 1].Price() - initialPrice) * 100.0 / initialPrice;
+                                ticker.RegressionAngle = (currentPerc - currentRegression) * regressionSlope * 100.0 / regressionStDev;
                                 ticker.PERatio = ticker.EPS > 0 ? (bars.Last().Price() / ticker.EPS) : 1000;
                                 ticker.MarketCap = bars.Last().Price() * ticker.Shares;
                                 ticker.EVEarnings = ticker.Earnings > 0 ? ((ticker.MarketCap + ticker.DebtMinusCash) / ticker.Earnings) : 1000;
                                 var debtCapRatio = ticker.DebtMinusCash / ticker.MarketCap;
                                 if (slopes.Count > 0)
                                 {
-                                    ticker.MonthTrend = slopes.Reverse<double>().ToArray().ApplyAlma(gaussianWeights);
+                                    ticker.MonthTrend = slopes.Reverse<double>().ToArray().ApplyAlma(6);
                                 }
                             }
                         }
@@ -198,7 +197,7 @@ namespace NumbersGoUp.Services
                     Func<Ticker, double, double> EarningsRatiosCalc = (t, maxFractional) => (0.5 * (1 - t.PERatio.DoubleReduce(PERatioCutoff, PERatioCutoff * maxFractional))) + (0.5 * (1 - t.EVEarnings.DoubleReduce(_tickerBankService.EarningsMultipleCutoff, _tickerBankService.EarningsMultipleCutoff * maxFractional)));
                     Func<Ticker, double, double> DebtCapCalc = (t, lowerBound) => t.MarketCap > 0 ? (1 - (t.DebtMinusCash / t.MarketCap).DoubleReduce(0.5, lowerBound)) : 0.0;
                     Func<Ticker, double> performanceFn1 = (t) => 1 - t.MaxMonthConsecutiveLosses.DoubleReduce(20, 1);
-                    Func<Ticker, double> performanceFn2 = (t) => t.ProfitLossStDev > 0 ? Math.Pow(t.ProfitLossAvg, 2) * t.MonthTrend.ZeroReduce(15, -15) / t.ProfitLossStDev : 0;
+                    Func<Ticker, double> performanceFn2 = (t) => t.ProfitLossStDev > 0 && t.ProfitLossAvg > 0 ? Math.Pow(t.ProfitLossAvg, 2) * t.MonthTrend.ZeroReduce(15, -15) / t.ProfitLossStDev : 0;
                     Func<Ticker, double> performanceFnRegression = (t) => 1 - t.RegressionAngle.DoubleReduce(30, -30);
                     Func<Ticker, double> performanceFnEarnings = (t) => Math.Sqrt(t.MarketCap) * EarningsRatiosCalc(t, 0.4) * DebtCapCalc(t, 0);
                     Func<Ticker, double> performanceFnEarningsRatios = (t) => EarningsRatiosCalc(t, 0);

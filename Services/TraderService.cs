@@ -300,7 +300,7 @@ namespace NumbersGoUp.Services
             }
         }
 
-        private double priorityOrdering(BuyState bss) => bss.Rebalancer.Ticker.PerformanceVector * bss.ProfitLossPerc.ZeroReduce(bss.Rebalancer.Ticker.ProfitLossAvg + bss.Rebalancer.Ticker.ProfitLossStDev, (bss.Rebalancer.Ticker.ProfitLossAvg + bss.Rebalancer.Ticker.ProfitLossStDev) * -1);
+        private double priorityOrdering(BuyState bss) => bss.Rebalancer.Ticker.PerformanceVector;// * bss.ProfitLossPerc.ZeroReduce(bss.Rebalancer.Ticker.ProfitLossAvg + bss.Rebalancer.Ticker.ProfitLossStDev, (bss.Rebalancer.Ticker.ProfitLossAvg + bss.Rebalancer.Ticker.ProfitLossStDev) * -1);
         private async Task ExecuteBuys(StockRebalancer[] rebalancers, double remainingBuyAmount)
         {
             if (_disableBuys) 

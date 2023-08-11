@@ -339,6 +339,8 @@ namespace NumbersGoUp.Utils
             dest.PriceChangeAvg = src.PriceChangeAvg;
             dest.DebtMinusCash = src.DebtMinusCash;
             dest.Shares = src.Shares;
+            dest.LastCalculatedFinancials = src.LastCalculatedFinancials;
+            dest.LastCalculatedFinancialsMillis = src.LastCalculatedFinancialsMillis;
         }
     }
     public class TickerBankProcessorResult
