@@ -18,9 +18,9 @@ namespace NumbersGoUp.Services
 {
     public class TickerService
     {
-        public const int MAX_TICKERS = 100;
+        public const int MAX_TICKERS = 175;
+        public const int MAX_BANK_TICKERS = MAX_TICKERS + 25;
         public const int PERFORMANCE_CUTOFF = 25;
-        public const int MAX_BANK_TICKERS = 200;
 
         private const string POLYGON_API_KEY = "polygon_api_key";
         private const string FINNHUB_API_KEY = "finnhub_api_key";
@@ -310,20 +310,28 @@ namespace NumbersGoUp.Services
             {
                 await _brokerService.Ready();
                 var nowMillis = now.ToUnixTimeMilliseconds();
+                var positions = await _brokerService.GetPositions();
+                var bankTickers = await _tickerBankService.GetTickers(positions.Select(p => p.Symbol).ToArray(), MAX_BANK_TICKERS);
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
                     var tickers = await stocksContext.Tickers.ToArrayAsync(_appCancellation.Token);
-                    var bankTickersFull = await stocksContext.TickerBank.ToArrayAsync(_appCancellation.Token);
-                    var filteredBankTickers = GetFilteredBankTickers(bankTickersFull).ToArray();
-                    var positions = await _brokerService.GetPositions();
+                    var filteredBankTickers = GetFilteredBankTickers(bankTickers).ToArray();
                     var count = tickers.Length;
                     foreach (var ticker in tickers)
                     {
-                        var bankTicker = filteredBankTickers.FirstOrDefault(t => ticker.Symbol == t.Symbol);
+                        var bankTicker1 = filteredBankTickers.FirstOrDefault(t => t.Symbol == ticker.Symbol);
+                        var bankTicker2 = bankTickers.FirstOrDefault(t => t.Symbol == ticker.Symbol);
                         var hasPosition = positions.Any(p => p.Symbol == ticker.Symbol);
-                        if (bankTicker != null && (bankTicker.PERatio < PERatioCutoff || hasPosition))
+                        if (bankTicker1 != null)
                         {
-                            TickerCopy(ticker, bankTicker);
+                            TickerCopy(ticker, bankTicker1);
+                            ticker.LastCalculated = now.UtcDateTime;
+                            ticker.LastCalculatedMillis = nowMillis;
+                            stocksContext.Tickers.Update(ticker);
+                        }
+                        else if (bankTicker2 != null && hasPosition)
+                        {
+                            TickerCopy(ticker, bankTicker2);
                             ticker.LastCalculated = now.UtcDateTime;
                             ticker.LastCalculatedMillis = nowMillis;
                             stocksContext.Tickers.Update(ticker);
@@ -337,19 +345,8 @@ namespace NumbersGoUp.Services
                         else if (hasPosition)
                         {
                             _logger.LogWarning($"Could not remove {ticker.Symbol}. Position exists. Modifying properties to encourage selling.");
-                            var bankTickerPosition = bankTickersFull.FirstOrDefault(t => t.Symbol == ticker.Symbol);
-                            if (bankTickerPosition != null)
-                            {
-                                TickerCopy(ticker, bankTickerPosition);
-                                ticker.EPS = Math.Min(bankTickerPosition.EPS, ticker.EPS) * 0.75;
-                                ticker.Earnings = Math.Min(bankTickerPosition.Earnings, ticker.EPS) * 0.75;
-                            }
-                            else
-                            {
-                                ticker.EPS *= 0.5;
-                                ticker.Earnings *= 0.5;
-                                ticker.PerformanceVector *= 0.8;
-                            }
+                            ticker.EPS *= 0.75;
+                            ticker.Earnings *= 0.75;
                             ticker.LastCalculated = now.UtcDateTime;
                             ticker.LastCalculatedMillis = nowMillis;
                             stocksContext.Tickers.Update(ticker);
@@ -364,8 +361,8 @@ namespace NumbersGoUp.Services
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
                     foreach (var bankTicker in filteredBankTickers)
                     {
-                        if(count > 200) { break; }
-                        if (!tickers.Any(t => t.Symbol == bankTicker.Symbol))
+                        if(count > MAX_TICKERS) { break; }
+                        if (!tickers.Any(t => t.Symbol == bankTicker.Symbol) && bankTicker.PERatio < PERatioCutoff)
                         {
                             stocksContext.Tickers.Add(TickerCopy(new Ticker
                             {
@@ -396,7 +393,7 @@ namespace NumbersGoUp.Services
             }
             var sectorIterator = sectorDict.Select(kv => KeyValuePair.Create(kv.Key, kv.Value.OrderByDescending(t => t.PerformanceVector).ToArray()));
             var filteredBankTickers = new List<BankTicker>();
-            for (var i = 0; filteredBankTickers.Count < MAX_BANK_TICKERS && i < bankTickersFull.Length; i++)
+            for (var i = 0; filteredBankTickers.Count < MAX_TICKERS && i < bankTickersFull.Length; i++)
             {
                 foreach (var sector in sectorIterator)
                 {
@@ -406,7 +403,7 @@ namespace NumbersGoUp.Services
                     }
                 }
             }
-            return filteredBankTickers.OrderByDescending(t => t.PerformanceVector).Take(MAX_BANK_TICKERS);
+            return filteredBankTickers.OrderByDescending(t => t.PerformanceVector).Take(MAX_TICKERS);
         }
         private static Ticker TickerCopy(Ticker ticker, BankTicker bankTicker)
         {

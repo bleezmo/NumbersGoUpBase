@@ -57,7 +57,8 @@ namespace NumbersGoUp.Utils
                      */
                     int? tickerIndex = null, sectorIndex = null, marketCapIndex = null, peRatioIndex = null, currentRatioIndex = null, debtEquityRatioIndex = null, 
                          dividendIndex = null, ebitdaIndex = null, evebitdaIndex = null, epsIndex = null, priceIndex = null, sharesIndex = null, evIndex = null, 
-                         currentEPSIndex = null, futureEPSIndex = null, epsQoQIndex = null, epsGrowthIndex = null, recentEarningsIndex = null, revenueGrowthIndex = null, incomeIndex = null;
+                         currentEPSIndex = null, futureEPSIndex = null, epsQoQIndex = null, epsGrowthIndex = null, recentEarningsIndex = null, revenueGrowthIndex = null, 
+                         incomeIndex = null, countryIndex = null;
                     using (var csv = new CsvReader(sr, CultureInfo.InvariantCulture))
                     {
                         string[] headers = null;
@@ -89,6 +90,7 @@ namespace NumbersGoUp.Utils
                                     if (headers[i] == "Recent Earnings Date") { recentEarningsIndex = i; }
                                     if (headers[i] == "Revenue (TTM YoY Growth)") { revenueGrowthIndex = i; }
                                     if (headers[i] == "Net Income (FY)") { incomeIndex = i; }
+                                    if (headers[i] == "Country") { countryIndex = i; }
                                 }
                             }
                             else
@@ -114,7 +116,11 @@ namespace NumbersGoUp.Utils
                                 }
                                 else
                                 {
-                                    _logger.LogError($"Sector not found for {ticker.Ticker.Symbol}");
+                                    //_logger.LogError($"Sector not found for {ticker.Ticker.Symbol}");
+                                }
+                                if (countryIndex.HasValue)
+                                {
+                                    ticker.Ticker.Country = csv[countryIndex.Value];
                                 }
                                 if(revenueGrowthIndex.HasValue && double.TryParse(csv[revenueGrowthIndex.Value] ,out var revenueGrowth))
                                 {
@@ -339,6 +345,7 @@ namespace NumbersGoUp.Utils
             dest.PriceChangeAvg = src.PriceChangeAvg;
             dest.DebtMinusCash = src.DebtMinusCash;
             dest.Shares = src.Shares;
+            dest.Country = src.Country;
             dest.LastCalculatedFinancials = src.LastCalculatedFinancials;
             dest.LastCalculatedFinancialsMillis = src.LastCalculatedFinancialsMillis;
         }

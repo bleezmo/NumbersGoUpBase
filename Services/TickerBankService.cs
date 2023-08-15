@@ -21,6 +21,15 @@ namespace NumbersGoUp.Services
     {
         private const string EARNINGS_MULTIPLE_CUTOFF_KEY = "EarningsMultipleCutoff";
 
+        private static readonly string[][] CountryTiers = new string[][]
+        {
+            new string[] {"United States"},
+            new string[] {"United Kingdom", "Ireland", "Canada"},
+            new string[] {"Australia", "New Zealand", "Israel", "Japan"},
+            new string[] {"Denmark", "Netherlands", "Finland", "Iceland", "Belgium", "Germany", "Norway", "Sweden", "Taiwan"},
+            new string[] {"Portugal", "France", "Hungary", "Spain", "Singapore", "South Korea", "Switzerland" }
+        };
+
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<TickerBankService> _logger;
@@ -51,6 +60,29 @@ namespace NumbersGoUp.Services
             EarningsMultipleCutoff = double.TryParse(configuration[EARNINGS_MULTIPLE_CUTOFF_KEY], out var peratioCutoff) ? peratioCutoff : 40;
             _brokerService = brokerService;
             TickerBlacklist = configuration["TickerBlacklist"]?.Split(',') ?? new string[] { };
+        }
+        public async Task<BankTicker[]> GetTickers(string[] currentPositions, int maxTickers)
+        {
+            using (var stocksContext = _contextFactory.CreateDbContext())
+            {
+                var bankTickers = await stocksContext.TickerBank.ToArrayAsync(_appCancellation.Token);
+                var tickers = new List<BankTicker>(bankTickers.Where(t => currentPositions.Any(s => s == t.Symbol)));
+                for(var i = 0; i < CountryTiers.Length; i++)
+                {
+                    var countryTier = CountryTiers[i];
+                    if (tickers.Count < maxTickers)
+                    {
+                        var toAdd = bankTickers.Where(t =>
+                            countryTier.Any(c => string.Equals(c, t.Country, StringComparison.OrdinalIgnoreCase)) &&
+                            t.PerformanceVector > 0
+                            ).OrderByDescending(t => t.PerformanceVector).Take(maxTickers - tickers.Count);
+                        if (i == 0 && !toAdd.Any()) { throw new Exception("No tickers found for first tier country!!!!"); }
+                        tickers.AddRange(toAdd);
+                    }
+                    else { break; }
+                }
+                return tickers.ToArray();
+            }
         }
         public async Task Load()
         {
