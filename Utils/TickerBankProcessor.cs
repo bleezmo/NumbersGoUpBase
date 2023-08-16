@@ -346,6 +346,7 @@ namespace NumbersGoUp.Utils
             dest.DebtMinusCash = src.DebtMinusCash;
             dest.Shares = src.Shares;
             dest.Country = src.Country;
+            dest.BetaAvg = src.BetaAvg;
             dest.LastCalculatedFinancials = src.LastCalculatedFinancials;
             dest.LastCalculatedFinancialsMillis = src.LastCalculatedFinancialsMillis;
         }

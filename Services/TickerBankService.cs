@@ -93,6 +93,7 @@ namespace NumbersGoUp.Services
                 if (processorTickers.Length == 0) { return; }
                 _logger.LogInformation($"Loading {processorTickers.Length} tickers into ticker bank");
                 var positions = await _brokerService.GetPositions();
+                var marketHistory = await _brokerService.GetBarHistoryDay("VTI", _lookbackDate);
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
                     var dbTickers = await stocksContext.TickerBank.ToArrayAsync(_appCancellation.Token);
@@ -121,8 +122,9 @@ namespace NumbersGoUp.Services
                             else if (passCutoff || hasPosition)
                             {
                                 var bars = await stocksContext.HistoryBars.Where(b => b.Symbol == ticker.Symbol).ToArrayAsync(_appCancellation.Token);
-                                var priceChangeAvg = CalculatePriceChangeAvg(bars.Length > 0 ? bars : (await _brokerService.GetBarHistoryDay(ticker.Symbol, _lookbackDate)).ToArray());
+                                var (priceChangeAvg, betaAvg) = CalculatePriceChangeAvg(bars.Length > 0 ? bars : (await _brokerService.GetBarHistoryDay(ticker.Symbol, _lookbackDate)).ToArray(), marketHistory.ToArray());
                                 ticker.PriceChangeAvg = priceChangeAvg ?? 0.0;
+                                ticker.BetaAvg = betaAvg ?? 0.0;
                                 ticker.LastCalculatedFinancials = now;
                                 ticker.LastCalculatedFinancialsMillis = new DateTimeOffset(now).ToUnixTimeMilliseconds();
                                 if (dbTicker != null)
@@ -161,7 +163,9 @@ namespace NumbersGoUp.Services
             {
                 _logger.LogError(e, "Error occurred when loading ticker bank data");
             }
+            _logger.LogInformation("Completed bank ticker loading.");
             await CalculatePerformance();
+            _logger.LogInformation("Completed bank ticker performance calculation.");
         }
         private bool LoadCutoff(ProcessorBankTicker ticker) => ticker.Income > 50000000 && ticker.RevenueGrowth > -15 && BasicCutoff(ticker.Ticker);
         private bool BasicCutoff(BankTicker ticker) => (ticker.CurrentRatio > 1 || ticker.DebtEquityRatio > 0) && 
@@ -213,7 +217,7 @@ namespace NumbersGoUp.Services
                 }
                 await stocksContext.SaveChangesAsync(_appCancellation.Token);
                 Func<BankTicker, double> performanceFn1 = (t) => Math.Sqrt(t.Earnings);
-                Func<BankTicker, double> performanceFn2 = (t) => t.PriceChangeAvg;
+                Func<BankTicker, double> performanceFn2 = (t) => t.PriceChangeAvg * t.BetaAvg.ZeroReduce(2, 0);
                 Func<BankTicker, double> performanceFn3 = (t) => Math.Min(t.DividendYield, 0.06);
                 Func<BankTicker, double> performanceFn4 = (t) => 1 - t.EVEarnings.DoubleReduce(EarningsMultipleCutoff, 0);
                 Func<BankTicker, double> performanceFn5 = (t) => 1 - (t.DebtMinusCash / t.MarketCap).DoubleReduce(0.5, -0.5);
@@ -230,8 +234,8 @@ namespace NumbersGoUp.Services
                     minmax4.Run(ticker);
                     minmax5.Run(ticker);
                 }
-                Func<BankTicker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 50) +
-                                                                     (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 15) +
+                Func<BankTicker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 40) +
+                                                                     (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 25) +
                                                                      (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 5) +
                                                                      (performanceFn4(t).DoubleReduce(minmax4.Max, minmax4.Min) * 15) +
                                                                      (performanceFn5(t).DoubleReduce(minmax5.Max, minmax5.Min) * 15);
@@ -250,12 +254,12 @@ namespace NumbersGoUp.Services
                 await stocksContext.SaveChangesAsync(_appCancellation.Token);
             }
         }
-        private double? CalculatePriceChangeAvg(HistoryBar[] bars)
+        private (double? priceChangeAvg, double? betaAvg) CalculatePriceChangeAvg(HistoryBar[] bars, HistoryBar[] marketBars)
         {
-            if(bars == null || bars.Length == 0) { return null; }
+            if(bars == null || bars.Length == 0) { return (null, null); }
             var now = DateTime.Now;
             var datePointer = _lookbackDate;
-            var priceChanges = new List<double>();
+            List<Double> priceChanges = new List<double>(), betas = new List<double>();
             for (var i = 0; now.CompareTo(datePointer) > 0 && i < 1000; i++)
             {
                 var from = datePointer;
@@ -263,11 +267,17 @@ namespace NumbersGoUp.Services
                 var priceWindow = bars.Where(b => b.BarDay.CompareTo(from) > 0 && b.BarDay.CompareTo(to) < 0).OrderBy(b => b.BarDayMilliseconds).ToArray();
                 if (priceWindow.Length > 2 && priceWindow.Last().Price() > 0)
                 {
+                    var marketPriceWindow = marketBars.Where(b => b.BarDay.CompareTo(from) > 0 && b.BarDay.CompareTo(to) < 0).OrderBy(b => b.BarDayMilliseconds).ToArray();
+                    if(marketPriceWindow.Length > 2 && marketPriceWindow.Last().Price() > 0)
+                    {
+                        betas.Add(CalculateBeta(priceWindow, marketPriceWindow));
+                    }
                     var futurePrice = priceWindow.CalculateFutureRegression((b) => b.Price(), 1);
                     priceChanges.Add(priceWindow[0].Price().PercChange(futurePrice) * 100);
                 }
                 datePointer = to;
             }
+            double? betaAvg = betas.Count > 0 ? betas.Average() : null;
             if (priceChanges.Count > ((DataService.LOOKBACK_YEARS - 2) * 2))
             {
                 var avg = priceChanges.Average();
@@ -275,19 +285,52 @@ namespace NumbersGoUp.Services
                 //var mode = priceChanges.OrderBy(p => p).Skip(priceChanges.Count / 2).FirstOrDefault();
                 if (stdev > 0)
                 {
-                    return avg / stdev;
+                    return (avg / stdev, betaAvg);
                 }
                 else
                 {
-                    _logger.LogWarning($"Standard deviation was zero for some reason. Symbol {bars[0].Symbol}");
-                    return avg;
+                    _logger.LogError($"Standard deviation was zero for some reason. Symbol {bars[0].Symbol}");
+                    return (avg, betaAvg);
                 }
             }
             else
             {
                 _logger.LogDebug($"Insufficient price information for {bars[0].Symbol}");
-                return null;
+                return (null, betaAvg);
             }
+        }
+        private static double CalculateBeta(HistoryBar[] priceWindow, HistoryBar[] marketPriceWindow)
+        {
+            var dayChange = new double[priceWindow.Length - 1];
+            var marketDayChange = new double[marketPriceWindow.Length - 1];
+            double dayChangeSum = 0.0, marketDayChangeSum = 0.0;
+            var maxLength = Math.Max(priceWindow.Length, marketPriceWindow.Length);
+            for (var i = 0; i < maxLength; i++)
+            {
+                if (i < priceWindow.Length - 1)
+                {
+                    dayChange[i] = (priceWindow[i + 1].Price() - priceWindow[i].Price()) * 100.0 / priceWindow[i].Price();
+                    dayChangeSum += dayChange[i];
+                }
+                if (i < marketPriceWindow.Length - 1)
+                {
+                    marketDayChange[i] = (marketPriceWindow[i + 1].Price() - marketPriceWindow[i].Price()) * 100 / marketPriceWindow[i].Price();
+                    marketDayChangeSum += marketDayChange[i];
+                }
+            }
+            var avgDayChange = dayChangeSum / dayChange.Length;
+            var marketAvgDayChange = marketDayChangeSum / marketDayChange.Length;
+            var minlength = Math.Min(dayChange.Length, marketDayChange.Length);
+            double sum = 0.0;
+            for (var i = 0; i < minlength; i++)
+            {
+                sum += (dayChange[i] - avgDayChange) * (marketDayChange[i] - marketAvgDayChange); 
+            }
+            var cov = sum / minlength;
+
+            var marketVariance = marketDayChange.Sum(d => Math.Pow(d - marketAvgDayChange, 2)) / marketDayChange.Length;
+
+            return cov / marketVariance;
         }
     }
 }

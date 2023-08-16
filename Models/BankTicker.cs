@@ -27,6 +27,7 @@ namespace NumbersGoUp.Models
         public double DebtMinusCash { get; set; }
         public double Shares { get; set; }
         public double PriceChangeAvg { get; set; }
+        public double BetaAvg { get; set; }
         public double PerformanceVector { get; set; }
         public string Country { get; set; }
         public DateTime? LastCalculatedPerformance { get; set; }
