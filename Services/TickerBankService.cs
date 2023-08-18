@@ -61,12 +61,12 @@ namespace NumbersGoUp.Services
             _brokerService = brokerService;
             TickerBlacklist = configuration["TickerBlacklist"]?.Split(',') ?? new string[] { };
         }
-        public async Task<BankTicker[]> GetTickers(string[] currentPositions, int maxTickers)
+        public async Task<(BankTicker[] main, BankTicker[] remainingPositions)> GetTickers(string[] currentPositions, int maxTickers)
         {
             using (var stocksContext = _contextFactory.CreateDbContext())
             {
                 var bankTickers = await stocksContext.TickerBank.ToArrayAsync(_appCancellation.Token);
-                var tickers = new List<BankTicker>(bankTickers.Where(t => currentPositions.Any(s => s == t.Symbol)));
+                List<BankTicker> tickers = new List<BankTicker>(), remainingPositions = new List<BankTicker>(); 
                 for(var i = 0; i < CountryTiers.Length; i++)
                 {
                     var countryTier = CountryTiers[i];
@@ -81,7 +81,15 @@ namespace NumbersGoUp.Services
                     }
                     else { break; }
                 }
-                return tickers.ToArray();
+                foreach(var position in currentPositions)
+                {
+                    if(!tickers.Any(t => t.Symbol == position))
+                    {
+                        var bankTicker = bankTickers.FirstOrDefault(t => t.Symbol == position);
+                        if(bankTicker != null) { remainingPositions.Add(bankTicker); }
+                    }
+                }
+                return (tickers.ToArray(), remainingPositions.ToArray());
             }
         }
         public async Task Load()

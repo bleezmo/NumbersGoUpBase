@@ -311,7 +311,7 @@ namespace NumbersGoUp.Services
                 await _brokerService.Ready();
                 var nowMillis = now.ToUnixTimeMilliseconds();
                 var positions = await _brokerService.GetPositions();
-                var bankTickers = await _tickerBankService.GetTickers(positions.Select(p => p.Symbol).ToArray(), MAX_BANK_TICKERS);
+                var (bankTickers, remainingPositions) = await _tickerBankService.GetTickers(positions.Select(p => p.Symbol).ToArray(), MAX_BANK_TICKERS);
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
                     var tickers = await stocksContext.Tickers.ToArrayAsync(_appCancellation.Token);
@@ -336,17 +336,23 @@ namespace NumbersGoUp.Services
                             ticker.LastCalculatedMillis = nowMillis;
                             stocksContext.Tickers.Update(ticker);
                         }
-                        else if (filteredBankTickers.Length < 100 && ticker.PerformanceVector > 50) //keep some tickers if the bank size is to small
-                        {
-                            ticker.LastCalculated = now.UtcDateTime;
-                            ticker.LastCalculatedMillis = nowMillis;
-                            stocksContext.Tickers.Update(ticker);
-                        }
                         else if (hasPosition)
                         {
                             _logger.LogWarning($"Could not remove {ticker.Symbol}. Position exists. Modifying properties to encourage selling.");
-                            ticker.EPS *= 0.75;
-                            ticker.Earnings *= 0.75;
+                            var positionBankTicker = remainingPositions.FirstOrDefault(t => t.Symbol == ticker.Symbol);
+                            if(positionBankTicker != null)
+                            {
+                                var minEPS = Math.Min(ticker.EPS, positionBankTicker.EPS);
+                                var minEarnings = Math.Min(ticker.Earnings, positionBankTicker.Earnings);
+                                TickerCopy(ticker, positionBankTicker);
+                                ticker.EPS = minEPS * (positionBankTicker.PerformanceVector > 0 ? 0.9 : 0.8);
+                                ticker.Earnings = minEarnings * (positionBankTicker.PerformanceVector > 0 ? 0.9 : 0.8);
+                            }
+                            else
+                            { 
+                                ticker.EPS *= 0.75;
+                                ticker.Earnings *= 0.75;
+                            }
                             ticker.LastCalculated = now.UtcDateTime;
                             ticker.LastCalculatedMillis = nowMillis;
                             stocksContext.Tickers.Update(ticker);
