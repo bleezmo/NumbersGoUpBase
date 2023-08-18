@@ -133,7 +133,7 @@ namespace NumbersGoUp.Services
 
                     var coeff = barMetrics.Average(b => b.SMASMA).DoubleReduce(ticker.SMASMAAvg, ticker.SMASMAAvg - ticker.SMASMAStDev) * barMetrics.CalculateAvgVelocity(b => b.SMASMA).DoubleReduce(0.5 * ticker.SMAVelStDev, -ticker.SMAVelStDev);
                     pricePrediction = (coeff * bullPricePrediction) + ((1 - coeff) * bearPricePrediction);
-                    pricePrediction *= 1 - peRatio.DoubleReduce(_peratioCutoff, _peratioCutoff * 0.4);
+                    //pricePrediction *= 1 - peRatio.DoubleReduce(_peratioCutoff, _peratioCutoff * 0.4);
                 }
                 else
                 {
@@ -157,7 +157,7 @@ namespace NumbersGoUp.Services
 
                     var coeff = barMetrics.Average(b => b.SMASMA).DoubleReduce(ticker.SMASMAAvg, ticker.SMASMAAvg - ticker.SMASMAStDev) * barMetrics.CalculateAvgVelocity(b => b.SMASMA).DoubleReduce(0.5 * ticker.SMAVelStDev, -ticker.SMAVelStDev);
                     pricePrediction = (coeff * bullPricePrediction) + ((1 - coeff) * bearPricePrediction);
-                    pricePrediction += (1 - pricePrediction) * peRatio.DoubleReduce(_peratioCutoff * 2, _peratioCutoff);
+                    //pricePrediction += (1 - pricePrediction) * peRatio.DoubleReduce(_peratioCutoff * 2, _peratioCutoff);
                 }
 
                 if (buy)

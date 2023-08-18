@@ -30,6 +30,7 @@ namespace NumbersGoUp.Models
         public double BetaAvg { get; set; }
         public double PerformanceVector { get; set; }
         public string Country { get; set; }
+        public double CurrentPriceDiff { get; set; }
         public DateTime? LastCalculatedPerformance { get; set; }
         public long? LastCalculatedPerformanceMillis { get; set; }
         public DateTime? LastCalculatedFinancials { get; set; }

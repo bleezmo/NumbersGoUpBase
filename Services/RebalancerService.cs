@@ -42,7 +42,7 @@ namespace NumbersGoUpBase.Services
                 _logger.LogError($"No equity available! Skipping rebalance.");
                 return Enumerable.Empty<IRebalancer>();
             }
-            var allTickers = await _tickerService.GetFullTickerList();
+            var allTickers = (await _tickerService.GetFullTickerList()).Where(t => !t.IsIndex());
             foreach(var position in positions.Where(p => !BondSymbols.Contains(p.Symbol)))
             {
                 if(!allTickers.Any(t => t.Symbol == position.Symbol))

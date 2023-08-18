@@ -179,7 +179,38 @@ namespace NumbersGoUp.Utils
         }
         public static (double slope, double yintercept) CalculateRegression(this double[] itemsAsc) => itemsAsc.CalculateRegression((x) => x);
         public static double CalculateFutureRegression(this double[] itemsAsc, int offset) => itemsAsc.CalculateFutureRegression((x) => x, offset);
+        public static double CalculateBeta(this HistoryBar[] priceWindowAsc, HistoryBar[] marketPriceWindowAsc)
+        {
+            var dayChange = new double[priceWindowAsc.Length - 1];
+            var marketDayChange = new double[marketPriceWindowAsc.Length - 1];
+            double dayChangeSum = 0.0, marketDayChangeSum = 0.0;
+            var maxLength = Math.Max(priceWindowAsc.Length, marketPriceWindowAsc.Length);
+            for (var i = 0; i < maxLength; i++)
+            {
+                if (i < priceWindowAsc.Length - 1)
+                {
+                    dayChange[i] = (priceWindowAsc[i + 1].Price() - priceWindowAsc[i].Price()) * 100.0 / priceWindowAsc[i].Price();
+                    dayChangeSum += dayChange[i];
+                }
+                if (i < marketPriceWindowAsc.Length - 1)
+                {
+                    marketDayChange[i] = (marketPriceWindowAsc[i + 1].Price() - marketPriceWindowAsc[i].Price()) * 100 / marketPriceWindowAsc[i].Price();
+                    marketDayChangeSum += marketDayChange[i];
+                }
+            }
+            var avgDayChange = dayChangeSum / dayChange.Length;
+            var marketAvgDayChange = marketDayChangeSum / marketDayChange.Length;
+            var minlength = Math.Min(dayChange.Length, marketDayChange.Length);
+            var covValues = new double[minlength];
+            for (var i = 0; i < minlength; i++)
+            {
+                covValues[i] = (dayChange[i] - avgDayChange) * (marketDayChange[i] - marketAvgDayChange);
+            }
 
+            var marketVariance = marketDayChange.Sum(d => Math.Pow(d - marketAvgDayChange, 2)) / marketDayChange.Length;
+
+            return covValues.Average() / marketVariance;
+        }
         public static async Task<int> BatchJobs<T>(this IEnumerable<T> data, Func<T,Task> fn, int batchSize = 10)
         {
             var length = data.Count();

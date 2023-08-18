@@ -118,61 +118,75 @@ namespace NumbersGoUp.Services
                     var nowMillis = now.ToUnixTimeMilliseconds();
                     var lookback = now.AddYears(-DataService.LOOKBACK_YEARS).ToUnixTimeMilliseconds();
                     var tickers = await stocksContext.Tickers.ToListAsync(_appCancellation.Token);
-                    foreach (var ticker in tickers) //filter any positions we currently hold in case we find we want to remove them
+                    var indexTicker = tickers.FirstOrDefault(t => t.IsIndex());
+                    if(indexTicker == null)
+                    {
+                        _logger.LogError("Index ticker ticker not found. Performance calculation failed");
+                        return;
+                    }
+                    var indexBars = await stocksContext.HistoryBars.Where(bar => bar.Symbol == indexTicker.Symbol && bar.BarDayMilliseconds > lookback).OrderByDescending(b => b.BarDayMilliseconds).ToArrayAsync(_appCancellation.Token);
+                    foreach (var ticker in tickers.Where(t => !t.IsIndex())) //filter any positions we currently hold in case we find we want to remove them
                     {
                         ticker.MonthTrend = -1000; //default if ticker is invalid
                         if(TickerBlacklist.Any(s => s == ticker.Symbol))
                         {
                             continue;
                         }
-                        var bars = await stocksContext.HistoryBars.Where(bar => bar.Symbol == ticker.Symbol && bar.BarDayMilliseconds > lookback).OrderBy(b => b.BarDayMilliseconds).ToArrayAsync(_appCancellation.Token);
+                        var bars = await stocksContext.HistoryBars.Where(bar => bar.Symbol == ticker.Symbol && bar.BarDayMilliseconds > lookback).OrderByDescending(b => b.BarDayMilliseconds).ToArrayAsync(_appCancellation.Token);
                         if (bars.Any())
                         {
-                            if (now.AddYears(1 - DataService.LOOKBACK_YEARS).CompareTo(bars.First().BarDay) > 0 && now.AddDays(-7).CompareTo(bars.Last().BarDay) < 0) //remove anything that doesn't have enough history
+                            if (now.AddYears(1 - DataService.LOOKBACK_YEARS).CompareTo(bars.Last().BarDay) > 0 && now.AddDays(-7).CompareTo(bars.First().BarDay) < 0) //remove anything that doesn't have enough history
                             {
                                 var currentMin = 0.0;
-                                var slopes = new List<double>();
-                                const int monthPeriod = 20;
-                                var initialPrice = bars[0].Price();
+                                List<double> slopes = new List<double>(), betas = new List<double>();
+                                const int monthPeriod = 22;
+                                const int betaPeriod = monthPeriod * 3;
+                                var initialPrice = bars[bars.Length - 1].Price();
                                 if(initialPrice == 0)
                                 {
                                     _logger.LogError($"Error calculating performance. Inital price was zero for {ticker.Symbol}");
                                     continue;
                                 }
-                                double x = 0.0, y = 0.0, xsqr = 0.0, xy = 0.0;
                                 for (var i = 0; i < bars.Length; i++)
                                 {
                                     if (i % monthPeriod == 0)
                                     {
                                         var min = (bars.Skip(i).Take(monthPeriod).Min(b => b.LowPrice) - initialPrice) * 100 / initialPrice;
-                                        slopes.Add(min - currentMin);
+                                        if (i > 0) { slopes.Add(currentMin - min); }
                                         currentMin = min;
                                     }
-                                    var perc = (bars[i].Price() - initialPrice) * 100 / initialPrice;
-                                    y += perc;
-                                    x += i;
-                                    xsqr += Math.Pow(i, 2);
-                                    xy += perc * i;
+                                    if(i % betaPeriod == 0)
+                                    {
+                                        if(i <= bars.Length - betaPeriod && i <= indexBars.Length - betaPeriod)
+                                        {
+                                            var betaBars = bars.Skip(i).Take(betaPeriod).Reverse().ToArray();
+                                            var betaIndexBars = indexBars.Skip(i).Take(betaPeriod).Reverse().ToArray();
+                                            betas.Add(betaBars.CalculateBeta(betaIndexBars));
+                                        }
+                                    }
                                 }
-                                var regressionDenom = (bars.Length * xsqr) - Math.Pow(x, 2);
-                                var regressionSlope = regressionDenom != 0 ? ((bars.Length * xy) - (x * y)) / regressionDenom : 0.0;
-                                var yintercept = (y - (regressionSlope * x)) / bars.Length;
-                                var regressionStDev = Math.Sqrt(bars.Select((bar, i) =>
+                                var barsReversed = bars.Reverse().ToArray();
+                                var (regressionSlope, yintercept) = barsReversed.CalculateRegression(b => b.Price());
+                                var regressionStDev = Math.Sqrt(barsReversed.Select((bar, i) =>
                                 {
                                     var perc = (bar.Price() - initialPrice) * 100 / initialPrice;
                                     var regression = (regressionSlope * i) + yintercept;
                                     return Math.Pow(perc - regression, 2);
                                 }).Sum() / bars.Length) * 2;
                                 var currentRegression = (regressionSlope * (bars.Length - 1)) + yintercept;
-                                var currentPerc = (bars[bars.Length - 1].Price() - initialPrice) * 100.0 / initialPrice;
+                                var currentPerc = (bars[0].Price() - initialPrice) * 100.0 / initialPrice;
                                 ticker.RegressionAngle = (currentPerc - currentRegression) * regressionSlope * 100.0 / regressionStDev;
-                                ticker.PERatio = ticker.EPS > 0 ? (bars.Last().Price() / ticker.EPS) : 1000;
-                                ticker.MarketCap = bars.Last().Price() * ticker.Shares;
+                                ticker.PERatio = ticker.EPS > 0 ? (bars[0].Price() / ticker.EPS) : 1000;
+                                ticker.MarketCap = bars[0].Price() * ticker.Shares;
                                 ticker.EVEarnings = ticker.Earnings > 0 ? ((ticker.MarketCap + ticker.DebtMinusCash) / ticker.Earnings) : 1000;
                                 var debtCapRatio = ticker.DebtMinusCash / ticker.MarketCap;
                                 if (slopes.Count > 0)
                                 {
-                                    ticker.MonthTrend = slopes.Reverse<double>().ToArray().ApplyAlma(6);
+                                    ticker.MonthTrend = slopes.ToArray().ApplyAlma(6);
+                                }
+                                if(betas.Count > 0)
+                                {
+                                    ticker.BetaDiff = betas.First() - betas.Average();
                                 }
                             }
                         }
@@ -197,7 +211,7 @@ namespace NumbersGoUp.Services
                     Func<Ticker, double, double> EarningsRatiosCalc = (t, maxFractional) => (0.5 * (1 - t.PERatio.DoubleReduce(PERatioCutoff, PERatioCutoff * maxFractional))) + (0.5 * (1 - t.EVEarnings.DoubleReduce(_tickerBankService.EarningsMultipleCutoff, _tickerBankService.EarningsMultipleCutoff * maxFractional)));
                     Func<Ticker, double, double> DebtCapCalc = (t, lowerBound) => t.MarketCap > 0 ? (1 - (t.DebtMinusCash / t.MarketCap).DoubleReduce(0.5, lowerBound)) : 0.0;
                     Func<Ticker, double> performanceFn1 = (t) => 1 - t.MaxMonthConsecutiveLosses.DoubleReduce(20, 1);
-                    Func<Ticker, double> performanceFn2 = (t) => t.ProfitLossStDev > 0 && t.ProfitLossAvg > 0 ? Math.Pow(t.ProfitLossAvg, 2) * t.MonthTrend.ZeroReduce(15, -15) / t.ProfitLossStDev : 0;
+                    Func<Ticker, double> performanceFn2 = (t) => t.ProfitLossStDev > 0 && t.ProfitLossAvg > 0 ? Math.Pow(t.ProfitLossAvg, 2) * t.MonthTrend.DoubleReduce(0, -10) * t.BetaDiff.DoubleReduce(1, -1) / t.ProfitLossStDev : 0;
                     Func<Ticker, double> performanceFnRegression = (t) => 1 - t.RegressionAngle.DoubleReduce(30, -30);
                     Func<Ticker, double> performanceFnEarnings = (t) => Math.Sqrt(t.MarketCap) * EarningsRatiosCalc(t, 0.4) * DebtCapCalc(t, 0);
                     Func<Ticker, double> performanceFnEarningsRatios = (t) => EarningsRatiosCalc(t, 0);
@@ -317,7 +331,7 @@ namespace NumbersGoUp.Services
                     var tickers = await stocksContext.Tickers.ToArrayAsync(_appCancellation.Token);
                     var filteredBankTickers = GetFilteredBankTickers(bankTickers).ToArray();
                     var count = tickers.Length;
-                    foreach (var ticker in tickers)
+                    foreach (var ticker in tickers.Where(t => !t.IsIndex()))
                     {
                         var bankTicker1 = filteredBankTickers.FirstOrDefault(t => t.Symbol == ticker.Symbol);
                         var bankTicker2 = bankTickers.FirstOrDefault(t => t.Symbol == ticker.Symbol);
@@ -372,6 +386,15 @@ namespace NumbersGoUp.Services
                             }, bankTicker));
                             count++;
                         }
+                    }
+                    if(!tickers.Any(t => t.IsIndex()))
+                    {
+                        stocksContext.Tickers.Add(new Ticker
+                        {
+                            Symbol = "VTI",
+                            Sector = Ticker.IndexSector,
+                            MonthTrend = -1000
+                        });
                     }
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
                 }

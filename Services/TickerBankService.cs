@@ -270,16 +270,22 @@ namespace NumbersGoUp.Services
                     var marketPriceWindow = marketBars.Where(b => b.BarDay.CompareTo(from) > 0 && b.BarDay.CompareTo(to) < 0).OrderBy(b => b.BarDayMilliseconds).ToArray();
                     if(marketPriceWindow.Length > 2 && marketPriceWindow.Last().Price() > 0)
                     {
-                        betas.Add(CalculateBeta(priceWindow, marketPriceWindow));
+                        betas.Add(priceWindow.CalculateBeta(marketPriceWindow));
                     }
                     var futurePrice = priceWindow.CalculateFutureRegression((b) => b.Price(), 1);
                     priceChanges.Add(priceWindow[0].Price().PercChange(futurePrice) * 100);
                 }
                 datePointer = to;
             }
-            double? betaAvg = betas.Count > 0 ? betas.Average() : null;
+            //double? betaAvg = null;
+            //if (betas.Count > 0)
+            //{
+            //    var avg = betas.Average();
+            //    betaAvg = alma - avg;
+            //}
             if (priceChanges.Count > ((DataService.LOOKBACK_YEARS - 2) * 2))
             {
+                double? betaAvg = betas.Count - 1 > 0 ? betas.Take(betas.Count - 1).Average() : null;
                 var avg = priceChanges.Average();
                 var stdev = Math.Sqrt(priceChanges.Sum(p => Math.Pow(p - avg, 2)) / priceChanges.Count);
                 //var mode = priceChanges.OrderBy(p => p).Skip(priceChanges.Count / 2).FirstOrDefault();
@@ -296,41 +302,8 @@ namespace NumbersGoUp.Services
             else
             {
                 _logger.LogDebug($"Insufficient price information for {bars[0].Symbol}");
-                return (null, betaAvg);
+                return (null, null);
             }
-        }
-        private static double CalculateBeta(HistoryBar[] priceWindow, HistoryBar[] marketPriceWindow)
-        {
-            var dayChange = new double[priceWindow.Length - 1];
-            var marketDayChange = new double[marketPriceWindow.Length - 1];
-            double dayChangeSum = 0.0, marketDayChangeSum = 0.0;
-            var maxLength = Math.Max(priceWindow.Length, marketPriceWindow.Length);
-            for (var i = 0; i < maxLength; i++)
-            {
-                if (i < priceWindow.Length - 1)
-                {
-                    dayChange[i] = (priceWindow[i + 1].Price() - priceWindow[i].Price()) * 100.0 / priceWindow[i].Price();
-                    dayChangeSum += dayChange[i];
-                }
-                if (i < marketPriceWindow.Length - 1)
-                {
-                    marketDayChange[i] = (marketPriceWindow[i + 1].Price() - marketPriceWindow[i].Price()) * 100 / marketPriceWindow[i].Price();
-                    marketDayChangeSum += marketDayChange[i];
-                }
-            }
-            var avgDayChange = dayChangeSum / dayChange.Length;
-            var marketAvgDayChange = marketDayChangeSum / marketDayChange.Length;
-            var minlength = Math.Min(dayChange.Length, marketDayChange.Length);
-            double sum = 0.0;
-            for (var i = 0; i < minlength; i++)
-            {
-                sum += (dayChange[i] - avgDayChange) * (marketDayChange[i] - marketAvgDayChange); 
-            }
-            var cov = sum / minlength;
-
-            var marketVariance = marketDayChange.Sum(d => Math.Pow(d - marketAvgDayChange, 2)) / marketDayChange.Length;
-
-            return cov / marketVariance;
         }
     }
 }

@@ -8,14 +8,10 @@ using System.Threading.Tasks;
 namespace NumbersGoUp.Models
 {
     [Index(nameof(Symbol), IsUnique = true)]
-    [Index(nameof(LastCalculatedMillis))]
-    [Index(nameof(LastCalculatedPerformanceMillis))]
-    [Index(nameof(LastCalculatedAvgsMillis))]
     [Index(nameof(PerformanceVector))]
-    [Index(nameof(PERatio))]
-    [Index(nameof(MonthTrend))]
     public class Ticker : ITicker
     {
+        public const string IndexSector = "Index";
         public long Id { get; set; }
         public string Symbol { get; set; }
         public string Sector { get; set; }
@@ -49,8 +45,11 @@ namespace NumbersGoUp.Models
         public double DebtMinusCash { get; set; }
         public double Shares { get; set; }
         public double MarketCap { get; set; }
+        public double BetaDiff { get; set; }
 
         public List<HistoryBar> HistoryBars { get; set; }
         public List<DbOrder> Orders { get; set; }
+
+        public bool IsIndex() => Sector == IndexSector;
     }
 }

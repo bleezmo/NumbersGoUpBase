@@ -175,18 +175,6 @@ namespace NumbersGoUp.Services
             using var stocksContext = _contextFactory.CreateDbContext();
             var symbol = ticker.Symbol;
             var lastBar = await stocksContext.HistoryBars.Where(t => t.Symbol == symbol).OrderByDescending(t => t.BarDayMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
-            //if(lastBar == null || DateTime.UtcNow.Subtract(lastBar.TimeUtc).TotalDays > 5)
-            //{
-            //    var info = await _brokerService.GetTickerInfo(symbol); //make sure we can use it with alpaca
-            //    if (info == null || !info.IsTradable || !info.Fractionable)
-            //    {
-            //        _logger.LogError($"Couldn't retrieve symbol {symbol}!!!!");
-            //        ticker.LastCalculatedMillis = 0;
-            //        stocksContext.Tickers.Update(ticker);
-            //        await stocksContext.SaveChangesAsync(_appCancellation.Token);
-            //        return;
-            //    }
-            //}
             DateTime? from = null;
             if (lastBar != null)
             {
