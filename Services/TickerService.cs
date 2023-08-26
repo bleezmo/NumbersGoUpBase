@@ -144,11 +144,11 @@ namespace NumbersGoUp.Services
                                 {
                                     if (i % monthPeriod == 0)
                                     {
-                                        var min = (bars.Skip(i).Take(monthPeriod).Min(b => b.LowPrice) - initialPrice) * 100 / initialPrice;
+                                        var min = (bars.Skip(i).Take(monthPeriod).Min(b => b.LowPrice) - initialPrice) * 100.0 / initialPrice;
                                         slopes.Add(min - currentMin);
                                         currentMin = min;
                                     }
-                                    var perc = (bars[i].Price() - initialPrice) * 100 / initialPrice;
+                                    var perc = (bars[i].Price() - initialPrice) * 100.0 / initialPrice;
                                     y += perc;
                                     x += i;
                                     xsqr += Math.Pow(i, 2);
@@ -159,12 +159,12 @@ namespace NumbersGoUp.Services
                                 var yintercept = (y - (regressionSlope * x)) / bars.Length;
                                 var regressionStDev = Math.Sqrt(bars.Select((bar, i) =>
                                 {
-                                    var perc = (bar.Price() - initialPrice) * 100 / initialPrice;
+                                    var perc = (bar.Price() - initialPrice) * 100.0 / initialPrice;
                                     var regression = (regressionSlope * i) + yintercept;
                                     return Math.Pow(perc - regression, 2);
                                 }).Sum() / bars.Length) * 2;
                                 var currentRegression = (regressionSlope * (bars.Length - 1)) + yintercept;
-                                var currentPerc = (bars[bars.Length - 1].Price() - initialPrice) * 100.0 / initialPrice;
+                                var currentPerc = bars.Reverse().Take(100).ToArray().ApplyAlma(b => (b.Price() - initialPrice) * 100.0 / initialPrice);
                                 ticker.RegressionAngle = (currentPerc - currentRegression) * regressionSlope * 100.0 / regressionStDev;
                                 ticker.PERatio = ticker.EPS > 0 ? (bars.Last().Price() / ticker.EPS) : 1000;
                                 ticker.MarketCap = bars.Last().Price() * ticker.Shares;

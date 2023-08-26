@@ -10,7 +10,7 @@ namespace NumbersGoUp.Services
 {
     public class TraderService
     {
-        public const double MAX_COOLDOWN_DAYS = 10;
+        public const double MAX_COOLDOWN_DAYS = 14;
         private const string DISABLE_SELLS = "DisableSells";
         private const string DISABLE_BUYS = "DisableBuys";
         public const string MAX_DAILY_BUY = "MaxDailyBuy";

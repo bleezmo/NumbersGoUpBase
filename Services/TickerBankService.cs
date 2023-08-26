@@ -66,8 +66,8 @@ namespace NumbersGoUp.Services
             using (var stocksContext = _contextFactory.CreateDbContext())
             {
                 var bankTickers = await stocksContext.TickerBank.ToArrayAsync(_appCancellation.Token);
-                List<BankTicker> tickers = new List<BankTicker>(), remainingPositions = new List<BankTicker>(); 
-                for(var i = 0; i < CountryTiers.Length; i++)
+                List<BankTicker> tickers = new List<BankTicker>(), remainingPositions = new List<BankTicker>();
+                for (var i = 0; i < CountryTiers.Length; i++)
                 {
                     var countryTier = CountryTiers[i];
                     if (tickers.Count < maxTickers)
@@ -81,12 +81,12 @@ namespace NumbersGoUp.Services
                     }
                     else { break; }
                 }
-                foreach(var position in currentPositions)
+                foreach (var position in currentPositions)
                 {
-                    if(!tickers.Any(t => t.Symbol == position))
+                    if (!tickers.Any(t => t.Symbol == position))
                     {
                         var bankTicker = bankTickers.FirstOrDefault(t => t.Symbol == position);
-                        if(bankTicker != null) { remainingPositions.Add(bankTicker); }
+                        if (bankTicker != null) { remainingPositions.Add(bankTicker); }
                     }
                 }
                 return (tickers.ToArray(), remainingPositions.ToArray());
@@ -128,8 +128,8 @@ namespace NumbersGoUp.Services
                             }
                             else if (passCutoff || hasPosition)
                             {
-                                var bars = await stocksContext.HistoryBars.Where(b => b.Symbol == ticker.Symbol).ToArrayAsync(_appCancellation.Token);
-                                var priceChangeAvg = CalculatePriceChangeAvg(bars.Length > 0 ? bars : (await _brokerService.GetBarHistoryDay(ticker.Symbol, _lookbackDate)).ToArray());
+                                var bars = await stocksContext.HistoryBars.Where(b => b.Symbol == ticker.Symbol).OrderBy(b => b.BarDayMilliseconds).ToArrayAsync(_appCancellation.Token);
+                                var priceChangeAvg = CalculatePriceChangeAvg(bars.Length > 0 ? bars : (await _brokerService.GetBarHistoryDay(ticker.Symbol, _lookbackDate)).OrderBy(b => b.BarDayMilliseconds).ToArray());
                                 ticker.PriceChangeAvg = priceChangeAvg ?? 0.0;
                                 ticker.LastCalculatedFinancials = now;
                                 ticker.LastCalculatedFinancialsMillis = new DateTimeOffset(now).ToUnixTimeMilliseconds();
@@ -169,7 +169,9 @@ namespace NumbersGoUp.Services
             {
                 _logger.LogError(e, "Error occurred when loading ticker bank data");
             }
+            _logger.LogInformation("Completed loading bank tickers");
             await CalculatePerformance();
+            _logger.LogInformation("Completed bank ticker performance calculation");
         }
         private bool LoadCutoff(ProcessorBankTicker ticker) => ticker.Income > 50000000 && ticker.RevenueGrowth > -15 && BasicCutoff(ticker.Ticker);
         private bool BasicCutoff(BankTicker ticker) => (ticker.CurrentRatio > 1 || ticker.DebtEquityRatio > 0) && 
@@ -258,42 +260,52 @@ namespace NumbersGoUp.Services
                 await stocksContext.SaveChangesAsync(_appCancellation.Token);
             }
         }
-        private double? CalculatePriceChangeAvg(HistoryBar[] bars)
+        private double? CalculatePriceChangeAvg(HistoryBar[] barsAsc)
         {
-            if(bars == null || bars.Length == 0) { return null; }
-            var now = DateTime.Now;
-            var datePointer = _lookbackDate;
-            var priceChanges = new List<double>();
-            for (var i = 0; now.CompareTo(datePointer) > 0 && i < 1000; i++)
+            if(barsAsc == null || barsAsc.Length == 0) { return null; }
+            var cutoff = _lookbackDate.AddMonths(6);
+            if (barsAsc[0].BarDay.CompareTo(cutoff) > 0)
             {
-                var from = datePointer;
-                var to = datePointer.AddMonths(6);
-                var priceWindow = bars.Where(b => b.BarDay.CompareTo(from) > 0 && b.BarDay.CompareTo(to) < 0).OrderBy(b => b.BarDayMilliseconds).ToArray();
+                return null;
+            }
+            var initialInitialPrice = barsAsc[0].Price();
+            var (totalslope, totalyintercept) = barsAsc.CalculateRegression(b => (b.Price() - initialInitialPrice) * 100.0 / initialInitialPrice);
+            var regressionTotal = (totalslope * barsAsc.Length) + totalyintercept - DataService.LOOKBACK_YEARS;
+            var stdevTotal = Math.Sqrt(barsAsc.Select((b, i) =>
+            {
+                var p = (b.Price() - initialInitialPrice) * 100 / initialInitialPrice;
+                var r = (totalslope * i) + totalyintercept;
+                return Math.Pow(p - r, 2);
+            }).Sum() / barsAsc.Length);
+            if (regressionTotal < 0) { return regressionTotal / stdevTotal; }
+            const int interval = 130;
+            var priceChanges = new List<double>();
+            var stdevs = new List<double>();
+            for(var i = 0; i < barsAsc.Length; i += interval)
+            {
+                var priceWindow = barsAsc.Skip(i).Take(interval).ToArray();
                 if (priceWindow.Length > 2 && priceWindow.Last().Price() > 0)
                 {
-                    var futurePrice = priceWindow.CalculateFutureRegression((b) => b.Price(), 1);
-                    priceChanges.Add(priceWindow[0].Price().PercChange(futurePrice) * 100);
+                    var initialPrice = priceWindow[0].Price();
+                    var (slope, yintercept) = priceWindow.CalculateRegression(b => (b.Price() - initialPrice) * 100.0 / initialPrice);
+                    var price = (slope * priceWindow.Length) + yintercept;
+                    var stdev = Math.Sqrt(priceWindow.Select((b, i) =>
+                    {
+                        var p = (b.Price() - initialPrice) * 100 / initialPrice;
+                        var r = (slope * i) + yintercept;
+                        return Math.Pow(p - r, 2);
+                    }).Sum() / priceWindow.Length);
+                    priceChanges.Add(price - 0.5);
+                    stdevs.Add(stdev);
                 }
-                datePointer = to;
             }
-            if (priceChanges.Count > ((DataService.LOOKBACK_YEARS - 2) * 2))
+            if (priceChanges.Count > ((DataService.LOOKBACK_YEARS - 2) * 2) && priceChanges.Any() && stdevs.Any())
             {
-                var avg = priceChanges.Average();
-                var stdev = Math.Sqrt(priceChanges.Sum(p => Math.Pow(p - avg, 2)) / priceChanges.Count);
-                //var mode = priceChanges.OrderBy(p => p).Skip(priceChanges.Count / 2).FirstOrDefault();
-                if (stdev > 0)
-                {
-                    return avg / stdev;
-                }
-                else
-                {
-                    _logger.LogWarning($"Standard deviation was zero for some reason. Symbol {bars[0].Symbol}");
-                    return avg;
-                }
+                return Math.Min(priceChanges.Average() / stdevs.Average(), regressionTotal / stdevTotal);
             }
             else
             {
-                _logger.LogDebug($"Insufficient price information for {bars[0].Symbol}");
+                _logger.LogDebug($"Insufficient price information for {barsAsc[0].Symbol}");
                 return null;
             }
         }

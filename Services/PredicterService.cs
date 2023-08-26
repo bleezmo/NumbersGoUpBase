@@ -91,12 +91,15 @@ namespace NumbersGoUp.Services
                     barMetrics = await stocksContext.BarMetrics.Where(p => p.Symbol == symbol && p.BarDayMilliseconds <= cutoff)
                                         .OrderByDescending(b => b.BarDayMilliseconds).Take(FEATURE_HISTORY_DAY).Include(b => b.HistoryBar).ToArrayAsync(_appCancellation.Token);
                 }
-                return new Prediction
+                if (barMetrics.Any())
                 {
-                    BuyMultiplier = Predict(ticker, barMetrics, true),
-                    SellMultiplier = Predict(ticker, barMetrics, false),
-                    Day = barMetrics[0].BarDay
-                };
+                    return new Prediction
+                    {
+                        BuyMultiplier = Predict(ticker, barMetrics, true),
+                        SellMultiplier = Predict(ticker, barMetrics, false),
+                        Day = barMetrics[0].BarDay
+                    };
+                }
             }
             catch (Exception ex)
             {

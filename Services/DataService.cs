@@ -80,7 +80,7 @@ namespace NumbersGoUp.Services
             {
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
-                    var cutoff = DateTimeOffset.Now.AddYears(0 - LOOKBACK_YEARS).ToUnixTimeMilliseconds();
+                    var cutoff = DateTimeOffset.Now.AddYears(-LOOKBACK_YEARS-1).ToUnixTimeMilliseconds();
                     var bars = await stocksContext.HistoryBars.Where(b => b.BarDayMilliseconds < cutoff).ToListAsync(_appCancellation.Token);
                     stocksContext.HistoryBars.RemoveRange(bars);
                     var removed = await stocksContext.SaveChangesAsync(_appCancellation.Token);

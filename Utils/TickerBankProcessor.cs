@@ -56,7 +56,7 @@ namespace NumbersGoUp.Utils
                      * Debt to Equity Ratio (MRQ),Dividend Yield Forward,EBITDA (TTM),Enterprise Value/EBITDA (TTM),EPS Diluted (TTM)
                      */
                     int? tickerIndex = null, sectorIndex = null, marketCapIndex = null, peRatioIndex = null, currentRatioIndex = null, debtEquityRatioIndex = null, 
-                         dividendIndex = null, ebitdaIndex = null, evebitdaIndex = null, epsIndex = null, priceIndex = null, sharesIndex = null, evIndex = null, 
+                         dividendIndex = null, ebitdaIndex = null, evebitdaIndex = null, epsFYIndex = null, epsIndex = null, priceIndex = null, sharesIndex = null, evIndex = null, 
                          currentEPSIndex = null, futureEPSIndex = null, epsQoQIndex = null, epsGrowthIndex = null, recentEarningsIndex = null, revenueGrowthIndex = null, 
                          incomeIndex = null, countryIndex = null;
                     using (var csv = new CsvReader(sr, CultureInfo.InvariantCulture))
@@ -79,6 +79,7 @@ namespace NumbersGoUp.Utils
                                     if (headers[i] == "Dividend Yield Forward") { dividendIndex = i; }
                                     if (headers[i] == "EBITDA (TTM)") { ebitdaIndex = i; }
                                     if (headers[i] == "Enterprise Value/EBITDA (TTM)") { evebitdaIndex = i; }
+                                    if (headers[i] == "EPS Diluted (FY)") { epsFYIndex = i; }
                                     if (headers[i] == "EPS Diluted (TTM)") { epsIndex = i; }
                                     if (headers[i] == "Price") { priceIndex = i; }
                                     if (headers[i] == "EPS Diluted (MRQ)") { currentEPSIndex = i; }
@@ -203,7 +204,15 @@ namespace NumbersGoUp.Utils
                                     }
                                     else
                                     {
-                                        ticker.Ticker.EPS = Math.Min(eps, eps * 0.5);
+                                        ticker.Ticker.EPS = Math.Min(eps, eps * 0.8);
+                                    }
+                                    if(epsFYIndex.HasValue && double.TryParse(csv[epsFYIndex.Value], out var epsFY) && epsFY > 0)
+                                    {
+                                        ticker.Ticker.EPS *= (eps / epsFY).ZeroReduce(2, 0);
+                                    }
+                                    else
+                                    {
+                                        ticker.Ticker.EPS *= 0.9;
                                     }
                                 }
                                 else
