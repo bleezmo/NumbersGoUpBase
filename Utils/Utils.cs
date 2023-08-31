@@ -162,7 +162,28 @@ namespace NumbersGoUp.Utils
             }
             return sum / size;
         }
-        public static double PercChange(this double currentValue, double futureValue) => (futureValue / currentValue) - 1;
+        public static double CalculateAccelerationAlma(this double[] barsDesc)
+        {
+            var size = barsDesc.Length - 2;
+            if (size < 1) { throw new Exception("Length does not meet minimum requirements to calculate acceleration"); }
+            var accels = new List<double>();
+            for (var i = 0; i < size; i++)
+            {
+                accels.Add(barsDesc[i] - barsDesc[i + 1] - barsDesc[i + 1] + barsDesc[i + 2]);
+            }
+            return accels.ToArray().ApplyAlma();
+        }
+        public static double CalculateAvgStDevRatio(this IEnumerable<double> values)
+        {
+            var count = values.Count();
+            if (count == 0) return 0;
+            if (count == 1) return values.First();
+            var avg = values.Average();
+            return avg / Math.Sqrt(values.Select((v, i) =>
+            {
+                return Math.Pow(v - avg, 2);
+            }).Sum() / values.Count());
+        }
         public static (double slope, double yintercept) CalculateRegression<T>(this T[] itemsAsc, Func<T, double> valueFn)
         {
             double x = 0.0, y = 0.0, xsqr = 0.0, xy = 0.0;

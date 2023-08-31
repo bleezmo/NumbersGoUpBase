@@ -196,12 +196,12 @@ namespace NumbersGoUp.Services
                         minmaxDebtCap.Run(ticker);
                     }
                     Func<Ticker, double> performanceFnTotal = (t) =>
-                                                                  (performanceFnEarnings(t).DoubleReduce(minmaxEarnings.Max, minmaxEarnings.Min) * 30) +
-                                                                  (performanceFnEarningsRatios(t).DoubleReduce(minmaxEarningsRatios.Max, minmaxEarningsRatios.Min) * 10) +
-                                                                  (performanceFnDebtCap(t).DoubleReduce(minmaxDebtCap.Max, minmaxDebtCap.Min) * 10) +
-                                                                  (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 5) +
-                                                                  (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 30) +
-                                                                  (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 10);
+                                                                  (performanceFnEarnings(t).DoubleReduceSafe(minmaxEarnings.Max, minmaxEarnings.Min) * 30) +
+                                                                  (performanceFnEarningsRatios(t).DoubleReduceSafe(minmaxEarningsRatios.Max, minmaxEarningsRatios.Min) * 10) +
+                                                                  (performanceFnDebtCap(t).DoubleReduceSafe(minmaxDebtCap.Max, minmaxDebtCap.Min) * 10) +
+                                                                  (performanceFn1(t).DoubleReduceSafe(minmax1.Max, minmax1.Min) * 10) +
+                                                                  (performanceFn2(t).DoubleReduceSafe(minmax2.Max, minmax2.Min) * 30) +
+                                                                  (performanceFn3(t).DoubleReduceSafe(minmax3.Max, minmax3.Min) * 10);
 
                     var minmaxTotal = new MinMaxStore<Ticker>(performanceFnTotal);
                     var perfAvg = 0.0;
