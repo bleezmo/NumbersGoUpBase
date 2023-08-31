@@ -271,12 +271,7 @@ namespace NumbersGoUp.Services
             var initialInitialPrice = barsAsc[0].Price();
             var (totalslope, totalyintercept) = barsAsc.CalculateRegression(b => (b.Price() - initialInitialPrice) * 100.0 / initialInitialPrice);
             var regressionTotal = (totalslope * barsAsc.Length) + totalyintercept - DataService.LOOKBACK_YEARS;
-            var stdevTotal = Math.Sqrt(barsAsc.Select((b, i) =>
-            {
-                var p = (b.Price() - initialInitialPrice) * 100 / initialInitialPrice;
-                var r = (totalslope * i) + totalyintercept;
-                return Math.Pow(p - r, 2);
-            }).Sum() / barsAsc.Length);
+            var stdevTotal = barsAsc.RegressionStDev(b => (b.Price() - initialInitialPrice) * 100.0 / initialInitialPrice, totalslope, totalyintercept);
             if (regressionTotal < 0) { return regressionTotal / stdevTotal; }
             const int interval = 130;
             var priceChanges = new List<double>();
@@ -289,12 +284,7 @@ namespace NumbersGoUp.Services
                     var initialPrice = priceWindow[0].Price();
                     var (slope, yintercept) = priceWindow.CalculateRegression(b => (b.Price() - initialPrice) * 100.0 / initialPrice);
                     var price = (slope * priceWindow.Length) + yintercept;
-                    var stdev = Math.Sqrt(priceWindow.Select((b, i) =>
-                    {
-                        var p = (b.Price() - initialPrice) * 100 / initialPrice;
-                        var r = (slope * i) + yintercept;
-                        return Math.Pow(p - r, 2);
-                    }).Sum() / priceWindow.Length);
+                    var stdev = priceWindow.RegressionStDev(b => (b.Price() - initialPrice) * 100.0 / initialPrice, slope, yintercept);
                     priceChanges.Add(price - 0.5);
                     stdevs.Add(stdev);
                 }

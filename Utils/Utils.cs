@@ -28,6 +28,7 @@ namespace NumbersGoUp.Utils
             if (value > max) { value = max; }
             return (value - min) / (max - min);
         }
+        public static double DoubleReduceSafe(this double value, double max = 1.0, double min = 0.0) => max == 0 && min == 0 ? 0 : value.DoubleReduce(max, min);
         public static double FibonacciReduce(this double value, double max = 1.0, double min = 0.0, double exp = 1, double radius = 0.2)
         {
             var x = value.DoubleReduce(max, min) * 1000;
@@ -144,6 +145,12 @@ namespace NumbersGoUp.Utils
             if (size < 3) { throw new Exception("Length does not meet minimum requirements to calculate acceleration"); }
             return (angleValueFn(barsDesc.First()) - angleValueFn(barsDesc.Skip(size / 2).First())) - (angleValueFn(barsDesc.Skip(size / 2).First()) - angleValueFn(barsDesc.Last()));
         }
+        public static double CalculateAcceleration(this double[] valuesDesc)
+        {
+            var size = valuesDesc.Length;
+            if (size < 3) { throw new Exception("Length does not meet minimum requirements to calculate acceleration"); }
+            return (valuesDesc[0] - valuesDesc[valuesDesc.Length / 2]) - (valuesDesc[valuesDesc.Length / 2] - valuesDesc[valuesDesc.Length - 1]);
+        }
         public static double CalculateAvgAcceleration<T>(this T[] barsDesc, Func<T, double> valueFn)
         {
             var size = barsDesc.Length - 2;
@@ -171,6 +178,21 @@ namespace NumbersGoUp.Utils
             var yintercept = (y - (regressionSlope * x)) / itemsAsc.Length;
             return (regressionSlope, yintercept);
         }
+        public static double RegressionStDev<T>(this T[] itemsAsc, Func<T,double> valueFn, double slope, double yintercept)
+        {
+            return Math.Sqrt(itemsAsc.Select((b, i) =>
+            {
+                var regression = (slope * i) + yintercept;
+                return Math.Pow(valueFn(b) - regression, 2);
+            }).Sum() / itemsAsc.Length);
+        }
+        public static double CalculateFutureRegressionStDevRatio<T>(this T[] itemsAsc, Func<T, double> valueFn, int offset)
+        {
+            var (slope, yintercept) = itemsAsc.CalculateRegression(valueFn);
+            var stdev = itemsAsc.RegressionStDev(valueFn, slope, yintercept);
+            var currentRegression = (slope * (itemsAsc.Length + offset)) + yintercept;
+            return currentRegression / stdev;
+        }
         public static double CalculateFutureRegression<T>(this T[] itemsAsc, Func<T, double> valueFn, int offset)
         {
             int index = itemsAsc.Length + offset;
@@ -179,7 +201,53 @@ namespace NumbersGoUp.Utils
         }
         public static (double slope, double yintercept) CalculateRegression(this double[] itemsAsc) => itemsAsc.CalculateRegression((x) => x);
         public static double CalculateFutureRegression(this double[] itemsAsc, int offset) => itemsAsc.CalculateFutureRegression((x) => x, offset);
+        public static double CalculateFutureRegressionStDevRatio(this double[] itemsAsc, int offset) => itemsAsc.CalculateFutureRegressionStDevRatio(x => x, offset);
+        public static double CalculateCovariance<T>(this T[] itemsAsc1, T[] itemsAsc2, Func<T,double> valueFn)
+        {
+            var avgChange1 = itemsAsc1.Average(i => valueFn(i));
+            var avgChange2 = itemsAsc2.Average(i => valueFn(i));
+            var minlength = Math.Min(itemsAsc1.Length, itemsAsc2.Length);
+            if(minlength > 2)
+            {
+                var covValues = new double[minlength];
+                for (var i = 0; i < minlength; i++)
+                {
+                    covValues[i] = (valueFn(itemsAsc1[i]) - avgChange1) * (valueFn(itemsAsc2[i]) - avgChange2);
+                }
 
+                return covValues.Average();
+            }
+            return -1;
+        }
+        public static double CalculateCovariance(this (double, double)[] items)
+        {
+            var avg1 = items.Select(i => i.Item1).Average();
+            var avg2 = items.Select(i => i.Item2).Average();
+            var covValues = new double[items.Length];
+            for(var i = 0; i < items.Length; i++)
+            {
+                covValues[i] = (items[i].Item1 - avg1) * (items[i].Item2 - avg2);
+            }
+            return covValues.Average();
+        }
+        public static double CalculateCorrelation(this (double, double)[] items)
+        {
+            var avg1 = items.Select(i => i.Item1).Average();
+            var avg2 = items.Select(i => i.Item2).Average();
+            var covValues = new double[items.Length];
+            var diffsqr1 = new double[items.Length];
+            var diffsqr2 = new double[items.Length];
+            for (var i = 0; i < items.Length; i++)
+            {
+                var diff1 = items[i].Item1 - avg1;
+                var diff2 = items[i].Item2 - avg2;
+                covValues[i] = diff1 * diff2;
+                diffsqr1[i] = Math.Pow(diff1, 2);
+                diffsqr2[i] = Math.Pow(diff2, 2);
+            }
+            var stdevs = Math.Sqrt(diffsqr1.Average()) * Math.Sqrt(diffsqr2.Average());
+            return covValues.Average() / stdevs;
+        }
         public static async Task<int> BatchJobs<T>(this IEnumerable<T> data, Func<T,Task> fn, int batchSize = 10)
         {
             var length = data.Count();
