@@ -174,7 +174,7 @@ namespace NumbersGoUp.Services
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
                     Func<Ticker, double, double> EarningsRatiosCalc = (t, maxFractional) => (0.5 * (1 - t.PERatio.DoubleReduce(PERatioCutoff, PERatioCutoff * maxFractional))) + (0.5 * (1 - t.EVEarnings.DoubleReduce(_tickerBankService.EarningsMultipleCutoff, _tickerBankService.EarningsMultipleCutoff * maxFractional)));
                     Func<Ticker, double, double> DebtCapCalc = (t, lowerBound) => t.MarketCap > 0 ? (1 - (t.DebtMinusCash / t.MarketCap).DoubleReduce(0.5, lowerBound)) : 0.0;
-                    Func<Ticker, double> performanceFn1 = (t) => t.SMASMAAvg.ZeroReduce(20, -30);
+                    Func<Ticker, double> performanceFn1 = (t) => t.SMASMAAvg.ZeroReduce(20, -20);
                     Func<Ticker, double> performanceFn2 = (t) => (1 - t.MonthTrend.DoubleReduce(20, -20)) * (1 - t.SMASMAAvg.DoubleReduce(20, -20));
                     Func<Ticker, double> performanceFn3 = (t) => t.RegressionAngle * t.SMASMAAvg.ZeroReduce(20, -10);
                     Func<Ticker, double> performanceFnEarnings = (t) => Math.Sqrt(t.MarketCap) * EarningsRatiosCalc(t, 0.5) * DebtCapCalc(t, 0);
