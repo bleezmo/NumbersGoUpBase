@@ -114,6 +114,17 @@ namespace NumbersGoUp.Utils
             }
             return sum / (barsDesc.Length - 1);
         }
+        public static double CalculateVelocityAlma(this double[] barsDesc)
+        {
+            var size = barsDesc.Length - 1;
+            if (size < 2) { throw new Exception("Length does not meet minimum requirements to calculate acceleration"); }
+            var vels = new List<double>();
+            for (var i = 0; i < size; i++)
+            {
+                vels.Add(barsDesc[i] - barsDesc[i + 1]);
+            }
+            return vels.ToArray().ApplyAlma();
+        }
         public static double CalculateVelocityStDev<T>(this T[] barsDesc, Func<T, double> angleValueFn)
         {
             if (barsDesc.Length < 2) { throw new Exception("Length does not meet minimum requirements to calculate velocity"); }
@@ -165,7 +176,7 @@ namespace NumbersGoUp.Utils
         public static double CalculateAccelerationAlma(this double[] barsDesc)
         {
             var size = barsDesc.Length - 2;
-            if (size < 1) { throw new Exception("Length does not meet minimum requirements to calculate acceleration"); }
+            if (size < 2) { throw new Exception("Length does not meet minimum requirements to calculate acceleration"); }
             var accels = new List<double>();
             for (var i = 0; i < size; i++)
             {

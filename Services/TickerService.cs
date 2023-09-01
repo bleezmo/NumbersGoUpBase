@@ -125,7 +125,8 @@ namespace NumbersGoUp.Services
                         {
                             continue;
                         }
-                        var bars = await stocksContext.HistoryBars.Where(bar => bar.Symbol == ticker.Symbol && bar.BarDayMilliseconds > lookback).OrderBy(b => b.BarDayMilliseconds).ToArrayAsync(_appCancellation.Token);
+                        var bars = await stocksContext.HistoryBars.Where(bar => bar.Symbol == ticker.Symbol && bar.BarDayMilliseconds > lookback)
+                                                      .OrderBy(b => b.BarDayMilliseconds).Include(b => b.BarMetric).ToArrayAsync(_appCancellation.Token);
                         if (bars.Any())
                         {
                             if (now.AddMonths(-5).CompareTo(bars.First().BarDay) > 0 && now.AddDays(-7).CompareTo(bars.Last().BarDay) < 0) //remove anything that doesn't have enough history
@@ -140,8 +141,8 @@ namespace NumbersGoUp.Services
                                 }
                                 for (var i = bars.Length - (monthPeriod * 5); i < bars.Length; i+=monthPeriod)
                                 {
-                                    mins.Add((bars.Skip(i).Take(monthPeriod).Min(b => b.LowPrice) - initialPrice) * 100.0 / initialPrice);
-                                    maxs.Add((bars.Skip(i).Take(monthPeriod).Max(b => b.HighPrice) - initialPrice) * 100.0 / initialPrice);
+                                    mins.Add((bars.Skip(i).Take(monthPeriod).Min(b => b.Price()) - initialPrice) * 100.0 / initialPrice);
+                                    maxs.Add((bars.Skip(i).Take(monthPeriod).Max(b => b.Price()) - initialPrice) * 100.0 / initialPrice);
                                 }
                                 ticker.PERatio = ticker.EPS > 0 ? (bars.Last().Price() / ticker.EPS) : 1000;
                                 ticker.MarketCap = bars.Last().Price() * ticker.Shares;
@@ -150,7 +151,7 @@ namespace NumbersGoUp.Services
                                 {
                                     var monthMin = mins.ToArray().CalculateFutureRegression(1);
                                     ticker.MonthTrend = (monthMin - mins.First()) / initialPrice;
-                                    ticker.RegressionAngle = maxs.ToArray().CalculateFutureRegressionStDevRatio(1);
+                                    ticker.RegressionAngle = maxs.Reverse<double>().ToArray().CalculateVelocityAlma() * bars.Reverse().Select(b => b.BarMetric.AlmaSMA3).ToArray().ApplyAlma(); ;
                                 }
                             }
                         }
@@ -176,7 +177,7 @@ namespace NumbersGoUp.Services
                     Func<Ticker, double, double> DebtCapCalc = (t, lowerBound) => t.MarketCap > 0 ? (1 - (t.DebtMinusCash / t.MarketCap).DoubleReduce(0.5, lowerBound)) : 0.0;
                     Func<Ticker, double> performanceFn1 = (t) => t.SMASMAAvg.ZeroReduce(20, -20);
                     Func<Ticker, double> performanceFn2 = (t) => (1 - t.MonthTrend.DoubleReduce(20, -20)) * (1 - t.SMASMAAvg.DoubleReduce(20, -20));
-                    Func<Ticker, double> performanceFn3 = (t) => t.RegressionAngle * t.SMASMAAvg.ZeroReduce(20, -10);
+                    Func<Ticker, double> performanceFn3 = (t) => t.RegressionAngle * t.SMASMAAvg.ZeroReduce(20, -20);
                     Func<Ticker, double> performanceFnEarnings = (t) => Math.Sqrt(t.MarketCap) * EarningsRatiosCalc(t, 0.5) * DebtCapCalc(t, 0);
                     Func<Ticker, double> performanceFnEarningsRatios = (t) => EarningsRatiosCalc(t, 0);
                     Func<Ticker, double> performanceFnDebtCap = (t) => DebtCapCalc(t, -0.5);
@@ -200,8 +201,8 @@ namespace NumbersGoUp.Services
                                                                   (performanceFnEarningsRatios(t).DoubleReduceSafe(minmaxEarningsRatios.Max, minmaxEarningsRatios.Min) * 10) +
                                                                   (performanceFnDebtCap(t).DoubleReduceSafe(minmaxDebtCap.Max, minmaxDebtCap.Min) * 10) +
                                                                   (performanceFn1(t).DoubleReduceSafe(minmax1.Max, minmax1.Min) * 10) +
-                                                                  (performanceFn2(t).DoubleReduceSafe(minmax2.Max, minmax2.Min) * 30) +
-                                                                  (performanceFn3(t).DoubleReduceSafe(minmax3.Max, minmax3.Min) * 10);
+                                                                  (performanceFn2(t).DoubleReduceSafe(minmax2.Max, minmax2.Min) * 25) +
+                                                                  (performanceFn3(t).DoubleReduceSafe(minmax3.Max, minmax3.Min) * 15);
 
                     var minmaxTotal = new MinMaxStore<Ticker>(performanceFnTotal);
                     var perfAvg = 0.0;
