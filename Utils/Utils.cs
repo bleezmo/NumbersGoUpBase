@@ -280,6 +280,19 @@ namespace NumbersGoUp.Utils
             var stdevs = Math.Sqrt(diffsqr1.Average()) * Math.Sqrt(diffsqr2.Average());
             return covValues.Average() / stdevs;
         }
+        public static double KalmanValue(double[] valuesAsc, double[] errorDiffsAsc)
+        {
+            double xk = 0; double pk = 1; double kk; double zk; double r;
+            for(var i = 0; i < valuesAsc.Length; i++)
+            {
+                r = errorDiffsAsc[i];
+                zk = valuesAsc[i];
+                kk = pk / (pk + r);
+                pk = (1 - kk) * pk;
+                xk = xk + (kk * (zk - xk));
+            }
+            return xk;
+        }
         public static async Task<int> BatchJobs<T>(this IEnumerable<T> data, Func<T,Task> fn, int batchSize = 10)
         {
             var length = data.Count();

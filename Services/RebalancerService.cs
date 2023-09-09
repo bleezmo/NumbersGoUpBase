@@ -205,7 +205,7 @@ namespace NumbersGoUpBase.Services
             }
             if (Position != null && Position.UnrealizedProfitLossPercent.HasValue && Position.UnrealizedProfitLossPercent.Value > 0)
             {
-                performanceMultiplier *= Math.Log(Position.UnrealizedProfitLossPercent.Value + Math.E);
+                performanceMultiplier *= Math.Log((Position.UnrealizedProfitLossPercent.Value * Ticker.DividendYield.DoubleReduce(0.05, 0)) + Math.E);
             }
             return performanceMultiplier;
         }

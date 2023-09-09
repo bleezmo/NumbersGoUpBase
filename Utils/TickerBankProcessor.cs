@@ -217,7 +217,7 @@ namespace NumbersGoUp.Utils
                                 }
                                 else
                                 {
-                                    //_logger.LogError($"EPS not found for {ticker.Ticker.Symbol}");
+                                    _logger.LogWarning($"EPS not found for {ticker.Ticker.Symbol}");
                                 }
                                 if (sharesIndex.HasValue && double.TryParse(csv[sharesIndex.Value], out var shares))
                                 {

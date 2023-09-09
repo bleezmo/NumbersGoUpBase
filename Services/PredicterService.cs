@@ -107,7 +107,7 @@ namespace NumbersGoUp.Services
             }
             return null;
         }
-        private double Predict(Ticker ticker, BarMetric[] barMetrics, bool buy)
+        public double Predict(Ticker ticker, BarMetric[] barMetrics, bool buy)
         {
             if (barMetrics.Length == FEATURE_HISTORY_DAY)
             {
