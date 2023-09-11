@@ -200,8 +200,8 @@ namespace NumbersGoUp.Services
                                                                   (performanceFnEarnings(t).DoubleReduceSafe(minmaxEarnings.Max, minmaxEarnings.Min) * 30) +
                                                                   (performanceFnEarningsRatios(t).DoubleReduceSafe(minmaxEarningsRatios.Max, minmaxEarningsRatios.Min) * 10) +
                                                                   (performanceFnDebtCap(t).DoubleReduceSafe(minmaxDebtCap.Max, minmaxDebtCap.Min) * 10) +
-                                                                  (performanceFn1(t).DoubleReduceSafe(minmax1.Max, minmax1.Min) * 10) +
-                                                                  (performanceFn2(t).DoubleReduceSafe(minmax2.Max, minmax2.Min) * 25) +
+                                                                  (performanceFn1(t).DoubleReduceSafe(minmax1.Max, minmax1.Min) * 20) +
+                                                                  (performanceFn2(t).DoubleReduceSafe(minmax2.Max, minmax2.Min) * 15) +
                                                                   (performanceFn3(t).DoubleReduceSafe(minmax3.Max, minmax3.Min) * 15);
 
                     var minmaxTotal = new MinMaxStore<Ticker>(performanceFnTotal);
