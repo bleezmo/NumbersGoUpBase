@@ -176,14 +176,22 @@ namespace NumbersGoUp.Utils
                                         var quarters = new[] { pastEPS, currentEPS, futureEPS };
                                         var finalQ = quarters.CalculateFutureRegression(1);
                                         var calculatedEPS = pastEPS + currentEPS + futureEPS + finalQ;
-                                        if (finalQ > 0 && finalQ > quarters.Min() && eps > 0)
+                                        var minQtr = quarters.Min();
+                                        if (finalQ > 0 && eps > 0 && calculatedEPS > 0)
                                         {
-                                            var coeff = (calculatedEPS / eps).DoubleReduce(2, 1);
-                                            ticker.Ticker.EPS = (coeff * eps) + ((1 - coeff) * calculatedEPS);
+                                            if(finalQ > minQtr)
+                                            {
+                                                var coeff = (calculatedEPS / eps).DoubleReduce(2, 1);
+                                                ticker.Ticker.EPS = (coeff * eps) + ((1 - coeff) * calculatedEPS);
+                                            }
+                                            else
+                                            {
+                                                ticker.Ticker.EPS = Math.Min(eps, calculatedEPS * (finalQ / minQtr));
+                                            }
                                         }
                                         else
                                         {
-                                            ticker.Ticker.EPS = Math.Min(eps, calculatedEPS * 0.7);
+                                            ticker.Ticker.EPS = 0;
                                         }
                                     }
                                     else if (epsGrowthIndex.HasValue && double.TryParse(csv[epsGrowthIndex.Value], out var epsGrowth) && 
@@ -208,7 +216,7 @@ namespace NumbersGoUp.Utils
                                     }
                                     if(epsFYIndex.HasValue && double.TryParse(csv[epsFYIndex.Value], out var epsFY) && epsFY > 0)
                                     {
-                                        ticker.Ticker.EPS *= (eps / epsFY).ZeroReduce(2, 0);
+                                        ticker.Ticker.EPS *= (eps / epsFY).ZeroReduceSlow(2, 0);
                                     }
                                     else
                                     {
