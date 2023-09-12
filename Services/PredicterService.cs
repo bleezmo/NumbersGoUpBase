@@ -116,9 +116,9 @@ namespace NumbersGoUp.Services
                 if (buy)
                 {
                     var bullPricePrediction = ((
-                                        (barMetrics[0].AlmaSMA1.ZeroReduce(ticker.AlmaSma1Avg + ticker.AlmaSma1StDev, ticker.AlmaSma1Avg - ticker.AlmaSma1StDev) * 0.2) +
-                                        (barMetrics[0].AlmaSMA2.ZeroReduce(ticker.AlmaSma2Avg + ticker.AlmaSma2StDev, ticker.AlmaSma2Avg - ticker.AlmaSma2StDev) * 0.2) +
-                                        (barMetrics[0].AlmaSMA3.ZeroReduce(ticker.AlmaSma3Avg + ticker.AlmaSma3StDev, ticker.AlmaSma3Avg - ticker.AlmaSma3StDev) * 0.2)
+                                        ((1 - barMetrics[0].AlmaSMA1.DoubleReduce(ticker.AlmaSma1Avg + ticker.AlmaSma1StDev, ticker.AlmaSma1Avg - ticker.AlmaSma1StDev)) * 0.2) +
+                                        ((1 - barMetrics[0].AlmaSMA2.DoubleReduce(ticker.AlmaSma2Avg + ticker.AlmaSma2StDev, ticker.AlmaSma2Avg - ticker.AlmaSma2StDev)) * 0.2) +
+                                        ((1 - barMetrics[0].AlmaSMA3.DoubleReduce(ticker.AlmaSma3Avg + ticker.AlmaSma3StDev, ticker.AlmaSma3Avg - ticker.AlmaSma3StDev)) * 0.2)
                                       ) * barMetrics.CalculateAvgVelocity(b => b.AlmaSMA3).DoubleReduce(0, -ticker.AlmaVelStDev)) +
                                       ((1 - barMetrics[0].SMASMA.DoubleReduce(ticker.SMASMAAvg, ticker.SMASMAAvg - ticker.SMASMAStDev)) * 0.15) +
                                       (barMetrics.CalculateAvgVelocity(b => b.SMASMA).ZeroReduce(ticker.SMAVelStDev, -ticker.SMAVelStDev) * 0.1) +
