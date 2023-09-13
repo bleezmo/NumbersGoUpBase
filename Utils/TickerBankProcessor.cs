@@ -58,7 +58,7 @@ namespace NumbersGoUp.Utils
                     int? tickerIndex = null, sectorIndex = null, marketCapIndex = null, peRatioIndex = null, currentRatioIndex = null, debtEquityRatioIndex = null, 
                          dividendIndex = null, ebitdaIndex = null, evebitdaIndex = null, epsFYIndex = null, epsIndex = null, priceIndex = null, sharesIndex = null, evIndex = null, 
                          currentEPSIndex = null, futureEPSIndex = null, epsQoQIndex = null, epsGrowthIndex = null, recentEarningsIndex = null, revenueGrowthIndex = null, 
-                         incomeIndex = null, countryIndex = null;
+                         incomeIndex = null, countryIndex = null, incomeGrowthIndex = null;
                     using (var csv = new CsvReader(sr, CultureInfo.InvariantCulture))
                     {
                         string[] headers = null;
@@ -92,6 +92,7 @@ namespace NumbersGoUp.Utils
                                     if (headers[i] == "Revenue (TTM YoY Growth)") { revenueGrowthIndex = i; }
                                     if (headers[i] == "Net Income (FY)") { incomeIndex = i; }
                                     if (headers[i] == "Country") { countryIndex = i; }
+                                    if (headers[i] == "Net Income (TTM YoY Growth)") { incomeGrowthIndex = i; }
                                 }
                             }
                             else
@@ -130,6 +131,10 @@ namespace NumbersGoUp.Utils
                                 if(incomeIndex.HasValue && double.TryParse(csv[incomeIndex.Value], out var income))
                                 {
                                     ticker.Income = income;
+                                }
+                                if(incomeGrowthIndex.HasValue && double.TryParse(csv[incomeGrowthIndex.Value], out var incomeGrowth))
+                                {
+                                    ticker.IncomeGrowth = incomeGrowth;
                                 }
                                 if (peRatioIndex.HasValue && double.TryParse(csv[peRatioIndex.Value], out var peRatio))
                                 {
@@ -380,6 +385,7 @@ namespace NumbersGoUp.Utils
         }
         public double? RevenueGrowth { get; set; }
         public double? Income { get; set; }
+        public double? IncomeGrowth { get; set; }
         public double? QoQEPSGrowth { get; set; }
         public double? YoYEPSGrowth { get; set; }
         public double Price { get; set; }
