@@ -122,7 +122,7 @@ namespace NumbersGoUpBase.Services
                         if(diff < 0)
                         {
                             var gain = position.MarketValue.Value - position.CostBasis;
-                            diffCutoff = (gain * performanceTicker.Ticker.DividendYield.DoubleReduce(0.03, 0) / equity).DoubleReduce(0.1, 0, 99, diffCutoff);
+                            diffCutoff = (gain * performanceTicker.Ticker.DividendYield.DoubleReduce(0.04, 0) / equity).DoubleReduce(0.1, 0, 99, diffCutoff);
                         }
                         if (Math.Abs(diffPerc) > diffCutoff)
                         {
@@ -185,7 +185,7 @@ namespace NumbersGoUpBase.Services
         private static double PerformanceValue(PerformanceTicker performanceTicker)
         {
             var performanceValue = performanceTicker.Ticker.PerformanceVector;
-            return performanceValue * (1 + performanceValue.DoubleReduce(100, 0).Curve1(3));
+            return performanceValue * (1 + performanceValue.DoubleReduce(100, 0).Curve1(2));
         }
     }
     public class PerformanceTicker
