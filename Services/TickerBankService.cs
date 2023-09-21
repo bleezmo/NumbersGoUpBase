@@ -26,8 +26,8 @@ namespace NumbersGoUp.Services
             new string[] {"United States"},
             new string[] {"United Kingdom", "Ireland", "Canada"},
             new string[] {"Australia", "New Zealand", "Israel", "Japan"},
-            new string[] {"Denmark", "Netherlands", "Finland", "Iceland", "Belgium", "Germany", "Norway", "Sweden", "Taiwan"},
-            new string[] {"Portugal", "France", "Hungary", "Spain", "Singapore", "South Korea", "Switzerland" }
+            new string[] {"Denmark", "Netherlands", "Finland", "Iceland", "Belgium", "Germany", "Norway", "Sweden", "Taiwan", "South Korea"},
+            new string[] {"Portugal", "France", "Hungary", "Spain", "Singapore", "Luxembourg", "Switzerland" }
         };
 
         private readonly IHttpClientFactory _httpClientFactory;
