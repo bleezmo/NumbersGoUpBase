@@ -174,7 +174,7 @@ namespace NumbersGoUp.Services
             _logger.LogInformation("Completed bank ticker performance calculation");
         }
         private bool LoadCutoff(ProcessorBankTicker ticker) => ticker.Income > 50000000 && ticker.RevenueGrowth > -25 && ticker.IncomeGrowth > -75 && (ticker.Ticker.MarketCap > 4_000_000_000 || ticker.IncomeGrowth < 75) && BasicCutoff(ticker.Ticker);
-        private bool BasicCutoff(BankTicker ticker) => ticker.MarketCap > 3_800_000_000 && (ticker.CurrentRatio > 1 || ticker.DebtEquityRatio > 0) && 
+        private bool BasicCutoff(BankTicker ticker) => ticker.MarketCap > 3_750_000_000 && (ticker.CurrentRatio > 1 || ticker.DebtEquityRatio > 0) && 
                                                        (ticker.CurrentRatio > (ticker.DebtEquityRatio * 1.2) || ticker.DebtEquityRatio < 0.9) && (ticker.DebtMinusCash / ticker.MarketCap) < 0.5 && 
                                                        ticker.Earnings > 0 && ticker.DividendYield > 0 && ticker.EPS > 0 && ticker.EVEarnings > 0 && ticker.EVEarnings < EarningsMultipleCutoff;
         private bool IsCarryover(ProcessorBankTicker ticker, DateTime lastDownloaded) => ticker.RecentEarningsDate.HasValue && ticker.RecentEarningsDate.Value.CompareTo(lastDownloaded.AddDays(-15)) > 0 && 

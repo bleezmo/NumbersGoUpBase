@@ -191,7 +191,7 @@ namespace NumbersGoUp.Utils
                                             }
                                             else
                                             {
-                                                ticker.Ticker.EPS = Math.Min(eps, calculatedEPS * (finalQ / minQtr));
+                                                ticker.Ticker.EPS = Math.Min(eps, calculatedEPS * Math.Max(finalQ / minQtr, 0.5));
                                             }
                                         }
                                         else
