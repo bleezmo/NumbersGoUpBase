@@ -9,5 +9,6 @@ namespace NumbersGoUp.Utils
     public interface IRuntimeSettings
     {
         public bool ForceDataCollection { get; set; }
+        public int LookbackYears { get; }
     }
 }

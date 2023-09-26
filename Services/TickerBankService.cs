@@ -39,7 +39,8 @@ namespace NumbersGoUp.Services
         private readonly string _environmentName;
         private readonly IStocksContextFactory _contextFactory;
         private readonly IRuntimeSettings _runtimeSettings;
-        private readonly DateTime _lookbackDate = DateTime.Now.AddYears(-DataService.LOOKBACK_YEARS);
+        private readonly int _lookbackYears;
+        private readonly DateTime _lookbackDate;
         public double EarningsMultipleCutoff { get; }
         public string[] TickerBlacklist { get; }
 
@@ -60,6 +61,8 @@ namespace NumbersGoUp.Services
             EarningsMultipleCutoff = double.TryParse(configuration[EARNINGS_MULTIPLE_CUTOFF_KEY], out var peratioCutoff) ? peratioCutoff : 40;
             _brokerService = brokerService;
             TickerBlacklist = configuration["TickerBlacklist"]?.Split(',') ?? new string[] { };
+            _lookbackYears = runtimeSettings.LookbackYears;
+            _lookbackDate = DateTime.Now.AddYears(-_lookbackYears);
         }
         public async Task<(BankTicker[] main, BankTicker[] remainingPositions)> GetTickers(string[] currentPositions, int maxTickers)
         {
@@ -254,16 +257,17 @@ namespace NumbersGoUp.Services
             }
             var initialInitialPrice = barsAsc[0].Price();
             var (totalslope, totalyintercept) = barsAsc.CalculateRegression(b => (b.Price() - initialInitialPrice) * 100.0 / initialInitialPrice);
-            var regressionTotal = (totalslope * barsAsc.Length) + totalyintercept - DataService.LOOKBACK_YEARS;
+            var regressionTotal = (totalslope * barsAsc.Length) + totalyintercept - _lookbackYears;
             var stdevTotal = barsAsc.RegressionStDev(b => (b.Price() - initialInitialPrice) * 100.0 / initialInitialPrice, totalslope, totalyintercept);
             if (regressionTotal < 0) { return regressionTotal / stdevTotal; }
-            const int interval = 130;
+            const int interval = 120;
+            const int minLength = interval / 2;
             var priceChanges = new List<double>();
             var stdevs = new List<double>();
             for(var i = 0; i < barsAsc.Length; i += interval)
             {
                 var priceWindow = barsAsc.Skip(i).Take(interval).ToArray();
-                if (priceWindow.Length > 2 && priceWindow.Last().Price() > 0)
+                if (priceWindow.Length > minLength && priceWindow.Last().Price() > 0)
                 {
                     var initialPrice = priceWindow[0].Price();
                     var (slope, yintercept) = priceWindow.CalculateRegression(b => (b.Price() - initialPrice) * 100.0 / initialPrice);
@@ -273,7 +277,7 @@ namespace NumbersGoUp.Services
                     stdevs.Add(stdev);
                 }
             }
-            if (priceChanges.Count > ((DataService.LOOKBACK_YEARS - 2) * 2) && priceChanges.Any() && stdevs.Any())
+            if (priceChanges.Count > 3 && priceChanges.Any() && stdevs.Any())
             {
                 return Math.Min(priceChanges.Average() / stdevs.Average(), regressionTotal / stdevTotal);
             }

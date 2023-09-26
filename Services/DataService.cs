@@ -7,11 +7,6 @@ namespace NumbersGoUp.Services
 {
     public class DataService
     {
-#if DEBUG
-        public const int LOOKBACK_YEARS = 12;
-#else
-        public const int LOOKBACK_YEARS = 6;
-#endif
 
         private const int VOLEMA_LENGTH = 8;
         private const int SMA_LENGTH = 40;
@@ -30,7 +25,10 @@ namespace NumbersGoUp.Services
         private readonly TickerBankService _tickerBankService;
         private readonly IStocksContextFactory _contextFactory;
 
-        public DataService(IBrokerService brokerService, ILogger<DataService> logger, IAppCancellation appCancellation, TickerService tickerService, TickerBankService tickerBankService, IStocksContextFactory contextFactory)
+        public int LookbackYears { get; }
+
+        public DataService(IBrokerService brokerService, ILogger<DataService> logger, IAppCancellation appCancellation, IRuntimeSettings runtimeSettings,
+                           TickerService tickerService, TickerBankService tickerBankService, IStocksContextFactory contextFactory)
         {
             _brokerService = brokerService;
             _logger = logger;
@@ -38,6 +36,7 @@ namespace NumbersGoUp.Services
             _tickerService = tickerService;
             _tickerBankService = tickerBankService;
             _contextFactory = contextFactory;
+            LookbackYears = runtimeSettings.LookbackYears;
         }
         public async Task Run()
         {
@@ -80,7 +79,7 @@ namespace NumbersGoUp.Services
             {
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
-                    var cutoff = DateTimeOffset.Now.AddYears(-LOOKBACK_YEARS-1).ToUnixTimeMilliseconds();
+                    var cutoff = DateTimeOffset.Now.AddYears(-LookbackYears-1).ToUnixTimeMilliseconds();
                     var bars = await stocksContext.HistoryBars.Where(b => b.BarDayMilliseconds < cutoff).ToListAsync(_appCancellation.Token);
                     stocksContext.HistoryBars.RemoveRange(bars);
                     var removed = await stocksContext.SaveChangesAsync(_appCancellation.Token);
@@ -92,7 +91,7 @@ namespace NumbersGoUp.Services
         {
             var now = DateTime.Now;
             var days = new List<MarketDay>();
-            for (var i = now.Year - LOOKBACK_YEARS; i < now.Year; i++)
+            for (var i = now.Year - LookbackYears; i < now.Year; i++)
             {
                 _logger.LogInformation($"Retrieving all calendar days for year {i}");
                 days.AddRange(await _brokerService.GetMarketDays(i));
@@ -198,7 +197,7 @@ namespace NumbersGoUp.Services
             }
             else
             {
-                from = DateTime.Now.AddYears(0 - LOOKBACK_YEARS);
+                from = DateTime.Now.AddYears(0 - LookbackYears);
             }
             if (from.HasValue)
             {
@@ -255,7 +254,7 @@ namespace NumbersGoUp.Services
         {
             using var stocksContext = _contextFactory.CreateDbContext();
             var symbol = ticker.Symbol;
-            var lookback = DateTime.Now.AddYears(0 - LOOKBACK_YEARS);
+            var lookback = DateTime.Now.AddYears(0 - LookbackYears);
             var cutoff = new DateTimeOffset(lookback.Year, lookback.Month, lookback.Day, 0, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds();
             var currentBarMetric = await stocksContext.BarMetrics.Where(t => t.Symbol == symbol).OrderByDescending(t => t.BarDayMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
             cutoff = currentBarMetric != null ? currentBarMetric.BarDayMilliseconds - (_barLength * 2 * MILLIS_PER_DAY) : cutoff; //give buffer to cutoff
