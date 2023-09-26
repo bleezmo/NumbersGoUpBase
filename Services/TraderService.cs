@@ -285,7 +285,7 @@ namespace NumbersGoUp.Services
                                 Account = _account.AccountId,
                                 Qty = qty,
                                 AppliedAmt = qty * targetPrice,
-                                AvgEntryPrice = position.AverageEntryPrice,
+                                AvgEntryPrice = position.AverageEntryPrice ?? 0.0,
                                 BrokerOrderId = brokerOrder.BrokerOrderId
                             });
                             await stocksContext.SaveChangesAsync(_appCancellation.Token);

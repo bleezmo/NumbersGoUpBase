@@ -94,7 +94,7 @@ namespace NumbersGoUpBase.Services
                 {
                     rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, targetValue * prediction.BuyMultiplier, prediction));
                 }
-                else if (position != null && position.MarketValue.HasValue)
+                else if (position != null && position.MarketValue.HasValue && position.MarketValue.Value > 0)
                 {
                     var marketValue = position.MarketValue.Value;
                     if (marketValue > 0)
@@ -143,7 +143,7 @@ namespace NumbersGoUpBase.Services
                 }
             }
             var bondPerc = 1 - _stockBondPerc;
-            var perBondTargetValue = bondPerc * equity / BondSymbols.Length;
+            var perBondTargetValue = BondSymbols.Length > 0 ? (bondPerc * equity / BondSymbols.Length) : 0;
             foreach(var bondSymbol in BondSymbols)
             {
                 var bondPosition = positions.FirstOrDefault(p => bondSymbol == p.Symbol);

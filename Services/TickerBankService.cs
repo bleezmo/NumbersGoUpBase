@@ -193,23 +193,6 @@ namespace NumbersGoUp.Services
                 var tickers = new List<BankTicker>();
                 foreach (var t in dbTickers)
                 {
-                    //try
-                    //{
-                    //    if (passCutoff)
-                    //    {
-                    //        var currentBar = await stocksContext.HistoryBars.Where(b => b.Symbol == t.Symbol).OrderByDescending(b => b.BarDayMilliseconds).FirstOrDefaultAsync(_appCancellation.Token);
-                    //        var price = currentBar != null ? currentBar.ClosePrice : (await _brokerService.GetLastTrade(t.Symbol)).Price;
-                    //        t.PERatio = price / t.EPS;
-                    //        t.MarketCap = price * t.Shares;
-                    //        if(t.Earnings > 0) { t.EVEarnings = (t.MarketCap + t.DebtMinusCash) / t.Earnings; }
-                    //        t.LastCalculatedFinancials = now;
-                    //        t.LastCalculatedFinancialsMillis = new DateTimeOffset(now).ToUnixTimeMilliseconds();
-                    //    }
-                    //}
-                    //catch (Exception e)
-                    //{
-                    //    _logger.LogError(e, $"Error retrieving latest price info for bank ticker {t.Symbol}");
-                    //}
                     if (!TickerBlacklist.TickerAny(t) && BasicCutoff(t) && t.PERatio < EarningsMultipleCutoff && t.PERatio > 1 && t.PriceChangeAvg > 0)
                     {
                         tickers.Add(t);
@@ -242,9 +225,9 @@ namespace NumbersGoUp.Services
                     minmax5.Run(ticker);
                 }
                 Func<BankTicker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 50) +
-                                                                     (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 15) +
+                                                                     (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 20) +
                                                                      (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 5) +
-                                                                     (performanceFn4(t).DoubleReduce(minmax4.Max, minmax4.Min) * 15) +
+                                                                     (performanceFn4(t).DoubleReduce(minmax4.Max, minmax4.Min) * 10) +
                                                                      (performanceFn5(t).DoubleReduce(minmax5.Max, minmax5.Min) * 15);
                 var minmaxTotal = new MinMaxStore<BankTicker>(performanceFnTotal);
                 foreach (var ticker in tickers)

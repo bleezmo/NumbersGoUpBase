@@ -11,7 +11,7 @@ namespace NumbersGoUp.Models
 
         public string Symbol { get; set; }
 
-        public double AverageEntryPrice { get; set; }
+        public double? AverageEntryPrice { get; set; }
 
         public double Quantity { get; set; }
 

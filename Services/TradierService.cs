@@ -478,12 +478,12 @@ namespace NumbersGoUp.Services
                         MarketValue = quote != null ? quote.Price * jposition.Quantity : null,
                         AssetCurrentPrice = quote != null ? quote.Price : null,
                         AssetLastPrice = quote != null ? quote.Price : null,
-                        AverageEntryPrice = jposition.CostBasis / jposition.Quantity,
+                        AverageEntryPrice = jposition.Quantity > 0 ? (jposition.CostBasis / jposition.Quantity) : null,
                         UnrealizedProfitLoss = 0,
                         UnrealizedProfitLossPercent = 0
                     };
                     position.UnrealizedProfitLoss = position.MarketValue.HasValue ? position.MarketValue - position.CostBasis : null;
-                    position.UnrealizedProfitLossPercent = position.UnrealizedProfitLoss.HasValue ? position.UnrealizedProfitLoss / position.CostBasis : null;
+                    position.UnrealizedProfitLossPercent = position.CostBasis > 0 && position.UnrealizedProfitLoss.HasValue ? (position.UnrealizedProfitLoss / position.CostBasis) : null;
                     positions.Add(position);
                 }
                 return positions;
