@@ -10,7 +10,7 @@ namespace NumbersGoUp.Services
 {
     public class TraderService
     {
-        public const double MAX_COOLDOWN_DAYS = 14;
+        public const double MAX_COOLDOWN_DAYS = 35;
         private const string DISABLE_SELLS = "DisableSells";
         private const string DISABLE_BUYS = "DisableBuys";
         public const string MAX_DAILY_BUY = "MaxDailyBuy";
@@ -124,16 +124,8 @@ namespace NumbersGoUp.Services
             {
                 var profitLossPerc = 0.0;
                 var dayOfWeek = brokerOrder.FilledAt.Value.DayOfWeek;
-                var daysToNextBuy = brokerOrder.OrderSide == OrderSide.Buy ? (1 - _cashEquityRatio.DoubleReduce(2, 0.2)) * MAX_COOLDOWN_DAYS : MAX_COOLDOWN_DAYS; 
-                var daysToNextSell = brokerOrder.OrderSide == OrderSide.Sell ? _cashEquityRatio.DoubleReduce(0.2, -0.2) * MAX_COOLDOWN_DAYS : MAX_COOLDOWN_DAYS;
-                if (order != null && brokerOrder.OrderSide == OrderSide.Sell && order.AvgEntryPrice > 0)
-                {
-                    profitLossPerc = (brokerOrder.AverageFillPrice.Value - order.AvgEntryPrice) * 100 / order.AvgEntryPrice;
-                    if (profitLossPerc < 0)
-                    {
-                        daysToNextBuy = 64;
-                    }
-                }
+                var daysToNextBuy = brokerOrder.OrderSide == OrderSide.Buy ? (1 - _cashEquityRatio.DoubleReduce(1.8, 0.1, 1, 0.6)) * MAX_COOLDOWN_DAYS : MAX_COOLDOWN_DAYS; 
+                var daysToNextSell = brokerOrder.OrderSide == OrderSide.Sell ? _cashEquityRatio.DoubleReduce(0.5, -0.1) * MAX_COOLDOWN_DAYS : MAX_COOLDOWN_DAYS;
                 var lastBuyOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == order.Symbol && o.NextBuy != null).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
                 var lastSellOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == order.Symbol && o.NextSell != null).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
                 if(lastBuyOrder != null && brokerOrder.FilledAt.Value.CompareTo(lastBuyOrder.NextBuy.Value) < 0)
