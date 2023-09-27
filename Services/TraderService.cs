@@ -470,13 +470,14 @@ namespace NumbersGoUp.Services
         private async Task AccountPerformancePrint(IEnumerable<Position> positions)
         {
             var (historyEvents, dividends) = await _brokerService.GetAccountHistory();
-            var totalRealizedProfits = new List<(double cost, double profitPerc)>();
-            var totalUnRealizedProfits = new List<(double cost, double profitPerc)>();
+            var totalRealizedProfits = new List<(double cost, double profit, double profitPerc)>();
+            var totalUnRealizedStocks = new List<(double cost, double profit, double profitPerc)>();
+            var totalUnRealizedBonds = new List<(double cost, double profit, double profitPerc)>();
             foreach (var historyEvent in historyEvents)
             {
                 var events = historyEvent.Value.OrderBy(e => e.Date).ToArray();
                 var eventQueue = new Queue<double>();
-                var profits = new List<(double cost, double profitPerc)>();
+                var profits = new List<(double cost, double profit, double profitPerc)>();
                 for (var i = 0; i < events.Length; i++)
                 {
                     if (events[i].Amount < 0)
@@ -496,42 +497,54 @@ namespace NumbersGoUp.Services
                             if (eventQueue.Any())
                             {
                                 var cost = eventQueue.Dequeue();
-                                profits.Add((cost, (sellPrice / cost) - 1));
+                                profits.Add((cost, sellPrice, (sellPrice / cost) - 1));
                             }
                         }
                     }
                 }
                 totalRealizedProfits.Add(TotalProfit(profits));
             }
-            var (totalRealizedCost, totalRealized) = TotalProfit(totalRealizedProfits);
-            _logger.LogInformation($"Total Realized Cost: {totalRealizedCost:C2} Total Realized Profit: {totalRealized * 100}%");
+            var (totalRealizedCost, totalRealized, totalRealizedProfitPerc) = TotalProfit(totalRealizedProfits);
+            _logger.LogInformation($"Total Realized Cost: {totalRealizedCost:C2} Total Realized: {totalRealizedCost:C2} Total Realized Profit: {totalRealizedProfitPerc * 100}%");
             foreach (var position in positions)
             {
-                if (position.UnrealizedProfitLossPercent.HasValue && !_rebalancerService.BondSymbols.Any(s => s == position.Symbol))
+                if (position.UnrealizedProfitLossPercent.HasValue)
                 {
-                    totalUnRealizedProfits.Add((position.CostBasis, position.UnrealizedProfitLossPercent.Value));
+                    if(_rebalancerService.BondSymbols.Any(s => s == position.Symbol))
+                    {
+                        totalUnRealizedBonds.Add((position.CostBasis, position.MarketValue ?? 0.0, position.UnrealizedProfitLossPercent.Value));
+                    }
+                    else
+                    {
+                        totalUnRealizedStocks.Add((position.CostBasis, position.MarketValue ?? 0.0, position.UnrealizedProfitLossPercent.Value));
+                    }
                 }
             }
-            var (totalUnrealizedCost, totalUnrealized) = TotalProfit(totalUnRealizedProfits);
-            _logger.LogInformation($"Total Unrealized Cost: {totalUnrealizedCost:C2} Total Unrealized Profit: {totalUnrealized * 100}%");
-            var (totalCost, totalProfit) = TotalProfit(new List<(double cost, double profitPerc)>(new[]
+            var (totalUnrealizedStocksCost, totalUnrealizedStocksCurrent, totalUnrealizedStocksProfitPerc) = TotalProfit(totalUnRealizedStocks);
+            _logger.LogInformation($"Total Unrealized Stocks Cost: {totalUnrealizedStocksCost:C2} Total Unrealized Stocks: {totalUnrealizedStocksCurrent:C2} Total Profit: {totalUnrealizedStocksProfitPerc * 100}%");
+            var (totalUnrealizedBondsCost, totalUnrealizedBondsCurrent, totalUnrealizedBondsProfitPerc) = TotalProfit(totalUnRealizedBonds);
+            _logger.LogInformation($"Total Unrealized Bonds Cost: {totalUnrealizedBondsCost:C2} Total Unrealized Bonds: {totalUnrealizedBondsCurrent:C2} Total Profit: {totalUnrealizedBondsProfitPerc * 100}%");
+            var (totalCost, total, totalProfit) = TotalProfit(new List<(double cost, double profit, double profitPerc)>(new[]
             {
-                (totalRealizedCost, totalRealized),
-                (totalUnrealizedCost, totalUnrealized)
+                (totalRealizedCost, totalRealized, totalRealizedProfitPerc),
+                (totalUnrealizedStocksCost, totalUnrealizedStocksCurrent, totalUnrealizedStocksProfitPerc),
+                (totalUnrealizedBondsCost, totalUnrealizedBondsCurrent, totalUnrealizedBondsProfitPerc)
             }));
-            _logger.LogInformation($"Total Account Equity: {_account.Balance.LastEquity:C2} Total Cost Basis: {totalCost:C2} Total Profit: {totalProfit * 100:0.0000}% Dividends: {dividends:C2}");
+            _logger.LogInformation($"Total Account Equity: {_account.Balance.LastEquity:C2} Total Cost: {totalCost:C2} Total: {total:C2} Total Profit: {totalProfit * 100:0.0000}% Dividends: {dividends:C2}");
         }
-        private static (double cost, double profitPerc) TotalProfit(List<(double cost, double profitPerc)> profits)
+        private static (double cost, double profit, double profitPerc) TotalProfit(List<(double cost, double profit, double profitPerc)> profits)
         {
-            if (!profits.Any()) { return (0, 0); }
+            if (!profits.Any()) { return (0, 0, 0); }
             var totalCost = 0.0;
+            var totalProfit = 0.0;
             var numerator = 0.0;
             foreach (var profit in profits)
             {
                 totalCost += profit.cost;
+                totalProfit += profit.profit;
                 numerator += profit.cost * profit.profitPerc;
             }
-            return (totalCost, numerator / totalCost);
+            return (totalCost, totalProfit, numerator / totalCost);
         }
     }
     public class BuyState
