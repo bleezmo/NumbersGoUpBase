@@ -497,7 +497,7 @@ namespace NumbersGoUp.Services
                 totalRealizedProfits.Add(TotalProfit(profits));
             }
             var (totalRealizedCost, totalRealized, totalRealizedProfitPerc) = TotalProfit(totalRealizedProfits);
-            _logger.LogInformation($"Total Realized Cost: {totalRealizedCost:C2} Total Realized: {totalRealizedCost:C2} Total Realized Profit: {totalRealizedProfitPerc * 100}%");
+            _logger.LogInformation($"Total Realized Cost: {totalRealizedCost:C2} Total Realized: {totalRealized:C2} Total Realized Profit: {totalRealizedProfitPerc * 100}%");
             foreach (var position in positions)
             {
                 if (position.UnrealizedProfitLossPercent.HasValue)
