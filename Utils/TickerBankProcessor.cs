@@ -268,15 +268,11 @@ namespace NumbersGoUp.Utils
                                         ticker.EV = ev;
                                         ticker.Ticker.EVEarnings = ev / ticker.Ticker.Earnings;
                                     }
-                                    else if (evebitdaIndex.HasValue && double.TryParse(csv[evebitdaIndex.Value], out var evebitda) &&
+                                    if (evebitdaIndex.HasValue && double.TryParse(csv[evebitdaIndex.Value], out var evebitda) &&
                                              ebitdaIndex.HasValue && double.TryParse(csv[ebitdaIndex.Value], out var ebitda))
                                     {
-                                        ticker.EV = evebitda * ebitda;
+                                        ticker.EV = Math.Max(evebitda * ebitda, ticker.EV);
                                         ticker.Ticker.EVEarnings = ticker.EV / ticker.Ticker.Earnings;
-                                    }
-                                    else
-                                    {
-                                        //_logger.LogWarning($"EV EBITDA ratio unavailable for {ticker.Ticker.Symbol}. Could not calculate EV.");
                                     }
                                     if (marketCapIndex.HasValue && double.TryParse(csv[marketCapIndex.Value], out var marketCap))
                                     {

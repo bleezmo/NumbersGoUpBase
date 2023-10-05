@@ -106,7 +106,7 @@ namespace NumbersGoUpBase.Services
                             if (performanceTicker.MeetsRequirements && cash > (position.AssetLastPrice ?? 0))
                             {
                                 diffPerc *= prediction.BuyMultiplier;
-                                diff *= prediction.BuyMultiplier.Curve6(1);
+                                diff *= prediction.BuyMultiplier.Curve6((1 - performanceTicker.Ticker.PerformanceVector.DoubleReduce(100)) * 3);
                             }
                             else { diffPerc = 0; }
                         }
@@ -115,7 +115,7 @@ namespace NumbersGoUpBase.Services
                             diffPerc *= prediction.SellMultiplier;
                             if (targetValue > 0)
                             {
-                                diff *= prediction.SellMultiplier.Curve6(1);
+                                diff *= prediction.SellMultiplier.Curve6(performanceTicker.Ticker.PerformanceVector.DoubleReduce(100) * 3);
                             }
                         }
                         var diffCutoff = 12.0;

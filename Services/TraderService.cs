@@ -200,8 +200,8 @@ namespace NumbersGoUp.Services
             }
             rebalancers = rebalancers.Where(r => !currentOrders.Any(o => o.Symbol == r.Symbol));
             var (stocks, bonds) = (rebalancers.Where(r => r.IsStock).Select(r => r as StockRebalancer), rebalancers.Where(r => r.IsBond).Select(r => r as BondRebalancer));
-
-            var remainingBuyAmount = Math.Min(_maxDailyBuy, _account.Balance.TradableCash);
+            var maxDailyBuy = stocks.Any(r => r.Diff > 0) ? Math.Max((await Task.WhenAll(stocks.Where(r => r.Diff > 0).Select(sr => GetCurrentPrice(sr)))).Max(), _maxDailyBuy) : _maxDailyBuy;
+            var remainingBuyAmount = Math.Min(maxDailyBuy, _account.Balance.TradableCash);
 
             remainingBuyAmount -= currentOrders.Select(o => o.Side == OrderSide.Buy ? o.AppliedAmt : 0).Sum();
             _logger.LogInformation($"Starting balance {_account.Balance.TradableCash:C2} and remaining buy amount {remainingBuyAmount:C2}");
@@ -292,6 +292,7 @@ namespace NumbersGoUp.Services
             }
         }
 
+        private async Task<double> GetCurrentPrice(StockRebalancer sr) => sr.Position?.AssetLastPrice != null ? sr.Position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(sr.Symbol)).Price;
         private double priorityOrdering(BuyState bss) => bss.Rebalancer.Ticker.PerformanceVector;// * bss.ProfitLossPerc.ZeroReduce(bss.Rebalancer.Ticker.ProfitLossAvg + bss.Rebalancer.Ticker.ProfitLossStDev, (bss.Rebalancer.Ticker.ProfitLossAvg + bss.Rebalancer.Ticker.ProfitLossStDev) * -1);
         private async Task ExecuteBuys(StockRebalancer[] rebalancers, double remainingBuyAmount)
         {
@@ -314,7 +315,7 @@ namespace NumbersGoUp.Services
                     }
                     else
                     {
-                        var currentPrice = rebalancer.Position?.AssetLastPrice != null ? rebalancer.Position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(rebalancer.Symbol)).Price;
+                        var currentPrice = await GetCurrentPrice(rebalancer);
                         if(rebalancer.Position.CostBasis > 0)
                         {
                             percProfit = (currentPrice - rebalancer.Position.CostBasis) * 100 / rebalancer.Position.CostBasis;
