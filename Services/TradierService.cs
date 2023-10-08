@@ -482,7 +482,7 @@ namespace NumbersGoUp.Services
                         UnrealizedProfitLoss = 0,
                         UnrealizedProfitLossPercent = 0
                     };
-                    position.UnrealizedProfitLoss = position.MarketValue.HasValue ? position.MarketValue - position.CostBasis : null;
+                    position.UnrealizedProfitLoss = position.MarketValue.HasValue && position.CostBasis > 0 ? position.MarketValue - position.CostBasis : null;
                     position.UnrealizedProfitLossPercent = position.CostBasis > 0 && position.UnrealizedProfitLoss.HasValue ? (position.UnrealizedProfitLoss / position.CostBasis) : null;
                     positions.Add(position);
                 }

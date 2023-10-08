@@ -18,8 +18,8 @@ namespace NumbersGoUp.Services
 {
     public class TickerService
     {
-        public const int MAX_TICKERS = 175;
-        public const int MAX_BANK_TICKERS = MAX_TICKERS + 25;
+        private const int MAX_TICKERS = 150;
+        private const int MAX_BANK_TICKERS = 200;
         public const int PERFORMANCE_CUTOFF = 25;
 
         private const string POLYGON_API_KEY = "polygon_api_key";
