@@ -327,8 +327,8 @@ namespace NumbersGoUp.Services
                                 var minEPS = Math.Min(ticker.EPS, positionBankTicker.EPS);
                                 var minEarnings = Math.Min(ticker.Earnings, positionBankTicker.Earnings);
                                 TickerCopy(ticker, positionBankTicker);
-                                ticker.EPS = minEPS * (positionBankTicker.PerformanceVector > 0 ? 0.9 : 0.8);
-                                ticker.Earnings = minEarnings * (positionBankTicker.PerformanceVector > 0 ? 0.9 : 0.8);
+                                ticker.EPS = minEPS * (positionBankTicker.PerformanceVector > 0 ? 0.95 : 0.85);
+                                ticker.Earnings = minEarnings * (positionBankTicker.PerformanceVector > 0 ? 0.95 : 0.85);
                             }
                             else
                             { 
