@@ -25,8 +25,8 @@ namespace NumbersGoUp.Services
         {
             new string[] {"United States"},
             new string[] {"United Kingdom", "Ireland", "Canada"},
-            new string[] {"Australia", "New Zealand", "Israel", "Japan"},
-            new string[] {"Denmark", "Netherlands", "Finland", "Iceland", "Belgium", "Germany", "Norway", "Sweden", "Taiwan", "South Korea"},
+            new string[] {"Australia", "New Zealand", "Israel", "Japan", "South Korea"},
+            new string[] {"Denmark", "Netherlands", "Finland", "Iceland", "Belgium", "Germany", "Norway", "Sweden", "Taiwan"},
             new string[] {"Portugal", "France", "Hungary", "Spain", "Singapore", "Luxembourg", "Switzerland" }
         };
 
@@ -257,7 +257,7 @@ namespace NumbersGoUp.Services
             }
             var initialInitialPrice = barsAsc[0].Price();
             var (totalslope, totalyintercept) = barsAsc.CalculateRegression(b => (b.Price() - initialInitialPrice) * 100.0 / initialInitialPrice);
-            var regressionTotal = (totalslope * barsAsc.Length) + totalyintercept - _lookbackYears;
+            var regressionTotal = (totalslope * barsAsc.Length) + totalyintercept;
             var stdevTotal = barsAsc.RegressionStDev(b => (b.Price() - initialInitialPrice) * 100.0 / initialInitialPrice, totalslope, totalyintercept);
             if (regressionTotal < 0) { return regressionTotal / stdevTotal; }
             const int interval = 120;
@@ -273,7 +273,7 @@ namespace NumbersGoUp.Services
                     var (slope, yintercept) = priceWindow.CalculateRegression(b => (b.Price() - initialPrice) * 100.0 / initialPrice);
                     var price = (slope * priceWindow.Length) + yintercept;
                     var stdev = priceWindow.RegressionStDev(b => (b.Price() - initialPrice) * 100.0 / initialPrice, slope, yintercept);
-                    priceChanges.Add(price - 0.5);
+                    priceChanges.Add(price);
                     stdevs.Add(stdev);
                 }
             }
