@@ -198,7 +198,8 @@ namespace NumbersGoUp.Services
             {
                 currentOrders = await stocksContext.Orders.Where(o => o.Account == _account.AccountId && o.TimeLocalMilliseconds > dayStart).Include(o => o.Ticker).ToListAsync(_appCancellation.Token);
             }
-            rebalancers = rebalancers.Where(r => !currentOrders.Any(o => o.Symbol == r.Symbol));
+            var remainingOrders = await _brokerService.GetOpenOrders();
+            rebalancers = rebalancers.Where(r => !currentOrders.Any(o => o.Symbol == r.Symbol)).Where(r => !remainingOrders.Any(o => o.Symbol == r.Symbol));
             var (stocks, bonds) = (rebalancers.Where(r => r.IsStock).Select(r => r as StockRebalancer), rebalancers.Where(r => r.IsBond).Select(r => r as BondRebalancer));
             var maxDailyBuy = stocks.Any(r => r.Diff > 0) ? Math.Max((await Task.WhenAll(stocks.Where(r => r.Diff > 0).Select(sr => GetCurrentPrice(sr)))).Max(), _maxDailyBuy) : _maxDailyBuy;
             var remainingBuyAmount = Math.Min(maxDailyBuy, _account.Balance.TradableCash);
