@@ -169,50 +169,67 @@ namespace NumbersGoUp.Services
             }
             _logger.LogInformation($"Collected history for {totalCount} tickers");
         }
-        private async Task StartDayCollection(Ticker ticker)
+        private async Task StartDayCollection(Ticker ticker, DateTime? from = null)
         {
-            using var stocksContext = _contextFactory.CreateDbContext();
-            var symbol = ticker.Symbol;
-            var lastBar = await stocksContext.HistoryBars.Where(t => t.Symbol == symbol).OrderByDescending(t => t.BarDayMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
-            //if(lastBar == null || DateTime.UtcNow.Subtract(lastBar.TimeUtc).TotalDays > 5)
-            //{
-            //    var info = await _brokerService.GetTickerInfo(symbol); //make sure we can use it with alpaca
-            //    if (info == null || !info.IsTradable || !info.Fractionable)
-            //    {
-            //        _logger.LogError($"Couldn't retrieve symbol {symbol}!!!!");
-            //        ticker.LastCalculatedMillis = 0;
-            //        stocksContext.Tickers.Update(ticker);
-            //        await stocksContext.SaveChangesAsync(_appCancellation.Token);
-            //        return;
-            //    }
-            //}
-            DateTime? from = null;
-            if (lastBar != null)
+            var stockSplit = false;
+            using (var stocksContext = _contextFactory.CreateDbContext())
             {
-                var lastDay = await _brokerService.GetLastMarketDay();
-                if (lastBar.BarDay.Date.CompareTo(lastDay.Date) < 0)
+                var symbol = ticker.Symbol;
+                var lastBar = await stocksContext.HistoryBars.Where(t => t.Symbol == symbol).OrderByDescending(t => t.BarDayMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
+                if (!from.HasValue)
                 {
-                    from = lastBar.BarDay;
-                }
-            }
-            else
-            {
-                from = DateTime.Now.AddYears(0 - LookbackYears);
-            }
-            if (from.HasValue)
-            {
-                _logger.LogDebug($"Collecting bar history for {symbol}");
-                foreach (var bar in await _brokerService.GetBarHistoryDay(symbol, from.Value))
-                {
-                    //just make sure
-                    if (lastBar == null || lastBar.BarDay.CompareTo(bar.BarDay) < 0)
+                    if (lastBar != null)
                     {
-                        bar.TickerId = ticker.Id;
-                        stocksContext.HistoryBars.Add(bar);
+                        var lastDay = await _brokerService.GetLastMarketDay();
+                        if (lastBar.BarDay.Date.CompareTo(lastDay.Date) < 0)
+                        {
+                            from = lastBar.BarDay;
+                        }
+                    }
+                    else
+                    {
+                        from = DateTime.Now.AddYears(0 - LookbackYears);
                     }
                 }
-                await stocksContext.SaveChangesAsync(_appCancellation.Token);
+                if (from.HasValue)
+                {
+                    _logger.LogDebug($"Collecting bar history for {symbol}");
+                    var count = 0;
+                    foreach (var bar in await _brokerService.GetBarHistoryDay(symbol, from.Value))
+                    {
+                        //just make sure
+                        if (lastBar == null || lastBar.BarDay.CompareTo(bar.BarDay) < 0)
+                        {
+                            if (count == 0 && lastBar != null)
+                            {
+                                var diff = (bar.Price() - lastBar.Price()) / lastBar.Price();
+                                if (Math.Abs(diff) > 0.4) //possible stock split detected
+                                {
+                                    _logger.LogWarning($"Stock split detected for {ticker.Symbol}");
+                                    stockSplit = true;
+                                    break;
+                                }
+                            }
+                            else
+                            {
+                                bar.TickerId = ticker.Id;
+                                stocksContext.HistoryBars.Add(bar);
+                                count++;
+                            }
+                        }
+                    }
+                    if (stockSplit)
+                    {
+                        var remove = await stocksContext.HistoryBars.Where(t => t.Symbol == symbol).ToArrayAsync(_appCancellation.Token);
+                        stocksContext.HistoryBars.RemoveRange(remove);
+                    }
+                    await stocksContext.SaveChangesAsync(_appCancellation.Token);
+                }
                 _logger.LogDebug($"Completed bar history collection for {symbol}");
+            }
+            if (stockSplit)
+            {
+                await StartDayCollection(ticker, DateTime.Now.AddYears(0 - LookbackYears));
             }
         }
 
