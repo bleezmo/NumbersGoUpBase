@@ -210,12 +210,9 @@ namespace NumbersGoUp.Services
                                     break;
                                 }
                             }
-                            else
-                            {
-                                bar.TickerId = ticker.Id;
-                                stocksContext.HistoryBars.Add(bar);
-                                count++;
-                            }
+                            bar.TickerId = ticker.Id;
+                            stocksContext.HistoryBars.Add(bar);
+                            count++;
                         }
                     }
                     if (stockSplit)
