@@ -185,8 +185,9 @@ namespace NumbersGoUp.Services
         }
         private bool LoadCutoff(ProcessorBankTicker ticker) => ticker.Income > 50000000 && ticker.RevenueGrowth > -25 && ticker.IncomeGrowth > -75 && (ticker.Ticker.MarketCap > 4_000_000_000 || ticker.IncomeGrowth < 75) && BasicCutoff(ticker.Ticker);
         private bool BasicCutoff(BankTicker ticker) => ticker.MarketCap > 3_750_000_000 && (ticker.CurrentRatio > 1 || ticker.DebtEquityRatio > 0) && 
-                                                       (ticker.CurrentRatio > (ticker.DebtEquityRatio * 1.2) || ticker.DebtEquityRatio < 0.9) && (ticker.DebtMinusCash / ticker.MarketCap) < 0.5 && 
-                                                       ticker.Earnings > 0 && ticker.DividendYield > 0 && ticker.EPS > 0 && ticker.EVEarnings > 0 && ticker.EVEarnings < EarningsMultipleCutoff;
+                                                       (ticker.CurrentRatio > (ticker.DebtEquityRatio * 1.2) || ticker.DebtEquityRatio < 0.9) && ticker.Earnings > 0 && 
+                                                       (ticker.DebtMinusCash / ticker.Earnings) < 15 && ticker.DividendYield > 0 && ticker.EPS > 0 && 
+                                                       ticker.EVEarnings > 0 && ticker.EVEarnings < EarningsMultipleCutoff;
         private bool IsCarryover(ProcessorBankTicker ticker, DateTime lastDownloaded) => ticker.RecentEarningsDate.HasValue && ticker.RecentEarningsDate.Value.CompareTo(lastDownloaded.AddDays(-15)) > 0 && 
                                                                           ((ticker.Ticker.CurrentRatio == 0 && ticker.Ticker.DebtEquityRatio == 0) || 
                                                                             ticker.Ticker.EVEarnings == 0 || ticker.Ticker.EPS == 0 || 
@@ -220,7 +221,7 @@ namespace NumbersGoUp.Services
                 Func<BankTicker, double> performanceFn2 = (t) => t.PriceChangeAvg;
                 Func<BankTicker, double> performanceFn3 = (t) => Math.Min(t.DividendYield, 0.06);
                 Func<BankTicker, double> performanceFn4 = (t) => 1 - t.EVEarnings.DoubleReduce(EarningsMultipleCutoff, 0);
-                Func<BankTicker, double> performanceFn5 = (t) => 1 - (t.DebtMinusCash / t.MarketCap).DoubleReduce(0.5, -0.5);
+                Func<BankTicker, double> performanceFn5 = (t) => 1 - (t.DebtMinusCash / t.Earnings).DoubleReduce(10, -5);
                 var minmax1 = new MinMaxStore<BankTicker>(performanceFn1);
                 var minmax2 = new MinMaxStore<BankTicker>(performanceFn2);
                 var minmax3 = new MinMaxStore<BankTicker>(performanceFn3);

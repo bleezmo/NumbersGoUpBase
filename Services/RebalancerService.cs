@@ -145,7 +145,7 @@ namespace NumbersGoUpBase.Services
                         _logger.LogError($"Stupid market value not positive, which is impossible. Ticker {position.Symbol}");
                     }
                 }
-                else if (cash > 0)
+                else if (cash > 0 && bankTicker != null)
                 {
                     _logger.LogError($"Unable to rebalance {performanceTicker.Ticker.Symbol}. Position unavailable");
                 }
