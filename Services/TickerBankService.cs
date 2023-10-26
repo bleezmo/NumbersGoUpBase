@@ -64,12 +64,16 @@ namespace NumbersGoUp.Services
             _lookbackYears = runtimeSettings.LookbackYears;
             _lookbackDate = DateTime.Now.AddYears(-_lookbackYears);
         }
-        public async Task<(BankTicker[] main, BankTicker[] remainingPositions)> GetTickers(string[] currentPositions, int maxTickers)
+        public async Task<(BankTicker[] main, BankTicker[] remainingPositions)> GetTickers(string[] currentPositions = null, int? maxTickers = null)
         {
             using (var stocksContext = _contextFactory.CreateDbContext())
             {
                 var bankTickers = await stocksContext.TickerBank.ToArrayAsync(_appCancellation.Token);
                 List<BankTicker> tickers = new List<BankTicker>(), remainingPositions = new List<BankTicker>();
+                if (!maxTickers.HasValue)
+                {
+                    maxTickers = bankTickers.Length;
+                }
                 for (var i = 0; i < CountryTiers.Length; i++)
                 {
                     var countryTier = CountryTiers[i];
@@ -78,18 +82,21 @@ namespace NumbersGoUp.Services
                         var toAdd = bankTickers.Where(t =>
                             countryTier.Any(c => string.Equals(c, t.Country, StringComparison.OrdinalIgnoreCase)) &&
                             t.PerformanceVector > 0
-                            ).OrderByDescending(t => t.PerformanceVector).Take(maxTickers - tickers.Count);
+                            ).OrderByDescending(t => t.PerformanceVector).Take(maxTickers.Value - tickers.Count);
                         if (i == 0 && !toAdd.Any()) { throw new Exception("No tickers found for first tier country!!!!"); }
                         tickers.AddRange(toAdd);
                     }
                     else { break; }
                 }
-                foreach (var position in currentPositions)
+                if(currentPositions != null)
                 {
-                    if (!tickers.Any(t => t.Symbol == position))
+                    foreach (var position in currentPositions)
                     {
-                        var bankTicker = bankTickers.FirstOrDefault(t => t.Symbol == position);
-                        if (bankTicker != null) { remainingPositions.Add(bankTicker); }
+                        if (!tickers.Any(t => t.Symbol == position))
+                        {
+                            var bankTicker = bankTickers.FirstOrDefault(t => t.Symbol == position);
+                            if (bankTicker != null) { remainingPositions.Add(bankTicker); }
+                        }
                     }
                 }
                 return (tickers.ToArray(), remainingPositions.ToArray());

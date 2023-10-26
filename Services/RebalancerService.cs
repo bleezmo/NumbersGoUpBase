@@ -16,16 +16,18 @@ namespace NumbersGoUpBase.Services
     {
         private readonly ILogger<PredicterService> _logger;
         private readonly TickerService _tickerService;
+        private readonly TickerBankService _tickerBankService;
         private readonly PredicterService _predicterService;
         private readonly double _stockBondPerc;
         private readonly string[] _tickerBlacklist;
 
         public string[] BondSymbols { get; }
 
-        public RebalancerService(ILogger<PredicterService> logger, TickerService tickerService, IConfiguration configuration, PredicterService predicterService)
+        public RebalancerService(ILogger<PredicterService> logger, TickerService tickerService, TickerBankService tickerBankService, IConfiguration configuration, PredicterService predicterService)
         {
             _logger = logger;
             _tickerService = tickerService;
+            _tickerBankService = tickerBankService;
             var bondSymbols = configuration["BondSymbols"]?.Split(',');
             BondSymbols = bondSymbols != null && !bondSymbols.Any(s => string.IsNullOrWhiteSpace(s)) ? bondSymbols : new string[] { "VTIP", "STIP" };
             _stockBondPerc = double.TryParse(configuration["StockBondPerc"], out var stockBondPerc) ? stockBondPerc : 0.85;
@@ -43,6 +45,7 @@ namespace NumbersGoUpBase.Services
                 return Enumerable.Empty<IRebalancer>();
             }
             var allTickers = await _tickerService.GetFullTickerList();
+            var (bankTickers, _) = await _tickerBankService.GetTickers();
             foreach(var position in positions.Where(p => !BondSymbols.Contains(p.Symbol)))
             {
                 if(!allTickers.Any(t => t.Symbol == position.Symbol))
@@ -90,7 +93,8 @@ namespace NumbersGoUpBase.Services
                 var calculatedPerformance = tickerEquity * PerformanceValue(performanceTicker) * performanceTicker.PerformanceMultiplier();
                 var targetValue = totalPerformance > 0 ? (calculatedPerformance / totalPerformance) : 0.0;
                 var position = performanceTicker.Position;
-                if (position == null && targetValue > 0 && performanceTicker.MeetsRequirements && cash > 0)
+                var bankTicker = bankTickers.FirstOrDefault(t => t.Symbol == performanceTicker.Ticker.Symbol);
+                if (position == null && bankTicker != null && targetValue > 0 && performanceTicker.MeetsRequirements && cash > 0)
                 {
                     rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, targetValue * prediction.BuyMultiplier, prediction));
                 }
@@ -123,6 +127,10 @@ namespace NumbersGoUpBase.Services
                         {
                             var gain = position.MarketValue.Value - position.CostBasis;
                             diffCutoff = (gain * performanceTicker.Ticker.DividendYield.DoubleReduce(0.04, 0) / equity).DoubleReduce(0.1, 0, 99, diffCutoff);
+                        }
+                        else if(bankTicker == null)
+                        {
+                            diffPerc = 0;
                         }
                         if (Math.Abs(diffPerc) > diffCutoff)
                         {
