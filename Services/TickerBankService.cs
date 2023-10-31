@@ -268,6 +268,8 @@ namespace NumbersGoUp.Services
             var regressionTotal = (totalslope * barsAsc.Length) + totalyintercept;
             var stdevTotal = barsAsc.RegressionStDev(b => (b.Price() - initialInitialPrice) * 100.0 / initialInitialPrice, totalslope, totalyintercept);
             if (regressionTotal < 0) { return regressionTotal / stdevTotal; }
+            var lowerBound = regressionTotal - stdevTotal;
+            if(lowerBound < initialInitialPrice) { return -1; }
             const int interval = 120;
             const int minLength = interval / 2;
             var priceChanges = new List<double>();
