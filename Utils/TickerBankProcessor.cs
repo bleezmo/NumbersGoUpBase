@@ -57,7 +57,7 @@ namespace NumbersGoUp.Utils
                      */
                     int? tickerIndex = null, sectorIndex = null, marketCapIndex = null, peRatioIndex = null, currentRatioIndex = null, debtEquityRatioIndex = null, 
                          dividendIndex = null, ebitdaIndex = null, evebitdaIndex = null, epsFYIndex = null, epsIndex = null, priceIndex = null, sharesIndex = null, evIndex = null, 
-                         currentEPSIndex = null, futureEPSIndex = null, epsQoQIndex = null, epsGrowthIndex = null, recentEarningsIndex = null, revenueGrowthIndex = null, 
+                         currentEPSIndex = null, futureEPSIndex = null, epsQoQIndex = null, epsGrowthIndex = null, /*recentEarningsIndex = null,*/ revenueGrowthIndex = null, 
                          incomeIndex = null, countryIndex = null, incomeGrowthIndex = null;
                     using (var csv = new CsvReader(sr, CultureInfo.InvariantCulture))
                     {
@@ -70,29 +70,28 @@ namespace NumbersGoUp.Utils
                                 headers = csv.HeaderRecord;
                                 for (var i = 0; i < headers.Length; i++)
                                 {
-                                    if (headers[i] == "Ticker") { tickerIndex = i; }
-                                    if (headers[i] == "Sector") { sectorIndex = i; }
-                                    if (headers[i] == "Market Capitalization") { marketCapIndex = i; }
-                                    if (headers[i] == "Price to Earnings Ratio (TTM)") { peRatioIndex = i; }
-                                    if (headers[i] == "Current Ratio (MRQ)") { currentRatioIndex = i; }
-                                    if (headers[i] == "Debt to Equity Ratio (MRQ)") { debtEquityRatioIndex = i; }
-                                    if (headers[i] == "Dividend Yield Forward") { dividendIndex = i; }
-                                    if (headers[i] == "EBITDA (TTM)") { ebitdaIndex = i; }
-                                    if (headers[i] == "Enterprise Value/EBITDA (TTM)") { evebitdaIndex = i; }
-                                    if (headers[i] == "EPS Diluted (FY)") { epsFYIndex = i; }
-                                    if (headers[i] == "EPS Diluted (TTM)") { epsIndex = i; }
-                                    if (headers[i] == "Price") { priceIndex = i; }
-                                    if (headers[i] == "EPS Diluted (MRQ)") { currentEPSIndex = i; }
-                                    if (headers[i] == "EPS Forecast (MRQ)") { futureEPSIndex = i; }
-                                    if (headers[i] == "Total Shares Outstanding") { sharesIndex = i; }
-                                    if (headers[i] == "Enterprise Value (MRQ)") { evIndex = i; }
-                                    if (headers[i] == "EPS Diluted (Quarterly QoQ Growth)") { epsQoQIndex = i; }
-                                    if (headers[i] == "EPS Diluted (TTM YoY Growth)") { epsGrowthIndex = i; }
-                                    if (headers[i] == "Recent Earnings Date") { recentEarningsIndex = i; }
-                                    if (headers[i] == "Revenue (TTM YoY Growth)") { revenueGrowthIndex = i; }
-                                    if (headers[i] == "Net Income (FY)") { incomeIndex = i; }
-                                    if (headers[i] == "Country") { countryIndex = i; }
-                                    if (headers[i] == "Net Income (TTM YoY Growth)") { incomeGrowthIndex = i; }
+                                    if ("Symbol".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { tickerIndex = i; }
+                                    if ("Sector".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { sectorIndex = i; }
+                                    if ("Market capitalization".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { marketCapIndex = i; }
+                                    if ("Price to earnings ratio".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { peRatioIndex = i; }
+                                    if ("Current ratio, Quarterly".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { currentRatioIndex = i; }
+                                    if ("Debt to equity ratio, Quarterly".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { debtEquityRatioIndex = i; }
+                                    if ("Dividend yield %, Trailing 12 months".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { dividendIndex = i; }
+                                    if ("EBITDA, Trailing 12 months".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { ebitdaIndex = i; }
+                                    if ("Enterprise value to EBITDA ratio, Trailing 12 months".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { evebitdaIndex = i; }
+                                    if ("EPS diluted, Trailing 12 months".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { epsIndex = i; }
+                                    if ("EPS diluted, Annual".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { epsFYIndex = i; }
+                                    if ("Price".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { priceIndex = i; }
+                                    if ("EPS forecast, Quarterly".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { futureEPSIndex = i; }
+                                    if ("EPS diluted, Quarterly".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { currentEPSIndex = i; }
+                                    if ("Total common shares outstanding".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { sharesIndex = i; }
+                                    if ("Enterprise value".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { evIndex = i; }
+                                    if ("EPS diluted growth %, TTM YoY".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { epsGrowthIndex = i; }
+                                    if ("EPS diluted growth %, Quarterly QoQ".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { epsQoQIndex = i; }
+                                    if ("Revenue growth %, TTM YoY".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { revenueGrowthIndex = i; }
+                                    if ("Net income, Trailing 12 months".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { incomeIndex = i; }
+                                    if ("Country of registration".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { countryIndex = i; }
+                                    if ("Net income growth %, TTM YoY".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { incomeGrowthIndex = i; }
                                 }
                             }
                             else
@@ -166,9 +165,9 @@ namespace NumbersGoUp.Utils
                                 }
                                 else
                                 {
-                                    _logger.LogWarning($"Dividend not found for {ticker.Ticker.Symbol}");
+                                    //_logger.LogWarning($"Dividend not found for {ticker.Ticker.Symbol}");
                                 }
-                                if(epsIndex.HasValue && double.TryParse(csv[epsIndex.Value], out var eps))
+                                if (epsIndex.HasValue && double.TryParse(csv[epsIndex.Value], out var eps))
                                 {
                                     if (currentEPSIndex.HasValue && double.TryParse(csv[currentEPSIndex.Value], out var currentEPS) &&
                                         futureEPSIndex.HasValue && double.TryParse(csv[futureEPSIndex.Value], out var futureEPS) &&
@@ -184,7 +183,7 @@ namespace NumbersGoUp.Utils
                                         var minQtr = quarters.Min();
                                         if (finalQ > 0 && eps > 0 && calculatedEPS > 0)
                                         {
-                                            if(finalQ > minQtr)
+                                            if (finalQ > minQtr)
                                             {
                                                 var coeff = (calculatedEPS / eps).DoubleReduce(2, 1);
                                                 ticker.Ticker.EPS = (coeff * eps) + ((1 - coeff) * calculatedEPS);
@@ -199,7 +198,7 @@ namespace NumbersGoUp.Utils
                                             ticker.Ticker.EPS = 0;
                                         }
                                     }
-                                    else if (epsGrowthIndex.HasValue && double.TryParse(csv[epsGrowthIndex.Value], out var epsGrowth) && 
+                                    else if (epsGrowthIndex.HasValue && double.TryParse(csv[epsGrowthIndex.Value], out var epsGrowth) &&
                                              epsGrowth > -100 && epsGrowth < 300)
                                     {
                                         ticker.YoYEPSGrowth = epsGrowth;
@@ -219,7 +218,7 @@ namespace NumbersGoUp.Utils
                                     {
                                         ticker.Ticker.EPS = Math.Min(eps, eps * 0.8);
                                     }
-                                    if(epsFYIndex.HasValue && double.TryParse(csv[epsFYIndex.Value], out var epsFY) && epsFY > 0)
+                                    if (epsFYIndex.HasValue && double.TryParse(csv[epsFYIndex.Value], out var epsFY) && epsFY > 0)
                                     {
                                         ticker.Ticker.EPS *= (eps / epsFY).ZeroReduceSlow(2, 0);
                                     }
@@ -252,14 +251,6 @@ namespace NumbersGoUp.Utils
                                 else
                                 {
                                     //_logger.LogWarning($"Price not found for {ticker.Ticker.Symbol}");
-                                }
-                                if(recentEarningsIndex.HasValue && DateTime.TryParse(csv[recentEarningsIndex.Value], out var recentEarningsDate))
-                                {
-                                    ticker.RecentEarningsDate = recentEarningsDate;
-                                }
-                                else
-                                {
-                                    _logger.LogWarning($"Recent Earnings Date not found for {ticker.Ticker.Symbol}");
                                 }
                                 if (ticker.Ticker.Earnings > 0)
                                 {
@@ -386,7 +377,6 @@ namespace NumbersGoUp.Utils
         public double? YoYEPSGrowth { get; set; }
         public double Price { get; set; }
         public double EV { get; set; }
-        public DateTime? RecentEarningsDate { get; set; }
         public BankTicker Ticker { get; }
     }
 }

@@ -328,6 +328,18 @@ namespace NumbersGoUp.Utils
             }
             return false;
         }
+        public static (double max, double min) MaxMin<T>(this IEnumerable<T> objs, Func<T, double> valueFn)
+        {
+            double max = double.MinValue;
+            double min = double.MaxValue;
+            foreach(var obj in objs)
+            {
+                var value = valueFn(obj);
+                if(value > max) { max = value; }
+                if(value < min) { min = value; }
+            }
+            return (max, min);
+        }
     }
     public class MinMaxStore<T>
     {

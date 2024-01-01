@@ -18,12 +18,10 @@ namespace NumbersGoUp.Services
         private readonly IAppCancellation _appCancellation;
         private readonly IBrokerService _brokerService;
         private readonly IStocksContextFactory _contextFactory;
-        private readonly double _peratioCutoff;
-        private readonly TickerService _tickerService;
 
         public double EncouragementMultiplier { get; }
 
-        public PredicterService(IAppCancellation appCancellation, ILogger<PredicterService> logger, IBrokerService brokerService, TickerService tickerService, 
+        public PredicterService(IAppCancellation appCancellation, ILogger<PredicterService> logger, IBrokerService brokerService, 
                                 IStocksContextFactory contextFactory, IConfiguration configuration)
         {
             _logger = logger;
@@ -31,8 +29,6 @@ namespace NumbersGoUp.Services
             _brokerService = brokerService;
             _contextFactory = contextFactory;
             EncouragementMultiplier = Math.Min(Math.Max(double.TryParse(configuration["EncouragementMultiplier"], out var encouragementMultiplier) ? encouragementMultiplier : 0, -1), 1);
-            _peratioCutoff = tickerService.PERatioCutoff;
-            _tickerService = tickerService;
         }
         public async Task<Prediction> Predict(string symbol)
         {
@@ -135,6 +131,7 @@ namespace NumbersGoUp.Services
 
                     var coeff = barMetrics.Average(b => b.SMASMA).DoubleReduce(ticker.SMASMAAvg, ticker.SMASMAAvg - ticker.SMASMAStDev) * barMetrics.CalculateAvgVelocity(b => b.SMASMA).DoubleReduce(0.5 * ticker.SMAVelStDev, -ticker.SMAVelStDev);
                     pricePrediction = (coeff * bullPricePrediction) + ((1 - coeff) * bearPricePrediction);
+                    pricePrediction *= 1 - ticker.SMASMAAvg.DoubleReduce(20, -20);
                 }
                 else
                 {
@@ -158,6 +155,7 @@ namespace NumbersGoUp.Services
 
                     var coeff = barMetrics.Average(b => b.SMASMA).DoubleReduce(ticker.SMASMAAvg, ticker.SMASMAAvg - ticker.SMASMAStDev) * barMetrics.CalculateAvgVelocity(b => b.SMASMA).DoubleReduce(0.5 * ticker.SMAVelStDev, -ticker.SMAVelStDev);
                     pricePrediction = (coeff * bullPricePrediction) + ((1 - coeff) * bearPricePrediction);
+                    pricePrediction *= ticker.SMASMAAvg.DoubleReduce(20, -20);
                 }
 
                 if (buy)

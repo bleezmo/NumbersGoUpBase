@@ -1,19 +1,8 @@
 ﻿using Microsoft.Extensions.Configuration;
 using NumbersGoUp.Models;
 using NumbersGoUp.Utils;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Text;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Hosting;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Microsoft.EntityFrameworkCore;
-using NumbersGoUp.JsonModels;
 
 namespace NumbersGoUp.Services
 {
@@ -21,86 +10,31 @@ namespace NumbersGoUp.Services
     {
         private const string EARNINGS_MULTIPLE_CUTOFF_KEY = "EarningsMultipleCutoff";
 
-        private static readonly string[][] CountryTiers = new string[][]
-        {
-            new string[] {"United States"},
-            new string[] {"United Kingdom", "Ireland", "Canada"},
-            new string[] {"Australia", "New Zealand", "Israel", "Japan", "South Korea"},
-            new string[] {"Denmark", "Netherlands", "Finland", "Iceland", "Belgium", "Germany", "Norway", "Sweden", "Taiwan"},
-            new string[] {"Portugal", "France", "Hungary", "Spain", "Singapore", "Luxembourg", "Switzerland" }
-        };
-
-        private readonly IHttpClientFactory _httpClientFactory;
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<TickerBankService> _logger;
-        private readonly RateLimiter _rateLimiter;
         private readonly ITickerBankProcessor _tickerProcessor;
-        private readonly IConfiguration _configuration;
-        private readonly string _environmentName;
+        private readonly ITickerPickProcessor _tickerPickProcessor;
         private readonly IStocksContextFactory _contextFactory;
         private readonly IRuntimeSettings _runtimeSettings;
         private readonly int _lookbackYears;
         private readonly DateTime _lookbackDate;
         public double EarningsMultipleCutoff { get; }
-        public string[] TickerBlacklist { get; }
 
         private readonly IBrokerService _brokerService;
 
-        public TickerBankService(IConfiguration configuration, IHostEnvironment environment, IHttpClientFactory httpClientFactory, IStocksContextFactory contextFactory, IRuntimeSettings runtimeSettings,
-                                IAppCancellation appCancellation, ILogger<TickerBankService> logger, RateLimiter rateLimiter, ITickerBankProcessor tickerProcessor, IBrokerService brokerService)
+        public TickerBankService(IConfiguration configuration, IStocksContextFactory contextFactory, IRuntimeSettings runtimeSettings, ITickerPickProcessor tickerPickProcessor,
+                                IAppCancellation appCancellation, ILogger<TickerBankService> logger, ITickerBankProcessor tickerProcessor, IBrokerService brokerService)
         {
-            _httpClientFactory = httpClientFactory;
             _appCancellation = appCancellation;
             _logger = logger;
-            _rateLimiter = rateLimiter;
-            _environmentName = environment.EnvironmentName;
             _tickerProcessor = tickerProcessor;
-            _configuration = configuration;
+            _tickerPickProcessor = tickerPickProcessor;
             _contextFactory = contextFactory;
             _runtimeSettings = runtimeSettings;
             EarningsMultipleCutoff = double.TryParse(configuration[EARNINGS_MULTIPLE_CUTOFF_KEY], out var peratioCutoff) ? peratioCutoff : 40;
             _brokerService = brokerService;
-            TickerBlacklist = configuration["TickerBlacklist"]?.Split(',') ?? new string[] { };
             _lookbackYears = runtimeSettings.LookbackYears;
             _lookbackDate = DateTime.Now.AddYears(-_lookbackYears);
-        }
-        public async Task<(BankTicker[] main, BankTicker[] remainingPositions)> GetTickers(string[] currentPositions = null, int? maxTickers = null)
-        {
-            using (var stocksContext = _contextFactory.CreateDbContext())
-            {
-                var bankTickers = await stocksContext.TickerBank.ToArrayAsync(_appCancellation.Token);
-                List<BankTicker> tickers = new List<BankTicker>(), remainingPositions = new List<BankTicker>();
-                if (!maxTickers.HasValue)
-                {
-                    maxTickers = bankTickers.Length;
-                }
-                for (var i = 0; i < CountryTiers.Length; i++)
-                {
-                    var countryTier = CountryTiers[i];
-                    if (tickers.Count < maxTickers)
-                    {
-                        var toAdd = bankTickers.Where(t =>
-                            countryTier.Any(c => string.Equals(c, t.Country, StringComparison.OrdinalIgnoreCase)) &&
-                            t.PerformanceVector > 0
-                            ).OrderByDescending(t => t.PerformanceVector).Take(maxTickers.Value - tickers.Count);
-                        if (i == 0 && !toAdd.Any()) { throw new Exception("No tickers found for first tier country!!!!"); }
-                        tickers.AddRange(toAdd);
-                    }
-                    else { break; }
-                }
-                if(currentPositions != null)
-                {
-                    foreach (var position in currentPositions)
-                    {
-                        if (!tickers.Any(t => t.Symbol == position))
-                        {
-                            var bankTicker = bankTickers.FirstOrDefault(t => t.Symbol == position);
-                            if (bankTicker != null) { remainingPositions.Add(bankTicker); }
-                        }
-                    }
-                }
-                return (tickers.ToArray(), remainingPositions.ToArray());
-            }
         }
         public async Task Load()
         {
@@ -109,6 +43,7 @@ namespace NumbersGoUp.Services
                 var result = await _tickerProcessor.DownloadTickers(_runtimeSettings.ForceDataCollection);
                 var processorTickers = result.BankTickers;
                 if (processorTickers.Length == 0) { return; }
+                var tickerPicks = await _tickerPickProcessor.GetTickers();
                 _logger.LogInformation($"Loading {processorTickers.Length} tickers into ticker bank");
                 var positions = await _brokerService.GetPositions();
                 using (var stocksContext = _contextFactory.CreateDbContext())
@@ -120,23 +55,18 @@ namespace NumbersGoUp.Services
                     {
                         var ticker = processorTicker.Ticker;
                         var dbTicker = dbTickers.FirstOrDefault(t => t.Symbol == ticker.Symbol);
-                        var isBlacklisted = TickerBlacklist.TickerAny(ticker);
                         var lastModified = result.LastModified.HasValue ? result.LastModified.Value.DateTime : DateTime.UtcNow;
-                        var isCarryover = !isBlacklisted && IsCarryover(processorTicker, lastModified);
-                        var passCutoff = !isBlacklisted && LoadCutoff(processorTicker);
-                        var hasPosition = dbTicker != null && positions.Any(p => p.Symbol == dbTicker.Symbol);
-                        if (!isBlacklisted && processorTicker.RecentEarningsDate.HasValue && processorTicker.RecentEarningsDate.Value.Date.CompareTo(lastModified.Date) == 0)
-                        {
-                            _logger.LogInformation($"Ignoring {ticker.Symbol}. Recent Earnings Date matches last modified.");
-                            continue;
-                        }
+                        var isCarryover = IsCarryover(processorTicker);
+                        var passCutoff = LoadCutoff(processorTicker);
+                        var isTickerPick = tickerPicks.Any(t => t.Symbol == ticker.Symbol);
+                        var hasPosition = positions.Any(p => p.Symbol == ticker.Symbol);
                         try
                         {
                             if (isCarryover)
                             {
-                                if(dbTicker != null) _logger.LogInformation($"Missing values due to recent earnings update for {ticker.Symbol}. Using old values.");
+                                if(dbTicker != null) _logger.LogInformation($"Missing values for {ticker.Symbol}. Using old values.");
                             }
-                            else if (passCutoff || hasPosition)
+                            else if (passCutoff || hasPosition || isTickerPick)
                             {
                                 var bars = await stocksContext.HistoryBars.Where(b => b.Symbol == ticker.Symbol).OrderBy(b => b.BarDayMilliseconds).ToArrayAsync(_appCancellation.Token);
                                 var priceChangeAvg = CalculatePriceChangeAvg(bars.Length > 0 ? bars : (await _brokerService.GetBarHistoryDay(ticker.Symbol, _lookbackDate)).OrderBy(b => b.BarDayMilliseconds).ToArray());
@@ -162,7 +92,10 @@ namespace NumbersGoUp.Services
                     }
                     foreach(var dbTicker in dbTickers)
                     {
-                        if(!processorTickers.Any(t => t.Ticker.Symbol == dbTicker.Symbol))
+                        var isTickerPick = tickerPicks.Any(t => t.Symbol == dbTicker.Symbol);
+                        var hasPosition = positions.Any(p => p.Symbol == dbTicker.Symbol);
+                        var isProcessorTicker = processorTickers.Any(t => t.Ticker.Symbol == dbTicker.Symbol);
+                        if (!isProcessorTicker && !isTickerPick && !hasPosition)
                         {
                             toRemove.Add(dbTicker);
                         }
@@ -183,17 +116,16 @@ namespace NumbersGoUp.Services
             await CalculatePerformance();
             _logger.LogInformation("Completed bank ticker performance calculation");
         }
-        private bool LoadCutoff(ProcessorBankTicker ticker) => ticker.Income > 50000000 && ticker.RevenueGrowth > -25 && ticker.IncomeGrowth > -75 && (ticker.Ticker.MarketCap > 4_000_000_000 || ticker.IncomeGrowth < 75) && BasicCutoff(ticker.Ticker);
-        private bool BasicCutoff(BankTicker ticker) => ticker.MarketCap > 3_750_000_000 && (ticker.CurrentRatio > 1 || ticker.DebtEquityRatio > 0) && 
+        private bool LoadCutoff(ProcessorBankTicker ticker) => ticker.Income > 50000000 && ticker.RevenueGrowth > -25 && ticker.IncomeGrowth > -75 && (ticker.Ticker.MarketCap > 3_500_000_000 || ticker.IncomeGrowth < 75) && BasicCutoff(ticker.Ticker);
+        private bool BasicCutoff(BankTicker ticker) => ticker.MarketCap > 3_000_000_000 && (ticker.CurrentRatio > 1 || ticker.DebtEquityRatio > 0) && 
                                                        (ticker.CurrentRatio > (ticker.DebtEquityRatio * 1.2) || ticker.DebtEquityRatio < 0.9) && ticker.Earnings > 0 && 
-                                                       (ticker.DebtMinusCash / ticker.Earnings) < 15 && ticker.DividendYield > 0 && ticker.EPS > 0 && 
+                                                       (ticker.DebtMinusCash / ticker.Earnings) < 15 && ticker.EPS > 0 && 
                                                        ticker.EVEarnings > 0 && ticker.EVEarnings < EarningsMultipleCutoff;
-        private bool IsCarryover(ProcessorBankTicker ticker, DateTime lastDownloaded) => ticker.RecentEarningsDate.HasValue && ticker.RecentEarningsDate.Value.CompareTo(lastDownloaded.AddDays(-15)) > 0 && 
-                                                                          ((ticker.Ticker.CurrentRatio == 0 && ticker.Ticker.DebtEquityRatio == 0) || 
-                                                                            ticker.Ticker.EVEarnings == 0 || ticker.Ticker.EPS == 0 || 
-                                                                            (!ticker.QoQEPSGrowth.HasValue && !ticker.YoYEPSGrowth.HasValue) ||
-                                                                            !ticker.RevenueGrowth.HasValue || !ticker.Income.HasValue) || ticker.Ticker.MarketCap == 0 ||
-                                                                            !ticker.IncomeGrowth.HasValue;
+        private bool IsCarryover(ProcessorBankTicker ticker) => (ticker.Ticker.CurrentRatio == 0 && ticker.Ticker.DebtEquityRatio == 0) ||
+                                                                ticker.Ticker.EVEarnings == 0 || ticker.Ticker.EPS == 0 ||
+                                                                (!ticker.QoQEPSGrowth.HasValue && !ticker.YoYEPSGrowth.HasValue) ||
+                                                                !ticker.RevenueGrowth.HasValue || !ticker.Income.HasValue || ticker.Ticker.MarketCap == 0 ||
+                                                                !ticker.IncomeGrowth.HasValue;
         private async Task CalculatePerformance()
         {
             var now = DateTime.UtcNow;
@@ -204,7 +136,7 @@ namespace NumbersGoUp.Services
                 var tickers = new List<BankTicker>();
                 foreach (var t in dbTickers)
                 {
-                    if (!TickerBlacklist.TickerAny(t) && BasicCutoff(t) && t.PERatio < EarningsMultipleCutoff && t.PERatio > 1 && t.PriceChangeAvg > 0)
+                    if (BasicCutoff(t) && t.PERatio < EarningsMultipleCutoff && t.PERatio > 1 && t.PriceChangeAvg > 0)
                     {
                         tickers.Add(t);
                     }

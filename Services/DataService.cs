@@ -56,8 +56,6 @@ namespace NumbersGoUp.Services
                 _logger.LogInformation($"Completed clean up");
                 await _tickerService.ApplyAverages();
                 _logger.LogInformation($"Completed calculation of averages");
-                await _tickerService.CalculatePerformance();
-                _logger.LogInformation($"Completed performance calculation");
             }
             catch (Exception e)
             {
