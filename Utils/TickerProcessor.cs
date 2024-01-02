@@ -1,16 +1,4 @@
-﻿using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using NumbersGoUp.Models;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Reflection;
-using System.Security.Cryptography;
-using System.Text;
-using System.Threading.Tasks;
+﻿using NumbersGoUp.Models;
 
 namespace NumbersGoUp.Utils
 {
@@ -23,6 +11,10 @@ namespace NumbersGoUp.Utils
     {
         public Task<string> GetCurrentHash();
         public Task WriteNewHash(string hash);
+    }
+    public interface ITickerPickFile
+    {
+        public Task<Stream> OpenRead();
     }
     public interface ITickerProcessor
     {

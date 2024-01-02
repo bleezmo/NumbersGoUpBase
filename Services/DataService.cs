@@ -56,8 +56,6 @@ namespace NumbersGoUp.Services
                 _logger.LogInformation($"Completed clean up");
                 await _tickerService.ApplyAverages();
                 _logger.LogInformation($"Completed calculation of averages");
-                await _tickerService.CalculatePerformance();
-                _logger.LogInformation($"Completed performance calculation");
             }
             catch (Exception e)
             {
@@ -194,7 +192,8 @@ namespace NumbersGoUp.Services
                 if (from.HasValue)
                 {
                     _logger.LogDebug($"Collecting bar history for {symbol}");
-                    var count = 0;
+                    var gapDetected = false;
+                    var count = 0; HistoryBar previousBar = null;
                     foreach (var bar in await _brokerService.GetBarHistoryDay(symbol, from.Value))
                     {
                         //just make sure
@@ -210,10 +209,17 @@ namespace NumbersGoUp.Services
                                     break;
                                 }
                             }
+                            if(previousBar != null && bar.BarDay.Subtract(previousBar.BarDay).TotalDays > 10)
+                            {
+                                _logger.LogWarning($"Gap detected for {ticker.Symbol}");
+                                gapDetected = true;
+                                break;
+                            }
                             bar.TickerId = ticker.Id;
                             stocksContext.HistoryBars.Add(bar);
                             count++;
                         }
+                        previousBar = bar;
                     }
                     if (stockSplit)
                     {

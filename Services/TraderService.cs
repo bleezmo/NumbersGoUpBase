@@ -42,7 +42,7 @@ namespace NumbersGoUp.Services
             _contextFactory = contextFactory;
             _disableBuys = bool.TryParse(configuration[DISABLE_BUYS], out var disableBuys) ? disableBuys : false;
             _disableSells = bool.TryParse(configuration[DISABLE_SELLS], out var disableSells) ? disableSells : false;
-            _maxDailyBuy = double.TryParse(configuration[MAX_DAILY_BUY], out var maxBuy) ? maxBuy : 2000;
+            _maxDailyBuy = double.TryParse(configuration[MAX_DAILY_BUY], out var maxBuy) ? maxBuy : 5000;
         }
         public async Task Run()
         {
@@ -124,8 +124,8 @@ namespace NumbersGoUp.Services
             {
                 var profitLossPerc = 0.0;
                 var dayOfWeek = brokerOrder.FilledAt.Value.DayOfWeek;
-                var daysToNextBuy = brokerOrder.OrderSide == OrderSide.Buy ? (1 - _cashEquityRatio.DoubleReduce(1.8, 0.1, 1, 0.6)) * MAX_COOLDOWN_DAYS : MAX_COOLDOWN_DAYS; 
-                var daysToNextSell = brokerOrder.OrderSide == OrderSide.Sell ? _cashEquityRatio.DoubleReduce(0.5, -0.1) * MAX_COOLDOWN_DAYS : MAX_COOLDOWN_DAYS;
+                var daysToNextBuy = brokerOrder.OrderSide == OrderSide.Buy ? 5 : MAX_COOLDOWN_DAYS; 
+                var daysToNextSell = brokerOrder.OrderSide == OrderSide.Sell ? 5 : MAX_COOLDOWN_DAYS;
                 var lastBuyOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == order.Symbol && o.NextBuy != null).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
                 var lastSellOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == order.Symbol && o.NextSell != null).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
                 if(lastBuyOrder != null && brokerOrder.FilledAt.Value.CompareTo(lastBuyOrder.NextBuy.Value) < 0)
