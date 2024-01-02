@@ -158,12 +158,16 @@ namespace NumbersGoUp.Services
                         }
                         else if(ticker == null && bankTicker != null)
                         {
-                            stocksContext.Tickers.Add(TickerCopy(new Ticker
+                            var newTicker = TickerCopy(new Ticker
                             {
                                 Symbol = bankTicker.Symbol,
                                 LastCalculated = now.UtcDateTime,
                                 LastCalculatedMillis = nowMillis
-                            }, bankTicker, tickerPick));
+                            }, bankTicker, tickerPick);
+                            if(newTicker.PerformanceVector > 0)
+                            {
+                                stocksContext.Tickers.Add(newTicker);
+                            }
                         }
                         else if(ticker != null && bankTicker == null)
                         {
@@ -180,7 +184,7 @@ namespace NumbersGoUp.Services
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
                     foreach(var ticker in tickers)
                     {
-                        var tickerPick = tickerPicks.FirstOrDefault(t => t.Symbol == ticker.Symbol);
+                        var tickerPick = tickerPicks.FirstOrDefault(t => t.Symbol == ticker.Symbol && t.Score > 0);
                         if(tickerPick == null)
                         {
                             var hasPosition = positions.Any(p => p.Symbol == ticker.Symbol);
@@ -188,17 +192,6 @@ namespace NumbersGoUp.Services
                             if(bankTicker == null && hasPosition)
                             {
                                 ticker.PerformanceVector = Math.Max(ticker.PerformanceVector - 5, 0);
-                                ticker.LastCalculated = now.UtcDateTime;
-                                ticker.LastCalculatedMillis = nowMillis;
-                                stocksContext.Tickers.Update(ticker);
-                            }
-                            else if (bankTicker == null && !hasPosition)
-                            {
-                                stocksContext.Tickers.Remove(ticker);
-                            }
-                            else if (bankTicker != null && !hasPosition)
-                            {
-                                TickerCopy(ticker, bankTicker);
                                 ticker.LastCalculated = now.UtcDateTime;
                                 ticker.LastCalculatedMillis = nowMillis;
                                 stocksContext.Tickers.Update(ticker);
@@ -211,6 +204,10 @@ namespace NumbersGoUp.Services
                                 ticker.LastCalculated = now.UtcDateTime;
                                 ticker.LastCalculatedMillis = nowMillis;
                                 stocksContext.Tickers.Update(ticker);
+                            }
+                            else if (!hasPosition)
+                            {
+                                stocksContext.Tickers.Remove(ticker);
                             }
                         }
                     }
