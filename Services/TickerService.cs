@@ -176,9 +176,9 @@ namespace NumbersGoUp.Services
                             ticker.LastCalculatedMillis = nowMillis;
                             stocksContext.Tickers.Update(ticker);
                         }
-                        else
+                        else if (positions.Any(p => p.Symbol == tickerPick.Symbol))
                         {
-                            _logger.LogWarning($"No bank ticker found for ticker pick {tickerPick.Symbol}");
+                            _logger.LogError($"No bank ticker found for ticker pick {tickerPick.Symbol}");
                         }
                     }
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
