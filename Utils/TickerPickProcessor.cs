@@ -64,16 +64,20 @@ namespace NumbersGoUp.Utils
                             {
                                 _logger.LogError($"Score not found for ticker pick {ticker.Symbol}");
                             }
-                            
+                            if(tickers.Any(t => t.Symbol == ticker.Symbol))
+                            {
+                                _logger.LogError($"Duplicate ticker pick entries for {ticker.Symbol}");
+                            }
                             tickers.Add(ticker);
                         }
                     }
                 }
             }
-            var (max, min) = tickers.MaxMin(t => t.Score);
+
+            var max = tickers.Max(t => t.Score);
             foreach(var ticker in tickers)
             {
-                ticker.Score = ticker.Score.DoubleReduce(max, min, 100, 0);
+                ticker.Score = ticker.Score.DoubleReduce(max, 0, 100, 0);
             }
             return tickers;
         }

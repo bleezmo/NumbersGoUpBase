@@ -16,24 +16,21 @@ namespace NumbersGoUpBase.Services
     {
         private readonly ILogger<PredicterService> _logger;
         private readonly TickerService _tickerService;
-        private readonly TickerBankService _tickerBankService;
         private readonly PredicterService _predicterService;
         private readonly double _stockBondPerc;
 
         public string[] BondSymbols { get; }
 
-        public RebalancerService(ILogger<PredicterService> logger, TickerService tickerService, TickerBankService tickerBankService, IConfiguration configuration, PredicterService predicterService)
+        public RebalancerService(ILogger<PredicterService> logger, TickerService tickerService, IConfiguration configuration, PredicterService predicterService)
         {
             _logger = logger;
             _tickerService = tickerService;
-            _tickerBankService = tickerBankService;
             var bondSymbols = configuration["BondSymbols"]?.Split(',');
             BondSymbols = bondSymbols != null && !bondSymbols.Any(s => string.IsNullOrWhiteSpace(s)) ? bondSymbols : new string[] { "VTIP", "STIP" };
-            _stockBondPerc = double.TryParse(configuration["StockBondPerc"], out var stockBondPerc) ? stockBondPerc : 0.85;
+            _stockBondPerc = double.TryParse(configuration["StockBondPerc"], out var stockBondPerc) ? stockBondPerc : 1.0;
             _predicterService = predicterService;
         }
-        public async Task<IEnumerable<IRebalancer>> Rebalance(IEnumerable<Position> positions, Balance balance) => await Rebalance(positions, balance, DateTime.Now);
-        public async Task<IEnumerable<IRebalancer>> Rebalance(IEnumerable<Position> positions, Balance balance, DateTime day)
+        public async Task<IEnumerable<IRebalancer>> Rebalance(IEnumerable<Position> positions, Balance balance, DateTime? day = null)
         {
             var equity = balance.TradeableEquity;
             var cash = balance.TradableCash;
@@ -74,7 +71,8 @@ namespace NumbersGoUpBase.Services
 
             foreach (var performanceTicker in selectedTickers)
             {
-                performanceTicker.TickerPrediction = await _predicterService.Predict(performanceTicker.Ticker, day);
+                performanceTicker.TickerPrediction = day.HasValue ? await _predicterService.Predict(performanceTicker.Ticker, day.Value) : 
+                                                                    await _predicterService.Predict(performanceTicker.Ticker);
                 performanceTicker.Position = positions.FirstOrDefault(p => p.Symbol == performanceTicker.Ticker.Symbol);
                 totalPerformance += PerformanceValue(performanceTicker);
             }

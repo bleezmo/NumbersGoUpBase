@@ -19,6 +19,7 @@ namespace NumbersGoUp.Utils
     {
         Task<TickerBankProcessorResult> DownloadTickers(bool alwaysProcessData = false);
         void UpdateBankTicker(BankTicker src, BankTicker dest);
+        void FinalCalc(ProcessorBankTicker ticker, BankTicker dbTicker);
     }
 
     public class TradingViewTickerBankProcessor : ITickerBankProcessor
@@ -56,8 +57,8 @@ namespace NumbersGoUp.Utils
                      * Debt to Equity Ratio (MRQ),Dividend Yield Forward,EBITDA (TTM),Enterprise Value/EBITDA (TTM),EPS Diluted (TTM)
                      */
                     int? tickerIndex = null, sectorIndex = null, marketCapIndex = null, peRatioIndex = null, currentRatioIndex = null, debtEquityRatioIndex = null, 
-                         dividendIndex = null, ebitdaIndex = null, evebitdaIndex = null, epsFYIndex = null, epsIndex = null, priceIndex = null, sharesIndex = null, evIndex = null, 
-                         currentEPSIndex = null, futureEPSIndex = null, epsQoQIndex = null, epsGrowthIndex = null, /*recentEarningsIndex = null,*/ revenueGrowthIndex = null, 
+                         dividendIndex = null, ebitdaIndex = null, evebitdaIndex = null, epsIndex = null, priceIndex = null, sharesIndex = null, evIndex = null, 
+                         currentEPSIndex = null, futureEPSIndex = null, epsQoQIndex = null, epsGrowthIndex = null, revenueGrowthIndex = null, 
                          incomeIndex = null, countryIndex = null, incomeGrowthIndex = null;
                     using (var csv = new CsvReader(sr, CultureInfo.InvariantCulture))
                     {
@@ -80,7 +81,6 @@ namespace NumbersGoUp.Utils
                                     if ("EBITDA, Trailing 12 months".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { ebitdaIndex = i; }
                                     if ("Enterprise value to EBITDA ratio, Trailing 12 months".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { evebitdaIndex = i; }
                                     if ("EPS diluted, Trailing 12 months".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { epsIndex = i; }
-                                    if ("EPS diluted, Annual".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { epsFYIndex = i; }
                                     if ("Price".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { priceIndex = i; }
                                     if ("EPS forecast, Quarterly".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { futureEPSIndex = i; }
                                     if ("EPS diluted, Quarterly".Equals(headers[i], StringComparison.CurrentCultureIgnoreCase)) { currentEPSIndex = i; }
@@ -180,23 +180,8 @@ namespace NumbersGoUp.Utils
                                         var quarters = new[] { pastEPS, currentEPS, futureEPS };
                                         var finalQ = quarters.CalculateFutureRegression(1);
                                         var calculatedEPS = pastEPS + currentEPS + futureEPS + finalQ;
-                                        var minQtr = quarters.Min();
-                                        if (finalQ > 0 && eps > 0 && calculatedEPS > 0)
-                                        {
-                                            if (finalQ > minQtr)
-                                            {
-                                                var coeff = (calculatedEPS / eps).DoubleReduce(2, 1);
-                                                ticker.Ticker.EPS = (coeff * eps) + ((1 - coeff) * calculatedEPS);
-                                            }
-                                            else
-                                            {
-                                                ticker.Ticker.EPS = Math.Min(eps, calculatedEPS * Math.Max(finalQ / minQtr, 0.5));
-                                            }
-                                        }
-                                        else
-                                        {
-                                            ticker.Ticker.EPS = 0;
-                                        }
+                                        var coeff = eps > 0 ? (calculatedEPS / eps).ZeroReduce(2, 0) : 1.0;
+                                        ticker.Ticker.EPS = (coeff * calculatedEPS) + ((1 - coeff) * eps);
                                     }
                                     else if (epsGrowthIndex.HasValue && double.TryParse(csv[epsGrowthIndex.Value], out var epsGrowth) &&
                                              epsGrowth > -100 && epsGrowth < 300)
@@ -216,15 +201,7 @@ namespace NumbersGoUp.Utils
                                     }
                                     else
                                     {
-                                        ticker.Ticker.EPS = Math.Min(eps, eps * 0.8);
-                                    }
-                                    if (epsFYIndex.HasValue && double.TryParse(csv[epsFYIndex.Value], out var epsFY) && epsFY > 0)
-                                    {
-                                        ticker.Ticker.EPS *= (eps / epsFY).ZeroReduceSlow(2, 0);
-                                    }
-                                    else
-                                    {
-                                        ticker.Ticker.EPS *= 0.9;
+                                        ticker.Ticker.EPS = Math.Min(eps, eps * 0.85);
                                     }
                                 }
                                 else
@@ -305,41 +282,17 @@ namespace NumbersGoUp.Utils
                 BankTickers = tickers.ToArray()
             };
         }
-        //private static ProcessorBankTicker[] FinalCalc(List<ProcessorBankTicker> tickers)
-        //{
-        //    if(tickers.Count == 0) { return new ProcessorBankTicker[] { }; }
-        //    var orderedTickers = tickers.OrderByDescending(t => t.Ticker.MarketCap).ToArray();
-        //    for (var i = 0; i < orderedTickers.Length; i++)
-        //    {
-        //        var ticker = orderedTickers[i];
-        //        var eps = ticker.Ticker.EPS;
-        //        if (ticker.EPSGrowth.HasValue && eps > 0)
-        //        {
-        //            var epsGrowth = (ticker.EPSGrowth.Value + 100) / 100;
-        //            var previousEPS = eps / epsGrowth;
-        //            var avgEPS = (eps + previousEPS) / 2;
-        //            if (epsGrowth < 0)
-        //            {
-        //                var curveExp = 2 + (Convert.ToDouble(i * 8) / orderedTickers.Length);
-        //                var epsRatio = eps / avgEPS;
-        //                var epsMultiplier = epsRatio.Curve4(curveExp);
-        //                eps *= epsMultiplier;
-        //            }
-        //            else 
-        //            {
-        //                var curveExp = 1 + (Convert.ToDouble(i) / orderedTickers.Length);
-        //                var epsRatio = (avgEPS - ticker.CurrentEPS) / ticker.CurrentEPS;
-        //                var epsMultiplier = epsRatio.Curve1(curveExp) + 1;
-        //                eps *= epsMultiplier;
-        //            }
-        //            ticker.Ticker.EPS = eps;
-        //            ticker.Ticker.Earnings = eps * ticker.Ticker.Shares;
-        //            ticker.Ticker.PERatio = ticker.Price / eps;
-        //            ticker.Ticker.EVEarnings = ticker.EV / ticker.Ticker.Earnings;
-        //        }
-        //    }
-        //    return orderedTickers;
-        //}
+        public void FinalCalc(ProcessorBankTicker ticker, BankTicker dbTicker)
+        {
+            if(!ticker.QoQEPSGrowth.HasValue && !ticker.YoYEPSGrowth.HasValue && ticker.Ticker.EPS > 0 && dbTicker.EPS > 0)
+            {
+                var eps = (0.5 * ticker.Ticker.EPS) + (0.5 * dbTicker.EPS);
+                ticker.Ticker.EPS = eps;
+                ticker.Ticker.Earnings = eps * ticker.Ticker.Shares;
+                ticker.Ticker.PERatio = ticker.Price / eps;
+                ticker.Ticker.EVEarnings = ticker.EV / ticker.Ticker.Earnings;
+            }
+        }
         public void UpdateBankTicker(BankTicker dest, BankTicker src)
         {
             dest.Sector = src.Sector;

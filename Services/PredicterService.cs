@@ -30,36 +30,47 @@ namespace NumbersGoUp.Services
             _contextFactory = contextFactory;
             EncouragementMultiplier = Math.Min(Math.Max(double.TryParse(configuration["EncouragementMultiplier"], out var encouragementMultiplier) ? encouragementMultiplier : 0, -1), 1);
         }
-        public async Task<Prediction> Predict(string symbol)
+        public async Task<Prediction> Predict(Ticker ticker, DateTime? day = null)
         {
+            var symbol = ticker.Symbol;
             BarMetric[] barMetrics;
-            Ticker ticker;
             try
             {
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
-                    ticker = await stocksContext.Tickers.Where(t => t.Symbol == symbol).FirstOrDefaultAsync(_appCancellation.Token);
-                    if (ticker == null)
+                    IQueryable<BarMetric> barMetricQuery = null;
+                    if (day.HasValue)
                     {
-                        _logger.LogCritical($"Ticker {symbol} not found. Manual intervention required");
-                        return null;
+                        var cutoff = new DateTimeOffset(day.Value.Date).ToUnixTimeMilliseconds();
+                        barMetricQuery = stocksContext.BarMetrics.Where(p => p.Symbol == symbol && p.BarDayMilliseconds <= cutoff);
                     }
-                    barMetrics = await stocksContext.BarMetrics.Where(p => p.Symbol == symbol).OrderByDescending(b => b.BarDayMilliseconds).Take(FEATURE_HISTORY_DAY).Include(b => b.HistoryBar).ToArrayAsync(_appCancellation.Token);
+                    else
+                    {
+                        barMetricQuery = stocksContext.BarMetrics.Where(p => p.Symbol == symbol);
+                    }
+                    barMetrics = await barMetricQuery.OrderByDescending(b => b.BarDayMilliseconds).Take(FEATURE_HISTORY_DAY)
+                                                     .Include(b => b.HistoryBar).ToArrayAsync(_appCancellation.Token);
                 }
                 if (barMetrics.Length != FEATURE_HISTORY_DAY)
                 {
+#if !DEBUG
                     _logger.LogError($"BarMetrics for {symbol} did not return the required history (retrieved {barMetrics.Length} results). returning default prediction");
+#endif
                     if (barMetrics.Length == 0)
                     {
+#if !DEBUG
                         _logger.LogError($"BarMetrics for {symbol} did not return any history. Assume ticker is no longer valid.");
+#endif
                         return null;
                     }
                     return null;
                 }
-                var lastMarketDay = await _brokerService.GetLastMarketDay();
-                if (barMetrics[0].BarDay.CompareTo(lastMarketDay.Date.AddDays(-1)) < 0)
+                DateTime checkDay = day.HasValue ? day.Value.AddDays(-7) : (await _brokerService.GetLastMarketDay()).Date.AddDays(-1);
+                if (barMetrics[0].BarDay.CompareTo(checkDay) < 0)
                 {
+#if !DEBUG
                     _logger.LogError($"BarMetrics data for {symbol} isn't up to date! Returning default prediction.");
+#endif
                     return null;
                 }
                 return new Prediction
@@ -68,34 +79,6 @@ namespace NumbersGoUp.Services
                     SellMultiplier = Predict(ticker, barMetrics, false),
                     Day = barMetrics[0].BarDay
                 };
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error retrieving metrics for {symbol}");
-            }
-            return null;
-        }
-        public async Task<Prediction> Predict(Ticker ticker, DateTime day)
-        {
-            var symbol = ticker.Symbol;
-            BarMetric[] barMetrics;
-            var cutoff = new DateTimeOffset(day.Date).ToUnixTimeMilliseconds();
-            try
-            {
-                using (var stocksContext = _contextFactory.CreateDbContext())
-                {
-                    barMetrics = await stocksContext.BarMetrics.Where(p => p.Symbol == symbol && p.BarDayMilliseconds <= cutoff)
-                                        .OrderByDescending(b => b.BarDayMilliseconds).Take(FEATURE_HISTORY_DAY).Include(b => b.HistoryBar).ToArrayAsync(_appCancellation.Token);
-                }
-                if (barMetrics.Any())
-                {
-                    return new Prediction
-                    {
-                        BuyMultiplier = Predict(ticker, barMetrics, true),
-                        SellMultiplier = Predict(ticker, barMetrics, false),
-                        Day = barMetrics[0].BarDay
-                    };
-                }
             }
             catch (Exception ex)
             {

@@ -55,7 +55,7 @@ namespace NumbersGoUp.Services
                     {
                         var ticker = processorTicker.Ticker;
                         var dbTicker = dbTickers.FirstOrDefault(t => t.Symbol == ticker.Symbol);
-                        var lastModified = result.LastModified.HasValue ? result.LastModified.Value.DateTime : DateTime.UtcNow;
+                        //var lastModified = result.LastModified.HasValue ? result.LastModified.Value.DateTime : DateTime.UtcNow;
                         var isCarryover = IsCarryover(processorTicker);
                         var passCutoff = LoadCutoff(processorTicker);
                         var isTickerPick = tickerPicks.Any(t => t.Symbol == ticker.Symbol);
@@ -75,6 +75,7 @@ namespace NumbersGoUp.Services
                                 ticker.LastCalculatedFinancialsMillis = new DateTimeOffset(now).ToUnixTimeMilliseconds();
                                 if (dbTicker != null)
                                 {
+                                    _tickerProcessor.FinalCalc(processorTicker, dbTicker);
                                     _tickerProcessor.UpdateBankTicker(dbTicker, ticker);
                                     toUpdate.Add(dbTicker);
                                 }
@@ -122,10 +123,8 @@ namespace NumbersGoUp.Services
                                                        (ticker.DebtMinusCash / ticker.Earnings) < 15 && ticker.EPS > 0 && 
                                                        ticker.EVEarnings > 0 && ticker.EVEarnings < EarningsMultipleCutoff;
         private bool IsCarryover(ProcessorBankTicker ticker) => (ticker.Ticker.CurrentRatio == 0 && ticker.Ticker.DebtEquityRatio == 0) ||
-                                                                ticker.Ticker.EVEarnings == 0 || ticker.Ticker.EPS == 0 ||
-                                                                (!ticker.QoQEPSGrowth.HasValue && !ticker.YoYEPSGrowth.HasValue) ||
-                                                                !ticker.RevenueGrowth.HasValue || !ticker.Income.HasValue || ticker.Ticker.MarketCap == 0 ||
-                                                                !ticker.IncomeGrowth.HasValue;
+                                                                ticker.Ticker.EVEarnings == 0 || ticker.Ticker.EPS == 0 || !ticker.RevenueGrowth.HasValue || 
+                                                                !ticker.Income.HasValue || ticker.Ticker.MarketCap == 0 || !ticker.IncomeGrowth.HasValue;
         private async Task CalculatePerformance()
         {
             var now = DateTime.UtcNow;
