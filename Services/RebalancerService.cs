@@ -125,7 +125,7 @@ namespace NumbersGoUpBase.Services
                         if(diff < 0)
                         {
                             var gain = position.MarketValue.Value - position.CostBasis;
-                            diffCutoff = (gain * performanceTicker.Ticker.DividendYield.DoubleReduce(0.04, 0) / equity).DoubleReduce(0.1, 0, 99, diffCutoff);
+                            diffCutoff = (gain * performanceTicker.Ticker.DividendYield.DoubleReduce(0.04, 0) / equity).DoubleReduce(0.1, 0, diffCutoff * 10, diffCutoff);
                         }
                         if (Math.Abs(diffPerc) > diffCutoff)
                         {

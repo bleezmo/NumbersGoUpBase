@@ -158,15 +158,14 @@ namespace NumbersGoUp.Services
                         }
                         else if(ticker == null && bankTicker != null)
                         {
-                            var newTicker = TickerCopy(new Ticker
+                            if(tickerPick.Score > 0)
                             {
-                                Symbol = bankTicker.Symbol,
-                                LastCalculated = now.UtcDateTime,
-                                LastCalculatedMillis = nowMillis
-                            }, bankTicker, tickerPick);
-                            if(newTicker.PerformanceVector > 0)
-                            {
-                                stocksContext.Tickers.Add(newTicker);
+                                stocksContext.Tickers.Add(TickerCopy(new Ticker
+                                {
+                                    Symbol = bankTicker.Symbol,
+                                    LastCalculated = now.UtcDateTime,
+                                    LastCalculatedMillis = nowMillis
+                                }, bankTicker, tickerPick));
                             }
                         }
                         else if(ticker != null && bankTicker == null)
@@ -178,7 +177,7 @@ namespace NumbersGoUp.Services
                         }
                         else if (positions.Any(p => p.Symbol == tickerPick.Symbol))
                         {
-                            _logger.LogError($"No bank ticker found for ticker pick {tickerPick.Symbol}");
+                            _logger.LogError($"Invalid state for ticker pick {tickerPick.Symbol}");
                         }
                     }
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
