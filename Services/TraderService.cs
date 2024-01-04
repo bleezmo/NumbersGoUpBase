@@ -122,7 +122,6 @@ namespace NumbersGoUp.Services
             using var stocksContext = _contextFactory.CreateDbContext();
             foreach (var (order, brokerOrder) in orders)
             {
-                var profitLossPerc = 0.0;
                 var dayOfWeek = brokerOrder.FilledAt.Value.DayOfWeek;
                 var daysToNextBuy = brokerOrder.OrderSide == OrderSide.Buy ? 5 : MAX_COOLDOWN_DAYS; 
                 var daysToNextSell = brokerOrder.OrderSide == OrderSide.Sell ? 5 : MAX_COOLDOWN_DAYS;
@@ -146,7 +145,7 @@ namespace NumbersGoUp.Services
                     TimeLocalMilliseconds = new DateTimeOffset(brokerOrder.FilledAt.Value).ToUnixTimeMilliseconds(),
                     NextBuy = brokerOrder.FilledAt.Value.AddDays(daysToNextBuy).ToUniversalTime(),
                     NextSell = brokerOrder.FilledAt.Value.AddDays(daysToNextSell).ToUniversalTime(),
-                    ProfitLossPerc = profitLossPerc,
+                    ProfitLossPerc = order.AvgEntryPrice > 0 ? ((brokerOrder.AverageFillPrice.Value / order.AvgEntryPrice) - 1) : 0.0,
                     Account = order.Account,
                     BrokerOrderId = order.BrokerOrderId
                 };

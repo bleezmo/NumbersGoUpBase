@@ -66,7 +66,7 @@ namespace NumbersGoUp.Services
                             {
                                 if(dbTicker != null) _logger.LogInformation($"Missing values for {ticker.Symbol}. Using old values.");
                             }
-                            else if (passCutoff || hasPosition || isTickerPick)
+                            else if (hasPosition || (isTickerPick && passCutoff))
                             {
                                 var bars = await stocksContext.HistoryBars.Where(b => b.Symbol == ticker.Symbol).OrderBy(b => b.BarDayMilliseconds).ToArrayAsync(_appCancellation.Token);
                                 var priceChangeAvg = CalculatePriceChangeAvg(bars.Length > 0 ? bars : (await _brokerService.GetBarHistoryDay(ticker.Symbol, _lookbackDate)).OrderBy(b => b.BarDayMilliseconds).ToArray());
