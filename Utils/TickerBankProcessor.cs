@@ -218,7 +218,7 @@ namespace NumbersGoUp.Utils
                                 }
                                 else
                                 {
-                                    _logger.LogError($"No shares outstanding for {ticker.Ticker.Symbol} to calculate earnings.");
+                                    _logger.LogWarning($"No shares outstanding for {ticker.Ticker.Symbol} to calculate earnings.");
                                 }
                                 if (priceIndex.HasValue && double.TryParse(csv[priceIndex.Value], out var price))
                                 {
@@ -253,7 +253,7 @@ namespace NumbersGoUp.Utils
                                     }
                                     else
                                     {
-                                        _logger.LogError($"Market cap not found for {ticker.Ticker.Symbol} and unable to derive.");
+                                        _logger.LogWarning($"Market cap not found for {ticker.Ticker.Symbol} and unable to derive.");
                                     }
                                     if (ticker.EV > 0)
                                     {
