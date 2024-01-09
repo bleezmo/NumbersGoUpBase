@@ -88,44 +88,47 @@ namespace NumbersGoUp.Services
                     foreach (var ticker in tickers)
                     {
                         var bars = await stocksContext.BarMetrics.Where(b => b.Symbol == ticker.Symbol).OrderByDescending(b => b.BarDayMilliseconds).Take(500).ToArrayAsync(_appCancellation.Token);
-                        if(bars.Length < 500)
+                        if (!bars.Any())
                         {
-                            _logger.LogError($"Insufficient bar history for {ticker.Symbol}");
+                            _logger.LogError($"No bar metric history found for {ticker.Symbol}");
+                            continue;
                         }
-                        if (bars.Any())
+                        if (bars.Length < 500)
                         {
-                            ticker.SMASMAAvg = bars.Average(b => b.SMASMA);
-                            ticker.SMASMAStDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.SMASMA - ticker.SMASMAAvg, 2)) / bars.Length);
-
-                            ticker.AlmaSma1Avg = bars.Average(b => b.AlmaSMA1);
-                            ticker.AlmaSma1StDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.AlmaSMA1 - ticker.AlmaSma1Avg, 2)) / bars.Length);
-
-                            ticker.AlmaSma2Avg = bars.Average(b => b.AlmaSMA2);
-                            ticker.AlmaSma2StDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.AlmaSMA2 - ticker.AlmaSma2Avg, 2)) / bars.Length);
-
-                            ticker.AlmaSma3Avg = bars.Average(b => b.AlmaSMA3);
-                            ticker.AlmaSma3StDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.AlmaSMA3 - ticker.AlmaSma3Avg, 2)) / bars.Length);
-
-                            ticker.ProfitLossAvg = bars.Average(b => b.ProfitLossPerc);
-                            ticker.ProfitLossStDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.ProfitLossPerc - ticker.ProfitLossAvg, 2)) / bars.Length);
-
-                            ticker.AlmaVelStDev = (bars.CalculateVelocityStDev(b => b.AlmaSMA1) + bars.CalculateVelocityStDev(b => b.AlmaSMA2) + bars.CalculateVelocityStDev(b => b.AlmaSMA3)) / 3;
-                            ticker.SMAVelStDev = bars.CalculateVelocityStDev(b => b.SMASMA);
-
-                            var maxMonthConsecutiveLosses = 0.0;
-                            var consecutiveLosses = 0;
-                            const int monthLength = 20;
-                            for (var i = 0; i < bars.Length; i += monthLength)
-                            {
-                                consecutiveLosses = bars.Skip(i).Take(monthLength).Average(b => b.SMASMA) > 0 ? 0 : (consecutiveLosses + 1);
-                                maxMonthConsecutiveLosses = maxMonthConsecutiveLosses < consecutiveLosses ? consecutiveLosses : maxMonthConsecutiveLosses;
-                            }
-                            ticker.MaxMonthConsecutiveLosses = maxMonthConsecutiveLosses;
-
-                            ticker.LastCalculatedAvgs = now.UtcDateTime;
-                            ticker.LastCalculatedAvgsMillis = nowMillis;
-                            stocksContext.Tickers.Update(ticker);
+                            _logger.LogError($"Insufficient bar metric history for {ticker.Symbol}");
+                            continue;
                         }
+                        ticker.SMASMAAvg = bars.Average(b => b.SMASMA);
+                        ticker.SMASMAStDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.SMASMA - ticker.SMASMAAvg, 2)) / bars.Length);
+
+                        ticker.AlmaSma1Avg = bars.Average(b => b.AlmaSMA1);
+                        ticker.AlmaSma1StDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.AlmaSMA1 - ticker.AlmaSma1Avg, 2)) / bars.Length);
+
+                        ticker.AlmaSma2Avg = bars.Average(b => b.AlmaSMA2);
+                        ticker.AlmaSma2StDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.AlmaSMA2 - ticker.AlmaSma2Avg, 2)) / bars.Length);
+
+                        ticker.AlmaSma3Avg = bars.Average(b => b.AlmaSMA3);
+                        ticker.AlmaSma3StDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.AlmaSMA3 - ticker.AlmaSma3Avg, 2)) / bars.Length);
+
+                        ticker.ProfitLossAvg = bars.Average(b => b.ProfitLossPerc);
+                        ticker.ProfitLossStDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.ProfitLossPerc - ticker.ProfitLossAvg, 2)) / bars.Length);
+
+                        ticker.AlmaVelStDev = (bars.CalculateVelocityStDev(b => b.AlmaSMA1) + bars.CalculateVelocityStDev(b => b.AlmaSMA2) + bars.CalculateVelocityStDev(b => b.AlmaSMA3)) / 3;
+                        ticker.SMAVelStDev = bars.CalculateVelocityStDev(b => b.SMASMA);
+
+                        var maxMonthConsecutiveLosses = 0.0;
+                        var consecutiveLosses = 0;
+                        const int monthLength = 20;
+                        for (var i = 0; i < bars.Length; i += monthLength)
+                        {
+                            consecutiveLosses = bars.Skip(i).Take(monthLength).Average(b => b.SMASMA) > 0 ? 0 : (consecutiveLosses + 1);
+                            maxMonthConsecutiveLosses = maxMonthConsecutiveLosses < consecutiveLosses ? consecutiveLosses : maxMonthConsecutiveLosses;
+                        }
+                        ticker.MaxMonthConsecutiveLosses = maxMonthConsecutiveLosses;
+
+                        ticker.LastCalculatedAvgs = now.UtcDateTime;
+                        ticker.LastCalculatedAvgsMillis = nowMillis;
+                        stocksContext.Tickers.Update(ticker);
                     }
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
                 }

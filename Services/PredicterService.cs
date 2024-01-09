@@ -36,6 +36,13 @@ namespace NumbersGoUp.Services
             BarMetric[] barMetrics;
             try
             {
+                if (!IsValidTicker(ticker))
+                {
+#if !DEBUG
+                    _logger.LogWarning($"Ticker {ticker.Symbol} has invalid metric averages");
+#endif
+                    return null;
+                }
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
                     IQueryable<BarMetric> barMetricQuery = null;
@@ -156,6 +163,9 @@ namespace NumbersGoUp.Services
             }
             return 0.0;
         }
+        private bool IsValidTicker(Ticker ticker) =>
+            ticker.AlmaSma1StDev > 0 && ticker.AlmaSma2StDev > 0 && ticker.AlmaSma3StDev > 0 && ticker.AlmaVelStDev > 0 &&
+            ticker.SMASMAStDev > 0 && ticker.SMAVelStDev > 0;
     }
     public class Prediction
     {

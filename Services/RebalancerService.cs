@@ -74,6 +74,10 @@ namespace NumbersGoUpBase.Services
                 performanceTicker.TickerPrediction = day.HasValue ? await _predicterService.Predict(performanceTicker.Ticker, day.Value) : 
                                                                     await _predicterService.Predict(performanceTicker.Ticker);
                 performanceTicker.Position = positions.FirstOrDefault(p => p.Symbol == performanceTicker.Ticker.Symbol);
+                if(performanceTicker.Position != null && performanceTicker.TickerPrediction == null)
+                {
+                    _logger.LogError($"Position exists for {performanceTicker.Ticker.Symbol} but prediction returned null");
+                }
                 totalPerformance += PerformanceValue(performanceTicker);
             }
             totalPerformance = totalPerformance * (1 - (cash / equity).DoubleReduce(1, 0.1, 0.9, 0));
