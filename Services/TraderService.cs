@@ -123,8 +123,8 @@ namespace NumbersGoUp.Services
             foreach (var (order, brokerOrder) in orders)
             {
                 var dayOfWeek = brokerOrder.FilledAt.Value.DayOfWeek;
-                var daysToNextBuy = brokerOrder.OrderSide == OrderSide.Buy ? 5 : MAX_COOLDOWN_DAYS; 
-                var daysToNextSell = brokerOrder.OrderSide == OrderSide.Sell ? 5 : MAX_COOLDOWN_DAYS;
+                var daysToNextBuy = brokerOrder.OrderSide == OrderSide.Buy ? 7 : MAX_COOLDOWN_DAYS; 
+                var daysToNextSell = brokerOrder.OrderSide == OrderSide.Sell ? 7 : MAX_COOLDOWN_DAYS;
                 var lastBuyOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == order.Symbol && o.NextBuy != null).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
                 var lastSellOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == order.Symbol && o.NextSell != null).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
                 if(lastBuyOrder != null && brokerOrder.FilledAt.Value.CompareTo(lastBuyOrder.NextBuy.Value) < 0)
