@@ -192,7 +192,13 @@ namespace NumbersGoUpBase.Services
         private static double PerformanceValue(PerformanceTicker performanceTicker)
         {
             var performanceValue = performanceTicker.Ticker.PerformanceVector;
-            return performanceValue * (3 - performanceTicker.Ticker.SMASMAAvg.DoubleReduce(20, -20, 2, 0)) * (1 + performanceValue.DoubleReduce(100, 0).Curve1(2));
+            var performanceMultiplier = 3 - performanceTicker.Ticker.SMASMAAvg.DoubleReduce(20, -20, 2, 0);
+            //if (performanceTicker.Position != null && performanceTicker.Position.UnrealizedProfitLossPercent.HasValue)
+            //{
+            //    var positionMultiplier = performanceTicker.Position.UnrealizedProfitLossPercent.Value.DoubleReduce(0, -0.25);
+            //    performanceMultiplier = (1 - positionMultiplier) + (positionMultiplier * performanceMultiplier);
+            //}
+            return performanceValue * performanceMultiplier * (1 + performanceValue.DoubleReduce(100, 0).Curve1(2));
         }
     }
     public class PerformanceTicker

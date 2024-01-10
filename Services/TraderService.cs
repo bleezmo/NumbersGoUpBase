@@ -14,6 +14,7 @@ namespace NumbersGoUp.Services
         private const string DISABLE_SELLS = "DisableSells";
         private const string DISABLE_BUYS = "DisableBuys";
         public const string MAX_DAILY_BUY = "MaxDailyBuy";
+        private const string IGNORE_LIST = "IgnoreList";
 
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<TraderService> _logger;
@@ -26,6 +27,7 @@ namespace NumbersGoUp.Services
         private readonly bool _disableBuys;
         private readonly bool _disableSells;
         private readonly double _maxDailyBuy;
+        private readonly string[] _ignoreList;
         private Account _account;
         private double _cashEquityRatio;
 
@@ -43,6 +45,8 @@ namespace NumbersGoUp.Services
             _disableBuys = bool.TryParse(configuration[DISABLE_BUYS], out var disableBuys) ? disableBuys : false;
             _disableSells = bool.TryParse(configuration[DISABLE_SELLS], out var disableSells) ? disableSells : false;
             _maxDailyBuy = double.TryParse(configuration[MAX_DAILY_BUY], out var maxBuy) ? maxBuy : 5000;
+            var ignoreList = configuration[IGNORE_LIST];
+            _ignoreList = string.IsNullOrWhiteSpace(ignoreList) ? new string[] { } : ignoreList.Split(',').Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
         }
         public async Task Run()
         {
@@ -199,7 +203,8 @@ namespace NumbersGoUp.Services
             }
             var remainingOrders = await _brokerService.GetOpenOrders();
             rebalancers = rebalancers.Where(r => !currentOrders.Any(o => o.Symbol == r.Symbol)).Where(r => !remainingOrders.Any(o => o.Symbol == r.Symbol));
-            var (stocks, bonds) = (rebalancers.Where(r => r.IsStock).Select(r => r as StockRebalancer), rebalancers.Where(r => r.IsBond).Select(r => r as BondRebalancer));
+            var (stocks, bonds) = (rebalancers.Where(r => r.IsStock && !_ignoreList.Any(s => s == r.Symbol)).Select(r => r as StockRebalancer), 
+                                   rebalancers.Where(r => r.IsBond).Select(r => r as BondRebalancer));
             var maxDailyBuy = stocks.Any(r => r.Diff > 0) ? Math.Max((await Task.WhenAll(stocks.Where(r => r.Diff > 0).Select(sr => GetCurrentPrice(sr)))).Max(), _maxDailyBuy) : _maxDailyBuy;
             var remainingBuyAmount = Math.Min(maxDailyBuy, _account.Balance.TradableCash);
 
