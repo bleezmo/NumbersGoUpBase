@@ -113,7 +113,7 @@ namespace NumbersGoUpBase.Services
                             }
                             else { diffPerc = 0; }
                         }
-                        else if (diffPerc < 0)
+                        else if (diffPerc < 0 && totalPerformance > 0)
                         {
                             diffPerc *= prediction.SellMultiplier;
                             if (targetValue > 0)
@@ -144,7 +144,7 @@ namespace NumbersGoUpBase.Services
                         _logger.LogError($"Stupid market value not positive, which is impossible. Ticker {position.Symbol}");
                     }
                 }
-                else if (cash > 0)
+                else if (cash > 0 && targetValue > 0)
                 {
                     _logger.LogError($"Unable to rebalance {performanceTicker.Ticker.Symbol}. Position unavailable");
                 }
@@ -213,14 +213,13 @@ namespace NumbersGoUpBase.Services
             var performanceMultiplier = MeetsRequirements ? 1.0 : 0.9;
             if (TickerPrediction != null)
             {
-                var predictionMax = MeetsRequirements ? 1.15 : 1.0;
-                performanceMultiplier = 1 + (TickerPrediction.BuyMultiplier * (predictionMax - 1)) + (TickerPrediction.SellMultiplier * (predictionMax - 1.3));
+                performanceMultiplier += (TickerPrediction.BuyMultiplier - TickerPrediction.SellMultiplier).DoubleReduce(0.5, -0.5).Curve6(4);
             }
             if (Position != null && Position.UnrealizedProfitLossPercent.HasValue && Position.UnrealizedProfitLossPercent.Value > 0)
             {
                 performanceMultiplier *= Math.Log((Position.UnrealizedProfitLossPercent.Value * Ticker.DividendYield.DoubleReduce(0.03, 0)) + Math.E);
             }
-            return performanceMultiplier;
+            return Math.Max(performanceMultiplier, 0);
         }
     }
     public interface IRebalancer
