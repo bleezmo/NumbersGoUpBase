@@ -213,7 +213,7 @@ namespace NumbersGoUpBase.Services
             var performanceMultiplier = MeetsRequirements ? 1.0 : 0.9;
             if (TickerPrediction != null)
             {
-                performanceMultiplier += (TickerPrediction.BuyMultiplier - TickerPrediction.SellMultiplier).DoubleReduce(0.5, -0.5).Curve6(4);
+                performanceMultiplier += (TickerPrediction.BuyMultiplier - TickerPrediction.SellMultiplier).DoubleReduce(0.5, -0.5).Curve6(4).DoubleReduce(1, 0, 0.65, -0.15);
             }
             if (Position != null && Position.UnrealizedProfitLossPercent.HasValue && Position.UnrealizedProfitLossPercent.Value > 0)
             {
