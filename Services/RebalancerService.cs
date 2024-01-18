@@ -128,8 +128,9 @@ namespace NumbersGoUpBase.Services
                         var diffCutoff = 6.0;
                         if(diff < 0)
                         {
+                            diffCutoff = 10;
                             var gain = position.MarketValue.Value - position.CostBasis;
-                            diffCutoff = (gain * performanceTicker.Ticker.DividendYield.DoubleReduce(0.04, 0) / equity).DoubleReduce(0.1, 0, diffCutoff * 10, diffCutoff);
+                            diffCutoff = (gain * performanceTicker.Ticker.DividendYield.DoubleReduce(0.04, 0) / equity).DoubleReduce(0.1, 0, 90, diffCutoff);
                         }
                         if (Math.Abs(diffPerc) > diffCutoff)
                         {
@@ -213,7 +214,7 @@ namespace NumbersGoUpBase.Services
             var performanceMultiplier = MeetsRequirements ? 1.0 : 0.9;
             if (TickerPrediction != null)
             {
-                performanceMultiplier += (TickerPrediction.BuyMultiplier - TickerPrediction.SellMultiplier).DoubleReduce(0.5, -0.5).Curve6(4).DoubleReduce(1, 0, 0.65, -0.15);
+                performanceMultiplier += (TickerPrediction.BuyMultiplier - TickerPrediction.SellMultiplier).DoubleReduce(0.75, -0.75).Curve6(4).DoubleReduce(1, 0, 0.6, -0.2);
             }
             if (Position != null && Position.UnrealizedProfitLossPercent.HasValue && Position.UnrealizedProfitLossPercent.Value > 0)
             {

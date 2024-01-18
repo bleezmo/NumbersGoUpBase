@@ -184,6 +184,18 @@ namespace NumbersGoUp.Utils
             }
             return accels.ToArray().ApplyAlma();
         }
+        public static (double avg, double stdev) CalculateAvgStDev<T>(this IEnumerable<T> values, Func<T, double> valueFn)
+        {
+            var count = values?.Count() ?? 0;
+            if (count == 0) return (0, 0);
+            if (count == 1) return (valueFn(values.First()), 0);
+            var avg = values.Average(v => valueFn(v));
+            var stdev = Math.Sqrt(values.Select((v, i) =>
+            {
+                return Math.Pow(valueFn(v) - avg, 2);
+            }).Sum() / count);
+            return (avg, stdev);
+        }
         public static double CalculateAvgStDevRatio(this IEnumerable<double> values)
         {
             var count = values.Count();
@@ -193,7 +205,7 @@ namespace NumbersGoUp.Utils
             return avg / Math.Sqrt(values.Select((v, i) =>
             {
                 return Math.Pow(v - avg, 2);
-            }).Sum() / values.Count());
+            }).Sum() / count);
         }
         public static (double slope, double yintercept) CalculateRegression<T>(this T[] itemsAsc, Func<T, double> valueFn)
         {

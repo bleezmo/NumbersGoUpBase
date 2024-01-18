@@ -82,8 +82,8 @@ namespace NumbersGoUp.Services
                 }
                 return new Prediction
                 {
-                    BuyMultiplier = Predict(ticker, barMetrics, true),
-                    SellMultiplier = Predict(ticker, barMetrics, false),
+                    BuyMultiplier = Math.Round(Predict(ticker, barMetrics, true), 3, MidpointRounding.AwayFromZero),
+                    SellMultiplier = Math.Round(Predict(ticker, barMetrics, false), 3, MidpointRounding.AwayFromZero),
                     Day = barMetrics[0].BarDay
                 };
             }
@@ -121,7 +121,7 @@ namespace NumbersGoUp.Services
 
                     var coeff = barMetrics.Average(b => b.SMASMA).DoubleReduce(ticker.SMASMAAvg, ticker.SMASMAAvg - ticker.SMASMAStDev) * barMetrics.CalculateAvgVelocity(b => b.SMASMA).DoubleReduce(0.5 * ticker.SMAVelStDev, -ticker.SMAVelStDev);
                     pricePrediction = (coeff * bullPricePrediction) + ((1 - coeff) * bearPricePrediction);
-                    pricePrediction *= 1 - ticker.SMASMAAvg.DoubleReduce(20, -20);
+                    pricePrediction *= (2 - ticker.SMASMAAvg.DoubleReduce(20, -20) - (ticker.ProfitLossAvg / ticker.ProfitLossStDev).DoubleReduce()) / 2;
                 }
                 else
                 {
@@ -145,7 +145,7 @@ namespace NumbersGoUp.Services
 
                     var coeff = barMetrics.Average(b => b.SMASMA).DoubleReduce(ticker.SMASMAAvg, ticker.SMASMAAvg - ticker.SMASMAStDev) * barMetrics.CalculateAvgVelocity(b => b.SMASMA).DoubleReduce(0.5 * ticker.SMAVelStDev, -ticker.SMAVelStDev);
                     pricePrediction = (coeff * bullPricePrediction) + ((1 - coeff) * bearPricePrediction);
-                    pricePrediction *= ticker.SMASMAAvg.DoubleReduce(20, -20);
+                    pricePrediction *= (ticker.SMASMAAvg.DoubleReduce(20, -20) + (ticker.ProfitLossAvg / ticker.ProfitLossStDev).DoubleReduce()) / 2;
                 }
 
                 if (buy)
