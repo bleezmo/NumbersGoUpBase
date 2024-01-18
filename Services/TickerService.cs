@@ -19,6 +19,7 @@ namespace NumbersGoUp.Services
     public class TickerService
     {
         public const int PERFORMANCE_CUTOFF = 20;
+        public const int PERFORMANCE_AVGS_LOOKBACK = 375;
 
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<TickerService> _logger;
@@ -87,7 +88,7 @@ namespace NumbersGoUp.Services
                     //var nowTestMillis = new DateTimeOffset(now.AddYears(-5)).ToUnixTimeMilliseconds();
                     foreach (var ticker in tickers)
                     {
-                        var bars = await stocksContext.BarMetrics.Where(b => b.Symbol == ticker.Symbol).OrderByDescending(b => b.BarDayMilliseconds).Take(500).ToArrayAsync(_appCancellation.Token);
+                        var bars = await stocksContext.BarMetrics.Where(b => b.Symbol == ticker.Symbol).OrderByDescending(b => b.BarDayMilliseconds).Take(PERFORMANCE_AVGS_LOOKBACK).ToArrayAsync(_appCancellation.Token);
                         if (!bars.Any())
                         {
                             _logger.LogError($"No bar metric history found for {ticker.Symbol}");
