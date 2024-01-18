@@ -118,7 +118,7 @@ namespace NumbersGoUpBase.Services
                             diffPerc *= prediction.SellMultiplier;
                             if (targetValue > 0)
                             {
-                                diff *= prediction.SellMultiplier;
+                                diff = Math.Max(-marketValue * prediction.SellMultiplier, diff);
                             }
                             else
                             {
