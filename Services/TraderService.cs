@@ -44,7 +44,7 @@ namespace NumbersGoUp.Services
             _contextFactory = contextFactory;
             _disableBuys = bool.TryParse(configuration[DISABLE_BUYS], out var disableBuys) ? disableBuys : false;
             _disableSells = bool.TryParse(configuration[DISABLE_SELLS], out var disableSells) ? disableSells : false;
-            _maxDailyBuy = double.TryParse(configuration[MAX_DAILY_BUY], out var maxBuy) ? maxBuy : 5000;
+            _maxDailyBuy = double.TryParse(configuration[MAX_DAILY_BUY], out var maxBuy) ? maxBuy : 2000;
             var ignoreList = configuration[IGNORE_LIST];
             _ignoreList = string.IsNullOrWhiteSpace(ignoreList) ? new string[] { } : ignoreList.Split(',').Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
         }
@@ -487,11 +487,9 @@ namespace NumbersGoUp.Services
                     }
                     else if (events[i].Amount > 0)
                     {
-                        var qtySold = Math.Abs(events[i].Qty);
                         var sellPrice = events[i].Price;
-                        for (var dc = 0; qtySold > 0 && dc < 10000; dc++)
+                        for (var qtySold = Math.Abs(events[i].Qty); qtySold > 0; qtySold--)
                         {
-                            qtySold--;
                             if (eventQueue.Any())
                             {
                                 var cost = eventQueue.Dequeue();

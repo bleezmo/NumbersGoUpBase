@@ -21,6 +21,8 @@ namespace NumbersGoUp.Services
         public const int PERFORMANCE_CUTOFF = 20;
         public const int PERFORMANCE_AVGS_LOOKBACK = 375;
 
+        private const double PICK_WEIGHT = 0.45;
+
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<TickerService> _logger;
         private readonly IBrokerService _brokerService;
@@ -94,7 +96,7 @@ namespace NumbersGoUp.Services
                             _logger.LogError($"No bar metric history found for {ticker.Symbol}");
                             continue;
                         }
-                        if (bars.Length < 500)
+                        if (bars.Length < PERFORMANCE_AVGS_LOOKBACK)
                         {
                             _logger.LogError($"Insufficient bar metric history for {ticker.Symbol}");
                             continue;
@@ -174,7 +176,7 @@ namespace NumbersGoUp.Services
                         }
                         else if(ticker != null && bankTicker == null)
                         {
-                            ticker.PerformanceVector = (0.5 * Math.Max(ticker.PerformanceVector - 5, 0)) + (0.5 * tickerPick.Score);
+                            ticker.PerformanceVector = ((1 - PICK_WEIGHT) * Math.Max(ticker.PerformanceVector - 5, 0)) + (PICK_WEIGHT * tickerPick.Score);
                             ticker.LastCalculated = now.UtcDateTime;
                             ticker.LastCalculatedMillis = nowMillis;
                             stocksContext.Tickers.Update(ticker);
@@ -233,9 +235,8 @@ namespace NumbersGoUp.Services
         }
         private static Ticker TickerCopy(Ticker ticker, BankTicker bankTicker, TickerPick tickerPick)
         {
-            const double pickWeight = 0.5;
             TickerCopy(ticker, bankTicker);
-            ticker.PerformanceVector = (pickWeight * tickerPick.Score) + ((1 - pickWeight) * bankTicker.PerformanceVector);
+            ticker.PerformanceVector = (PICK_WEIGHT * tickerPick.Score) + ((1 - PICK_WEIGHT) * bankTicker.PerformanceVector);
             return ticker;
         }
     }

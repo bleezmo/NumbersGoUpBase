@@ -108,14 +108,14 @@ namespace NumbersGoUpBase.Services
                         {
                             if (performanceTicker.MeetsRequirements && cash > (position.AssetLastPrice ?? 0))
                             {
-                                diffPerc *= prediction.BuyMultiplier;
+                                diffPerc *= prediction.BuyMultiplier.Curve3(2);
                                 diff = Math.Min(prediction.BuyMultiplier * targetValue, diff);
                             }
                             else { diffPerc = 0; }
                         }
                         else if (diffPerc < 0 && totalPerformance > 0)
                         {
-                            diffPerc *= prediction.SellMultiplier;
+                            diffPerc *= prediction.SellMultiplier.Curve3(2);
                             if (targetValue > 0)
                             {
                                 diff = Math.Max(-marketValue * prediction.SellMultiplier, diff);
@@ -216,10 +216,10 @@ namespace NumbersGoUpBase.Services
             {
                 performanceMultiplier += (TickerPrediction.BuyMultiplier - TickerPrediction.SellMultiplier).DoubleReduce(0.75, -0.75).Curve6(4).DoubleReduce(1, 0, 0.6, -0.2);
             }
-            if (Position != null && Position.UnrealizedProfitLossPercent.HasValue && Position.UnrealizedProfitLossPercent.Value > 0)
-            {
-                performanceMultiplier *= Math.Log((Position.UnrealizedProfitLossPercent.Value * Ticker.DividendYield.DoubleReduce(0.03, 0)) + Math.E);
-            }
+            //if (Position != null && Position.UnrealizedProfitLossPercent.HasValue && Position.UnrealizedProfitLossPercent.Value > 0)
+            //{
+            //    performanceMultiplier *= Math.Log((Position.UnrealizedProfitLossPercent.Value * Ticker.DividendYield.DoubleReduce(0.03, 0)) + Math.E);
+            //}
             return Math.Max(performanceMultiplier, 0);
         }
     }

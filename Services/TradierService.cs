@@ -631,11 +631,9 @@ namespace NumbersGoUp.Services
                     }
                     else if (events[i].Amount > 0)
                     {
-                        var qtySold = Math.Abs(events[i].Qty);
                         var sellPrice = events[i].Price;
-                        for(var dc = 0; qtySold > 0 && dc < 10000; dc++)
+                        for(var qtySold = Math.Abs(events[i].Qty); qtySold > 0; qtySold--)
                         {
-                            qtySold--;
                             if(eventQueue.Any())
                             {
                                 var cost = eventQueue.Dequeue();
