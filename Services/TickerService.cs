@@ -21,7 +21,7 @@ namespace NumbersGoUp.Services
         public const int PERFORMANCE_CUTOFF = 20;
         public const int PERFORMANCE_AVGS_LOOKBACK = 375;
 
-        private const double PICK_WEIGHT = 0.45;
+        private const double PICK_WEIGHT = 0.5;
 
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<TickerService> _logger;
