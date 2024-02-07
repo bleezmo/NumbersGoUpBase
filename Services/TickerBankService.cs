@@ -118,12 +118,10 @@ namespace NumbersGoUp.Services
             _logger.LogInformation("Completed bank ticker performance calculation");
         }
         private bool LoadCutoff(ProcessorBankTicker ticker) => ticker.Income > 50000000 && ticker.RevenueGrowth > -25 && ticker.IncomeGrowth > -75 && (ticker.Ticker.MarketCap > 3_500_000_000 || ticker.IncomeGrowth < 75) && BasicCutoff(ticker.Ticker);
-        private bool BasicCutoff(BankTicker ticker) => ticker.MarketCap > 3_000_000_000 && (ticker.CurrentRatio > 1 || ticker.DebtEquityRatio > 0) && 
-                                                       (ticker.CurrentRatio > (ticker.DebtEquityRatio * 1.2) || ticker.DebtEquityRatio < 0.9) && ticker.Earnings > 0 && 
+        private bool BasicCutoff(BankTicker ticker) => ticker.MarketCap > 3_000_000_000 && ticker.Earnings > 0 && 
                                                        (ticker.DebtMinusCash / ticker.Earnings) < 15 && ticker.EPS > 0 && 
                                                        ticker.EVEarnings > 0 && ticker.EVEarnings < EarningsMultipleCutoff;
-        private bool IsCarryover(ProcessorBankTicker ticker) => (ticker.Ticker.CurrentRatio == 0 && ticker.Ticker.DebtEquityRatio == 0) ||
-                                                                ticker.Ticker.EVEarnings == 0 || ticker.Ticker.EPS == 0 || !ticker.RevenueGrowth.HasValue || 
+        private bool IsCarryover(ProcessorBankTicker ticker) => ticker.Ticker.EVEarnings == 0 || ticker.Ticker.EPS == 0 || !ticker.RevenueGrowth.HasValue || 
                                                                 !ticker.Income.HasValue || ticker.Ticker.MarketCap == 0 || !ticker.IncomeGrowth.HasValue;
         private async Task CalculatePerformance()
         {
