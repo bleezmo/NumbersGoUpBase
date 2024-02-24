@@ -45,12 +45,15 @@ namespace NumbersGoUp.Utils
             }
             return Math.Pow(result, exp);
         }
-
-        public static double DoubleReduce(this double value, double max, double min, double outUpper, double outLower) => outLower + (value.DoubleReduce(max,min)*(outUpper - outLower));
+        private static double ShiftReduce(this double value, double outUpper, double outLower) => outLower + (value * (outUpper - outLower));
+        public static double DoubleReduce(this double value, double max, double min, double outUpper, double outLower) => value.DoubleReduce(max,min).ShiftReduce(outUpper, outLower);
         public static double DoubleReduce(this float value, double max = 1.0, double min = 0.0) => DoubleReduce(Convert.ToDouble(value), max, min);
         public static double ZeroReduceSlow(this double value, double max = 1.0, double min = -1.0) => Math.Sqrt(1 - Math.Pow(value.DoubleReduce(max, min, 1, -1), 2));
+        public static double ZeroReduceSlow(this double value, double max, double min, double outUpper, double outLower) => value.ZeroReduceSlow(max, min).ShiftReduce(outUpper, outLower);
         public static double ZeroReduce(this double value, double max = 1.0, double min = -1.0) => 1 - Math.Pow(value.DoubleReduce(max, min, 1, -1), 2);
+        public static double ZeroReduce(this double value, double max, double min, double outUpper, double outLower) => value.ZeroReduce(max, min).ShiftReduce(outUpper, outLower);
         public static double ZeroReduceFast(this double value, double max = 1.0, double min = -1.0) => 1 - Math.Abs(value.DoubleReduce(max, min, 1, -1));
+        public static double ZeroReduceFast(this double value, double max, double min, double outUpper, double outLower) => value.ZeroReduceFast(max, min).ShiftReduce(outUpper, outLower);
         public static float SingleReduce(this double value, double max = 1.0, double min = 0.0) => Convert.ToSingle(value.DoubleReduce(max, min));
         public static float SingleReduce(this float value, double max = 1.0, double min = 0.0) => SingleReduce(Convert.ToDouble(value), max, min);
         public static double? ToDouble(this decimal? value) => value.HasValue ? Convert.ToDouble(value.Value) : null;

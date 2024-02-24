@@ -84,7 +84,7 @@ namespace NumbersGoUp.Services
                 {
                     BuyMultiplier = Math.Round(Predict(ticker, barMetrics, true), 3, MidpointRounding.AwayFromZero),
                     SellMultiplier = Math.Round(Predict(ticker, barMetrics, false), 3, MidpointRounding.AwayFromZero),
-                    Day = barMetrics[0].BarDay
+                    RecentBarMetric = barMetrics[0]
                 };
             }
             catch (Exception ex)
@@ -109,6 +109,7 @@ namespace NumbersGoUp.Services
                                       ((1 - barMetrics[0].SMASMA.DoubleReduce(ticker.SMASMAAvg, ticker.SMASMAAvg - ticker.SMASMAStDev)) * 0.15) +
                                       (barMetrics.CalculateAvgVelocity(b => b.SMASMA).ZeroReduce(ticker.SMAVelStDev, -ticker.SMAVelStDev) * 0.1) +
                                       (barMetrics[0].WeekTrend.DoubleReduce(0, -2) * barMetrics.CalculateAvgVelocity(b => b.WeekTrend).DoubleReduce(0.1, -0.2) * 0.15);
+                    bullPricePrediction += (1 - bullPricePrediction) * barMetrics[0].ProfitLossPerc.DoubleReduce(10, -10, 0.25, 0);
 
                     var bearPricePrediction = ((
                                         ((1 - barMetrics[0].AlmaSMA1.DoubleReduce(ticker.AlmaSma1Avg, ticker.AlmaSma1Avg - (ticker.AlmaSma1StDev * 1.5))) * 0.2) +
@@ -118,6 +119,7 @@ namespace NumbersGoUp.Services
                                       ((1 - barMetrics[0].SMASMA.DoubleReduce(ticker.SMASMAAvg, ticker.SMASMAAvg - (ticker.SMASMAStDev * 1.5))) * 0.15) +
                                       (barMetrics.CalculateAvgVelocity(b => b.SMASMA).ZeroReduce(0.5 * ticker.SMAVelStDev, -0.5 * ticker.SMAVelStDev) * 0.1) +
                                       (barMetrics[0].WeekTrend.DoubleReduce(1, -1) * barMetrics.CalculateAvgVelocity(b => b.WeekTrend).DoubleReduce(0.2, -0.1) * 0.15);
+                    bearPricePrediction *= barMetrics[0].ProfitLossPerc.DoubleReduce(10, -10, 1, 0.75);
 
                     var coeff = barMetrics.Average(b => b.SMASMA).DoubleReduce(ticker.SMASMAAvg, ticker.SMASMAAvg - ticker.SMASMAStDev) * barMetrics.CalculateAvgVelocity(b => b.SMASMA).DoubleReduce(0.5 * ticker.SMAVelStDev, -ticker.SMAVelStDev);
                     pricePrediction = (coeff * bullPricePrediction) + ((1 - coeff) * bearPricePrediction);
@@ -133,6 +135,7 @@ namespace NumbersGoUp.Services
                                             (barMetrics[0].SMASMA.DoubleReduce(ticker.SMASMAAvg + (ticker.SMASMAStDev * 1.5), ticker.SMASMAAvg) * 0.15) +
                                             (barMetrics.CalculateAvgVelocity(b => b.SMASMA).ZeroReduce(0.5 * ticker.SMAVelStDev, -0.5 * ticker.SMAVelStDev) * 0.1) +
                                             ((1 - barMetrics[0].WeekTrend.DoubleReduce(0, -2)) * (1 - barMetrics.CalculateAvgVelocity(b => b.WeekTrend).DoubleReduce(0.1, -0.2)) * 0.15);
+                    bullPricePrediction *= 1 - barMetrics[0].ProfitLossPerc.DoubleReduce(10, -10, 0.25, 0);
 
                     var bearPricePrediction = ((
                                                   (barMetrics[0].AlmaSMA1.DoubleReduce(ticker.AlmaSma1Avg + (ticker.AlmaSma1StDev * 1.5), ticker.AlmaSma1Avg) * 0.2) +
@@ -142,6 +145,7 @@ namespace NumbersGoUp.Services
                                             (barMetrics[0].SMASMA.DoubleReduce(ticker.SMASMAAvg + ticker.SMASMAStDev, ticker.SMASMAAvg) * 0.15) +
                                             (barMetrics.CalculateAvgVelocity(b => b.SMASMA).ZeroReduce(ticker.SMAVelStDev, -ticker.SMAVelStDev) * 0.1) +
                                             ((1 - barMetrics[0].WeekTrend.DoubleReduce(1, -1)) * (1 - barMetrics.CalculateAvgVelocity(b => b.WeekTrend).DoubleReduce(0.2, -0.1)) * 0.15);
+                    bearPricePrediction += (1 - bearPricePrediction) * (1 - barMetrics[0].ProfitLossPerc.DoubleReduce(10, -10, 1, 0.75));
 
                     var coeff = barMetrics.Average(b => b.SMASMA).DoubleReduce(ticker.SMASMAAvg, ticker.SMASMAAvg - ticker.SMASMAStDev) * barMetrics.CalculateAvgVelocity(b => b.SMASMA).DoubleReduce(0.5 * ticker.SMAVelStDev, -ticker.SMAVelStDev);
                     pricePrediction = (coeff * bullPricePrediction) + ((1 - coeff) * bearPricePrediction);
@@ -171,6 +175,6 @@ namespace NumbersGoUp.Services
     {
         public double SellMultiplier { get; set; }
         public double BuyMultiplier { get; set; }
-        public DateTime Day { get; set; }
+        public BarMetric RecentBarMetric { get; set; }
     }
 }

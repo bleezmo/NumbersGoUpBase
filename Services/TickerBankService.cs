@@ -64,13 +64,19 @@ namespace NumbersGoUp.Services
                         {
                             if (isCarryover)
                             {
-                                if(dbTicker != null) _logger.LogInformation($"Missing values for {ticker.Symbol}. Using old values.");
+                                if (dbTicker != null)
+                                {
+                                    _logger.LogInformation($"Missing values for {ticker.Symbol}. Using old values.");
+                                    if (hasPosition || isTickerPick)
+                                    {
+                                        await PopulatePriceChangeAvg(stocksContext, dbTicker);
+                                        toUpdate.Add(dbTicker);
+                                    }
+                                }
                             }
                             else if (hasPosition || (isTickerPick && passCutoff))
                             {
-                                var bars = await stocksContext.HistoryBars.Where(b => b.Symbol == ticker.Symbol).OrderBy(b => b.BarDayMilliseconds).ToArrayAsync(_appCancellation.Token);
-                                var priceChangeAvg = CalculatePriceChangeAvg(bars.Length > 0 ? bars : (await _brokerService.GetBarHistoryDay(ticker.Symbol, _lookbackDate)).OrderBy(b => b.BarDayMilliseconds).ToArray());
-                                ticker.PriceChangeAvg = priceChangeAvg ?? 0.0;
+                                await PopulatePriceChangeAvg(stocksContext, ticker);
                                 ticker.LastCalculatedFinancials = now;
                                 ticker.LastCalculatedFinancialsMillis = new DateTimeOffset(now).ToUnixTimeMilliseconds();
                                 if (dbTicker != null)
@@ -184,6 +190,12 @@ namespace NumbersGoUp.Services
                 await stocksContext.SaveChangesAsync(_appCancellation.Token);
             }
         }
+        private async Task PopulatePriceChangeAvg(StocksContext stocksContext, BankTicker ticker)
+        {
+            var bars = await stocksContext.HistoryBars.Where(b => b.Symbol == ticker.Symbol).OrderBy(b => b.BarDayMilliseconds).ToArrayAsync(_appCancellation.Token);
+            var priceChangeAvg = CalculatePriceChangeAvg(bars.Length > 0 ? bars : (await _brokerService.GetBarHistoryDay(ticker.Symbol, _lookbackDate)).OrderBy(b => b.BarDayMilliseconds).ToArray());
+            ticker.PriceChangeAvg = priceChangeAvg ?? 0.0;
+        }
         private double? CalculatePriceChangeAvg(HistoryBar[] barsAsc)
         {
             if(barsAsc == null || barsAsc.Length == 0) { return null; }
@@ -197,12 +209,9 @@ namespace NumbersGoUp.Services
             var regressionTotal = (totalslope * barsAsc.Length) + totalyintercept;
             var stdevTotal = barsAsc.RegressionStDev(b => (b.Price() - initialInitialPrice) * 100.0 / initialInitialPrice, totalslope, totalyintercept);
             if (regressionTotal < 0) { return regressionTotal / stdevTotal; }
-            var lowerBound = regressionTotal - stdevTotal;
-            if(lowerBound < initialInitialPrice) { return -1; }
             const int interval = 120;
             const int minLength = interval / 2;
-            var priceChanges = new List<double>();
-            var stdevs = new List<double>();
+            var priceChanges = new Stack<double>();
             for(var i = 0; i < barsAsc.Length; i += interval)
             {
                 var priceWindow = barsAsc.Skip(i).Take(interval).ToArray();
@@ -212,13 +221,12 @@ namespace NumbersGoUp.Services
                     var (slope, yintercept) = priceWindow.CalculateRegression(b => (b.Price() - initialPrice) * 100.0 / initialPrice);
                     var price = (slope * priceWindow.Length) + yintercept;
                     var stdev = priceWindow.RegressionStDev(b => (b.Price() - initialPrice) * 100.0 / initialPrice, slope, yintercept);
-                    priceChanges.Add(price);
-                    stdevs.Add(stdev);
+                    priceChanges.Push(price / stdev);
                 }
             }
-            if (priceChanges.Count > 3 && priceChanges.Any() && stdevs.Any())
+            if (priceChanges.Count > 3 && priceChanges.Any())
             {
-                return Math.Min(priceChanges.Average() / stdevs.Average(), regressionTotal / stdevTotal);
+                return Math.Min(priceChanges.ToArray().ApplyAlma(), regressionTotal / stdevTotal);
             }
             else
             {
