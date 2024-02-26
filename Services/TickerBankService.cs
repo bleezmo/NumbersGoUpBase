@@ -215,13 +215,21 @@ namespace NumbersGoUp.Services
             for(var i = 0; i < barsAsc.Length; i += interval)
             {
                 var priceWindow = barsAsc.Skip(i).Take(interval).ToArray();
-                if (priceWindow.Length > minLength && priceWindow.Last().Price() > 0)
+                var initialPrice = priceWindow[0].Price();
+                if (priceWindow.Length > minLength && initialPrice > 0 && priceWindow.Last().Price() > 0)
                 {
-                    var initialPrice = priceWindow[0].Price();
                     var (slope, yintercept) = priceWindow.CalculateRegression(b => (b.Price() - initialPrice) * 100.0 / initialPrice);
                     var price = (slope * priceWindow.Length) + yintercept;
                     var stdev = priceWindow.RegressionStDev(b => (b.Price() - initialPrice) * 100.0 / initialPrice, slope, yintercept);
-                    priceChanges.Push(price / stdev);
+                    if(stdev > 0)
+                    {
+                        priceChanges.Push(price / stdev);
+                    }
+                    else
+                    {
+                        _logger.LogWarning($"price change avg standard deviation was zero for {barsAsc[0].Symbol}");
+                        return null;
+                    }
                 }
             }
             if (priceChanges.Count > 3 && priceChanges.Any())
