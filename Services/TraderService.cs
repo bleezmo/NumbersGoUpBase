@@ -298,7 +298,7 @@ namespace NumbersGoUp.Services
         }
 
         private async Task<double> GetCurrentPrice(StockRebalancer sr) => sr.Position?.AssetLastPrice != null ? sr.Position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(sr.Symbol)).Price;
-        private double priorityOrdering(BuyState bss) => bss.Rebalancer.Ticker.PerformanceVector;// * bss.ProfitLossPerc.ZeroReduce(bss.Rebalancer.Ticker.ProfitLossAvg + bss.Rebalancer.Ticker.ProfitLossStDev, (bss.Rebalancer.Ticker.ProfitLossAvg + bss.Rebalancer.Ticker.ProfitLossStDev) * -1);
+        private double priorityOrdering(BuyState bss) => bss.Rebalancer.Diff * bss.Rebalancer.Ticker.PerformanceVector;
         private async Task ExecuteBuys(StockRebalancer[] rebalancers, double remainingBuyAmount)
         {
             if (_disableBuys) 
