@@ -18,10 +18,12 @@ namespace NumbersGoUpBase.Services
         private readonly TickerService _tickerService;
         private readonly PredicterService _predicterService;
         private readonly double _stockBondPerc;
+        private readonly ITickerPickProcessor _tickerPickProcessor;
 
         public string[] BondSymbols { get; }
 
-        public RebalancerService(ILogger<PredicterService> logger, TickerService tickerService, IConfiguration configuration, PredicterService predicterService)
+        public RebalancerService(ILogger<PredicterService> logger, TickerService tickerService, IConfiguration configuration, 
+                                 PredicterService predicterService, ITickerPickProcessor tickerPickProcessor)
         {
             _logger = logger;
             _tickerService = tickerService;
@@ -29,6 +31,7 @@ namespace NumbersGoUpBase.Services
             BondSymbols = bondSymbols != null && !bondSymbols.Any(s => string.IsNullOrWhiteSpace(s)) ? bondSymbols : new string[] { "VTIP", "STIP" };
             _stockBondPerc = double.TryParse(configuration["StockBondPerc"], out var stockBondPerc) ? stockBondPerc : 1.0;
             _predicterService = predicterService;
+            _tickerPickProcessor = tickerPickProcessor;
         }
         public async Task<IEnumerable<IRebalancer>> Rebalance(IEnumerable<Position> positions, Balance balance, DateTime? day = null)
         {
@@ -40,6 +43,7 @@ namespace NumbersGoUpBase.Services
                 return Enumerable.Empty<IRebalancer>();
             }
             var allTickers = await _tickerService.GetFullTickerList();
+            var tickerPicks = await _tickerPickProcessor.GetTickers();
             foreach(var position in positions.Where(p => !BondSymbols.Contains(p.Symbol)))
             {
                 if(!allTickers.Any(t => t.Symbol == position.Symbol))
@@ -51,7 +55,7 @@ namespace NumbersGoUpBase.Services
             var selectedTickers = new List<PerformanceTicker>();
             foreach(var ticker in allTickers)
             {
-                if(ticker.PerformanceVector > TickerService.PERFORMANCE_CUTOFF)
+                if(ticker.PerformanceVector > TickerService.PERFORMANCE_CUTOFF && tickerPicks.Any(t => t.Symbol == ticker.Symbol))
                 {
                     selectedTickers.Add(new PerformanceTicker
                     {

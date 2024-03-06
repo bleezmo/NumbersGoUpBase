@@ -14,6 +14,7 @@ namespace NumbersGoUp.Utils
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<TickerPickProcessor> _logger;
         private readonly ITickerPickFile _tickerFile;
+        private IEnumerable<TickerPick> _tickers = null;
 
         public TickerPickProcessor(IAppCancellation appCancellation, ILogger<TickerPickProcessor> logger, ITickerPickFile tickerFile)
         {
@@ -22,6 +23,14 @@ namespace NumbersGoUp.Utils
             _tickerFile = tickerFile;
         }
         public async Task<IEnumerable<TickerPick>> GetTickers()
+        {
+            if(_tickers == null)
+            {
+                _tickers = await LoadTickers();
+            }
+            return _tickers;
+        }
+        public async Task<IEnumerable<TickerPick>> LoadTickers()
         {
             List<TickerPick> tickers = new List<TickerPick>();
 
