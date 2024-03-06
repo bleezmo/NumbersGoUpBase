@@ -42,86 +42,115 @@ namespace NumbersGoUp.Services
             {
                 var result = await _tickerProcessor.DownloadTickers(_runtimeSettings.ForceDataCollection);
                 var processorTickers = result.BankTickers;
-                if (processorTickers.Length == 0) { return; }
-                var tickerPicks = await _tickerPickProcessor.GetTickers();
-                _logger.LogInformation($"Loading {processorTickers.Length} tickers into ticker bank");
-                var positions = await _brokerService.GetPositions();
-                using (var stocksContext = _contextFactory.CreateDbContext())
+                if (processorTickers.Length > 0) 
                 {
-                    var dbTickers = await stocksContext.TickerBank.ToArrayAsync(_appCancellation.Token);
-                    List<BankTicker> toUpdate = new List<BankTicker>(), toAdd = new List<BankTicker>(), toRemove = new List<BankTicker>();
-                    DateTime now = DateTime.UtcNow;
-                    foreach (var processorTicker in processorTickers)
-                    {
-                        var ticker = processorTicker.Ticker;
-                        var dbTicker = dbTickers.FirstOrDefault(t => t.Symbol == ticker.Symbol);
-                        //var lastModified = result.LastModified.HasValue ? result.LastModified.Value.DateTime : DateTime.UtcNow;
-                        var isCarryover = IsCarryover(processorTicker);
-                        var passCutoff = LoadCutoff(processorTicker);
-                        var isTickerPick = tickerPicks.Any(t => t.Symbol == ticker.Symbol);
-                        var hasPosition = positions.Any(p => p.Symbol == ticker.Symbol);
-                        try
-                        {
-                            if (isCarryover)
-                            {
-                                if (dbTicker != null)
-                                {
-                                    _logger.LogInformation($"Missing values for {ticker.Symbol}. Using old values.");
-                                    if (hasPosition || isTickerPick)
-                                    {
-                                        await PopulatePriceChangeAvg(stocksContext, dbTicker);
-                                        toUpdate.Add(dbTicker);
-                                    }
-                                }
-                            }
-                            else if (hasPosition || (isTickerPick && passCutoff))
-                            {
-                                await PopulatePriceChangeAvg(stocksContext, ticker);
-                                ticker.LastCalculatedFinancials = now;
-                                ticker.LastCalculatedFinancialsMillis = new DateTimeOffset(now).ToUnixTimeMilliseconds();
-                                if (dbTicker != null)
-                                {
-                                    _tickerProcessor.FinalCalc(processorTicker, dbTicker);
-                                    _tickerProcessor.UpdateBankTicker(dbTicker, ticker);
-                                    toUpdate.Add(dbTicker);
-                                }
-                                else { toAdd.Add(ticker); }
-                            }
-                            else if (dbTicker != null)
-                            {
-                                toRemove.Add(dbTicker);
-                            }
-                        }
-                        catch (Exception e)
-                        {
-                            _logger.LogError(e, $"Error loading info for bank ticker {ticker.Symbol}");
-                        }
-                    }
-                    foreach(var dbTicker in dbTickers)
-                    {
-                        var isTickerPick = tickerPicks.Any(t => t.Symbol == dbTicker.Symbol);
-                        var hasPosition = positions.Any(p => p.Symbol == dbTicker.Symbol);
-                        var isProcessorTicker = processorTickers.Any(t => t.Ticker.Symbol == dbTicker.Symbol);
-                        if (!isProcessorTicker && !isTickerPick && !hasPosition)
-                        {
-                            toRemove.Add(dbTicker);
-                        }
-                    }
-                    stocksContext.TickerBank.RemoveRange(toRemove);
-                    await stocksContext.SaveChangesAsync(_appCancellation.Token);
-                    stocksContext.TickerBank.UpdateRange(toUpdate);
-                    await stocksContext.SaveChangesAsync(_appCancellation.Token);
-                    stocksContext.TickerBank.AddRange(toAdd);
-                    await stocksContext.SaveChangesAsync(_appCancellation.Token);
+                    await LoadBankTickers(processorTickers);
+                    _logger.LogInformation("Completed loading bank tickers");
+                }
+                else
+                {
+                    await UpdatePriceChangeAvg();
+                    _logger.LogInformation("Completed price change avg update");
                 }
             }
             catch (Exception e)
             {
                 _logger.LogError(e, "Error occurred when loading ticker bank data");
             }
-            _logger.LogInformation("Completed loading bank tickers");
             await CalculatePerformance();
             _logger.LogInformation("Completed bank ticker performance calculation");
+        }
+        private async Task UpdatePriceChangeAvg()
+        {
+            var tickerPicks = await _tickerPickProcessor.GetTickers();
+            var positions = await _brokerService.GetPositions();
+            using (var stocksContext = _contextFactory.CreateDbContext())
+            {
+                var dbTickers = await stocksContext.TickerBank.ToArrayAsync(_appCancellation.Token);
+                foreach (var dbTicker in dbTickers)
+                {
+                    if (positions.Any(p => p.Symbol == dbTicker.Symbol) || tickerPicks.Any(t => t.Symbol == dbTicker.Symbol))
+                    {
+                        await PopulatePriceChangeAvg(stocksContext, dbTicker);
+                        stocksContext.TickerBank.Update(dbTicker);
+                    }
+                }
+                await stocksContext.SaveChangesAsync(_appCancellation.Token);
+            }
+        }
+        private async Task LoadBankTickers(ProcessorBankTicker[] processorTickers)
+        {
+            var tickerPicks = await _tickerPickProcessor.GetTickers();
+            _logger.LogInformation($"Loading {processorTickers.Length} tickers into ticker bank");
+            var positions = await _brokerService.GetPositions();
+            using (var stocksContext = _contextFactory.CreateDbContext())
+            {
+                var dbTickers = await stocksContext.TickerBank.ToArrayAsync(_appCancellation.Token);
+                List<BankTicker> toUpdate = new List<BankTicker>(), toAdd = new List<BankTicker>(), toRemove = new List<BankTicker>();
+                DateTime now = DateTime.UtcNow;
+                foreach (var processorTicker in processorTickers)
+                {
+                    var ticker = processorTicker.Ticker;
+                    var dbTicker = dbTickers.FirstOrDefault(t => t.Symbol == ticker.Symbol);
+                    //var lastModified = result.LastModified.HasValue ? result.LastModified.Value.DateTime : DateTime.UtcNow;
+                    var isCarryover = IsCarryover(processorTicker);
+                    var passCutoff = LoadCutoff(processorTicker);
+                    var isTickerPick = tickerPicks.Any(t => t.Symbol == ticker.Symbol);
+                    var hasPosition = positions.Any(p => p.Symbol == ticker.Symbol);
+                    try
+                    {
+                        if (isCarryover)
+                        {
+                            if (dbTicker != null)
+                            {
+                                _logger.LogInformation($"Missing values for {ticker.Symbol}. Using old values.");
+                                if (hasPosition || isTickerPick)
+                                {
+                                    await PopulatePriceChangeAvg(stocksContext, dbTicker);
+                                    toUpdate.Add(dbTicker);
+                                }
+                            }
+                        }
+                        else if (hasPosition || (isTickerPick && passCutoff))
+                        {
+                            await PopulatePriceChangeAvg(stocksContext, ticker);
+                            ticker.LastCalculatedFinancials = now;
+                            ticker.LastCalculatedFinancialsMillis = new DateTimeOffset(now).ToUnixTimeMilliseconds();
+                            if (dbTicker != null)
+                            {
+                                _tickerProcessor.FinalCalc(processorTicker, dbTicker);
+                                _tickerProcessor.UpdateBankTicker(dbTicker, ticker);
+                                toUpdate.Add(dbTicker);
+                            }
+                            else { toAdd.Add(ticker); }
+                        }
+                        else if (dbTicker != null)
+                        {
+                            toRemove.Add(dbTicker);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.LogError(e, $"Error loading info for bank ticker {ticker.Symbol}");
+                    }
+                }
+                foreach (var dbTicker in dbTickers)
+                {
+                    var isTickerPick = tickerPicks.Any(t => t.Symbol == dbTicker.Symbol);
+                    var hasPosition = positions.Any(p => p.Symbol == dbTicker.Symbol);
+                    var isProcessorTicker = processorTickers.Any(t => t.Ticker.Symbol == dbTicker.Symbol);
+                    if (!isProcessorTicker && !isTickerPick && !hasPosition)
+                    {
+                        toRemove.Add(dbTicker);
+                    }
+                }
+                stocksContext.TickerBank.RemoveRange(toRemove);
+                await stocksContext.SaveChangesAsync(_appCancellation.Token);
+                stocksContext.TickerBank.UpdateRange(toUpdate);
+                await stocksContext.SaveChangesAsync(_appCancellation.Token);
+                stocksContext.TickerBank.AddRange(toAdd);
+                await stocksContext.SaveChangesAsync(_appCancellation.Token);
+            }
         }
         private bool LoadCutoff(ProcessorBankTicker ticker) => ticker.Income > 50000000 && ticker.RevenueGrowth > -25 && ticker.IncomeGrowth > -75 && (ticker.Ticker.MarketCap > 3_500_000_000 || ticker.IncomeGrowth < 75) && BasicCutoff(ticker.Ticker);
         private bool BasicCutoff(BankTicker ticker) => ticker.MarketCap > 3_000_000_000 && ticker.Earnings > 0 && 
@@ -139,7 +168,7 @@ namespace NumbersGoUp.Services
                 var tickers = new List<BankTicker>();
                 foreach (var t in dbTickers)
                 {
-                    if (BasicCutoff(t) && t.PERatio < EarningsMultipleCutoff && t.PERatio > 1 && t.PriceChangeAvg > 0)
+                    if (BasicCutoff(t) && t.PERatio < EarningsMultipleCutoff && t.PERatio > 1 && t.PriceChangeAvg > -10)
                     {
                         tickers.Add(t);
                     }
@@ -194,7 +223,7 @@ namespace NumbersGoUp.Services
         {
             var bars = await stocksContext.HistoryBars.Where(b => b.Symbol == ticker.Symbol).OrderBy(b => b.BarDayMilliseconds).ToArrayAsync(_appCancellation.Token);
             var priceChangeAvg = CalculatePriceChangeAvg(bars.Length > 0 ? bars : (await _brokerService.GetBarHistoryDay(ticker.Symbol, _lookbackDate)).OrderBy(b => b.BarDayMilliseconds).ToArray());
-            ticker.PriceChangeAvg = priceChangeAvg ?? 0.0;
+            ticker.PriceChangeAvg = priceChangeAvg ?? -10;
         }
         private double? CalculatePriceChangeAvg(HistoryBar[] barsAsc)
         {
@@ -208,7 +237,6 @@ namespace NumbersGoUp.Services
             var (totalslope, totalyintercept) = barsAsc.CalculateRegression(b => (b.Price() - initialInitialPrice) * 100.0 / initialInitialPrice);
             var regressionTotal = (totalslope * barsAsc.Length) + totalyintercept;
             var stdevTotal = barsAsc.RegressionStDev(b => (b.Price() - initialInitialPrice) * 100.0 / initialInitialPrice, totalslope, totalyintercept);
-            if (regressionTotal < 0) { return regressionTotal / stdevTotal; }
             const int interval = 120;
             const int minLength = interval / 2;
             var priceChanges = new Stack<double>();
@@ -228,13 +256,12 @@ namespace NumbersGoUp.Services
                     else
                     {
                         _logger.LogWarning($"price change avg standard deviation was zero for {barsAsc[0].Symbol}");
-                        return null;
                     }
                 }
             }
             if (priceChanges.Count > 3 && priceChanges.Any())
             {
-                return Math.Min(priceChanges.ToArray().ApplyAlma(), regressionTotal / stdevTotal);
+                return Math.Min(priceChanges.Average(), regressionTotal / stdevTotal);
             }
             else
             {
