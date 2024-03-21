@@ -38,9 +38,10 @@ namespace NumbersGoUp.Services
             {
                 if (!IsValidTicker(ticker))
                 {
-#if !DEBUG
-                    _logger.LogWarning($"Ticker {ticker.Symbol} has invalid metric averages");
-#endif
+                    if (!day.HasValue && DateTime.Now.DayOfWeek != TickerService.RUN_LOAD)
+                    {
+                        _logger.LogWarning($"Ticker {ticker.Symbol} has invalid metric averages");
+                    }
                     return null;
                 }
                 using (var stocksContext = _contextFactory.CreateDbContext())

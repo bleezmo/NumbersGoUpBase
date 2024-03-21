@@ -154,10 +154,16 @@ namespace NumbersGoUp.Services
                             await StartDayCollection(tickerLocal);
                             _logger.LogDebug($"Completed StartCollection for {tickerLocal.Symbol}");
                         }
-                        catch (TaskCanceledException) { }
                         catch (Exception e)
                         {
-                            _logger.LogError(e, $"Error occurred collecting history for {tickerLocal.Symbol}");
+                            if(e is TaskCanceledException)
+                            {
+                                _logger.LogWarning(e, $"Task cancelled while collecting history for {tickerLocal.Symbol}");
+                            }
+                            else
+                            {
+                                _logger.LogError(e, $"Error occurred collecting history for {tickerLocal.Symbol}");
+                            }
                         }
                     }, _appCancellation.Token));
                     if (totalCount == 0) { await Task.Delay(1000); }
@@ -192,7 +198,6 @@ namespace NumbersGoUp.Services
                 if (from.HasValue)
                 {
                     _logger.LogDebug($"Collecting bar history for {symbol}");
-                    var gapDetected = false;
                     var count = 0; HistoryBar previousBar = null;
                     foreach (var bar in await _brokerService.GetBarHistoryDay(symbol, from.Value))
                     {
@@ -212,7 +217,6 @@ namespace NumbersGoUp.Services
                             if(previousBar != null && bar.BarDay.Subtract(previousBar.BarDay).TotalDays > 10)
                             {
                                 _logger.LogWarning($"Gap detected for {ticker.Symbol}");
-                                gapDetected = true;
                                 break;
                             }
                             bar.TickerId = ticker.Id;

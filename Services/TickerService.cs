@@ -21,6 +21,9 @@ namespace NumbersGoUp.Services
         public const int PERFORMANCE_CUTOFF = 20;
         public const int PERFORMANCE_AVGS_LOOKBACK = 375;
 
+        public const DayOfWeek RUN_AVGS = DayOfWeek.Wednesday;
+        public const DayOfWeek RUN_LOAD = DayOfWeek.Tuesday;
+
         private const double PICK_WEIGHT = 0.5;
 
         private readonly IAppCancellation _appCancellation;
@@ -44,7 +47,7 @@ namespace NumbersGoUp.Services
         {
             using (var stocksContext = _contextFactory.CreateDbContext())
             {
-                var tickers = await stocksContext.Tickers.Where(t => t.PerformanceVector > PERFORMANCE_CUTOFF && t.MonthTrend > -1000)
+                var tickers = await stocksContext.Tickers.Where(t => t.PerformanceVector > PERFORMANCE_CUTOFF)
                                                   .OrderByDescending(t => t.PerformanceVector).ToListAsync(_appCancellation.Token);
                 return tickers;
             }
@@ -81,7 +84,7 @@ namespace NumbersGoUp.Services
         public async Task ApplyAverages()
         {
             var now = DateTimeOffset.UtcNow;
-            if (_runtimeSettings.ForceDataCollection || now.DayOfWeek == DayOfWeek.Wednesday) //don't need to check every day
+            if (_runtimeSettings.ForceDataCollection || now.DayOfWeek == RUN_AVGS) //don't need to check every day
             {
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
@@ -140,7 +143,7 @@ namespace NumbersGoUp.Services
         public async Task Load()
         {
             var now = DateTimeOffset.UtcNow;
-            if (_runtimeSettings.ForceDataCollection || now.DayOfWeek == DayOfWeek.Tuesday) //don't need to check every day
+            if (_runtimeSettings.ForceDataCollection || now.DayOfWeek == RUN_LOAD) //don't need to check every day
             {
                 await _brokerService.Ready();
                 var nowMillis = now.ToUnixTimeMilliseconds();
@@ -223,14 +226,7 @@ namespace NumbersGoUp.Services
         private static void TickerCopy(Ticker ticker, BankTicker bankTicker)
         {
             ticker.Sector = bankTicker.Sector;
-            ticker.PERatio = bankTicker.PERatio;
-            ticker.EVEarnings = bankTicker.EVEarnings;
-            ticker.EPS = bankTicker.EPS;
-            ticker.Earnings = bankTicker.Earnings;
             ticker.DividendYield = bankTicker.DividendYield;
-            ticker.DebtMinusCash = bankTicker.DebtMinusCash;
-            ticker.Shares = bankTicker.Shares;
-            ticker.MarketCap = bankTicker.MarketCap;
             ticker.PerformanceVector = 0;
         }
         private static Ticker TickerCopy(Ticker ticker, BankTicker bankTicker, TickerPick tickerPick)
