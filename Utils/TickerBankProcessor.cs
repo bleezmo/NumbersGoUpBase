@@ -211,10 +211,7 @@ namespace NumbersGoUp.Utils
                                 if (sharesIndex.HasValue && double.TryParse(csv[sharesIndex.Value], out var shares))
                                 {
                                     ticker.Ticker.Shares = shares;
-                                    if(ticker.Ticker.EPS > 0)
-                                    {
-                                        ticker.Ticker.Earnings = ticker.Ticker.EPS * shares;
-                                    }
+                                    ticker.Ticker.Earnings = ticker.Ticker.EPS * shares;
                                 }
                                 else
                                 {
@@ -229,7 +226,7 @@ namespace NumbersGoUp.Utils
                                 {
                                     //_logger.LogWarning($"Price not found for {ticker.Ticker.Symbol}");
                                 }
-                                if (ticker.Ticker.Earnings > 0)
+                                if (ticker.Ticker.Earnings != 0)
                                 {
                                     if (evIndex.HasValue && double.TryParse(csv[evIndex.Value], out var ev))
                                     {
