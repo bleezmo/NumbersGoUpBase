@@ -122,6 +122,9 @@ namespace NumbersGoUp.Services
                         ticker.AlmaVelStDev = (bars.CalculateVelocityStDev(b => b.AlmaSMA1) + bars.CalculateVelocityStDev(b => b.AlmaSMA2) + bars.CalculateVelocityStDev(b => b.AlmaSMA3)) / 3;
                         ticker.SMAVelStDev = bars.CalculateVelocityStDev(b => b.SMASMA);
 
+                        (ticker.WeekTrendAvg, ticker.WeekTrendStDev) = bars.CalculateAvgStDev(b => b.WeekTrend);
+                        ticker.WeekTrendVelStDev = bars.CalculateVelocityStDev(b => b.WeekTrend);
+
                         var maxMonthConsecutiveLosses = 0.0;
                         var consecutiveLosses = 0;
                         const int monthLength = 20;

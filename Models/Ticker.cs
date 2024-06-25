@@ -12,14 +12,11 @@ namespace NumbersGoUp.Models
     [Index(nameof(LastCalculatedPerformanceMillis))]
     [Index(nameof(LastCalculatedAvgsMillis))]
     [Index(nameof(PerformanceVector))]
-    [Index(nameof(PERatio))]
-    [Index(nameof(MonthTrend))]
     public class Ticker : ITicker
     {
         public long Id { get; set; }
         public string Symbol { get; set; }
         public string Sector { get; set; }
-        public double MonthTrend { get; set; }
         public double MaxMonthConsecutiveLosses { get; set; }
         public double PerformanceVector { get; set; }
         public DateTime LastCalculated { get; set; }
@@ -28,8 +25,6 @@ namespace NumbersGoUp.Models
         public long? LastCalculatedPerformanceMillis { get; set; }
         public DateTime? LastCalculatedAvgs { get; set; }
         public long? LastCalculatedAvgsMillis { get; set; }
-        public double EPS { get; set; }
-        public double PERatio { get; set; }
         public double SMASMAAvg { get; set; }
         public double SMASMAStDev { get; set; }
         public double AlmaSma1Avg { get; set; }
@@ -44,11 +39,9 @@ namespace NumbersGoUp.Models
         public double DividendYield { get; set; }
         public double AlmaVelStDev { get; set; }
         public double SMAVelStDev { get; set; }
-        public double RegressionAngle { get; set; }
-        public double EVEarnings { get; set; }
-        public double DebtMinusCash { get; set; }
-        public double Shares { get; set; }
-        public double MarketCap { get; set; }
+        public double WeekTrendAvg { get; set; }
+        public double WeekTrendStDev { get; set; }
+        public double WeekTrendVelStDev { get; set; }
 
         public List<HistoryBar> HistoryBars { get; set; }
         public List<DbOrder> Orders { get; set; }

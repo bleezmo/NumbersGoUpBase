@@ -193,10 +193,7 @@ namespace NumbersGoUp.Utils
             if (count == 0) return (0, 0);
             if (count == 1) return (valueFn(values.First()), 0);
             var avg = values.Average(v => valueFn(v));
-            var stdev = Math.Sqrt(values.Select((v, i) =>
-            {
-                return Math.Pow(valueFn(v) - avg, 2);
-            }).Sum() / count);
+            var stdev = Math.Sqrt(values.Sum(v => Math.Pow(valueFn(v) - avg, 2)) / count);
             return (avg, stdev);
         }
         public static double CalculateAvgStDevRatio(this IEnumerable<double> values)
@@ -376,5 +373,7 @@ namespace NumbersGoUp.Utils
             Max = result > Max ? result : Max;
             return result;
         }
+
+        public double Rank(T data) => _perfFn(data).DoubleReduce(Max, Min);
     }
 }
