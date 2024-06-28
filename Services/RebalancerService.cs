@@ -129,13 +129,9 @@ namespace NumbersGoUpBase.Services
                                 diff = -marketValue * prediction.SellMultiplier.DoubleReduce(0.5, 0);
                             }
                         }
-                        var diffCutoff = 6.0;
-                        if(diff < 0)
-                        {
-                            diffCutoff = 10;
-                            var gain = position.MarketValue.Value - position.CostBasis;
-                            diffCutoff = (gain * performanceTicker.Ticker.DividendYield.DoubleReduce(0.04, 0) / equity).DoubleReduce(0.1, 0, 90, diffCutoff);
-                        }
+
+                        var diffCutoff = diff < 0 ? 16.0 : 8.0;
+
                         if (Math.Abs(diffPerc) > diffCutoff)
                         {
                             rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, diff, prediction)
