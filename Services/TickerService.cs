@@ -230,6 +230,7 @@ namespace NumbersGoUp.Services
         {
             ticker.Sector = bankTicker.Sector;
             ticker.DividendYield = bankTicker.DividendYield;
+            ticker.Earnings = bankTicker.Earnings;
             ticker.PerformanceVector = 0;
         }
         private static Ticker TickerCopy(Ticker ticker, BankTicker bankTicker, TickerPick tickerPick)
