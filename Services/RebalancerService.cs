@@ -55,7 +55,9 @@ namespace NumbersGoUpBase.Services
             var selectedTickers = new List<PerformanceTicker>();
             foreach(var ticker in allTickers)
             {
-                if(ticker.PerformanceVector > TickerService.PERFORMANCE_CUTOFF && tickerPicks.Any(t => t.Symbol == ticker.Symbol))
+                var meetsConditions = ticker.PerformanceVector > TickerService.PERFORMANCE_CUTOFF;
+                meetsConditions = day.HasValue ? meetsConditions && tickerPicks.Any(t => t.Symbol == ticker.Symbol) : meetsConditions;
+                if (meetsConditions)
                 {
                     selectedTickers.Add(new PerformanceTicker
                     {
@@ -126,7 +128,7 @@ namespace NumbersGoUpBase.Services
                             }
                             else
                             {
-                                diff = -marketValue * prediction.SellMultiplier.DoubleReduce(0.5, 0);
+                                diff = -marketValue * prediction.SellMultiplier.DoubleReduce(0.25, 0);
                             }
                         }
 

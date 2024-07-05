@@ -82,11 +82,10 @@ namespace NumbersGoUp.Utils
                     }
                 }
             }
-
-            var max = tickers.Max(t => t.Score);
+            var (max, min) = tickers.MaxMin(t => t.Score);
             foreach(var ticker in tickers)
             {
-                ticker.Score = ticker.Score.DoubleReduce(max, 0, 100, 0);
+                ticker.Score = ticker.Score.DoubleReduce(max, min / 3, 100, 0);
             }
             return tickers;
         }
