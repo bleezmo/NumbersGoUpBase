@@ -195,12 +195,8 @@ namespace NumbersGoUpBase.Services
         private static double PerformanceValue(PerformanceTicker performanceTicker)
         {
             var performanceValue = performanceTicker.Ticker.PerformanceVector;
-            var performanceMultiplier = 3 - performanceTicker.Ticker.SMASMAAvg.DoubleReduce(20, -20, 2, 0);
-            //if (performanceTicker.Position != null && performanceTicker.Position.UnrealizedProfitLossPercent.HasValue)
-            //{
-            //    var positionMultiplier = performanceTicker.Position.UnrealizedProfitLossPercent.Value.DoubleReduce(0, -0.25);
-            //    performanceMultiplier = (1 - positionMultiplier) + (positionMultiplier * performanceMultiplier);
-            //}
+            //var performanceMultiplier = 3 - performanceTicker.Ticker.SMASMAAvg.DoubleReduce(20, -20, 2, 0);
+            var performanceMultiplier = 3 - performanceTicker.Ticker.SMASMAAvg.DoubleReduce(30, 0, 2, 0);
             return performanceValue * performanceMultiplier * (1 + performanceValue.DoubleReduce(100, 0).Curve1(2));
         }
     }
@@ -216,12 +212,9 @@ namespace NumbersGoUpBase.Services
             var performanceMultiplier = MeetsRequirements ? 1.0 : 0.9;
             if (TickerPrediction != null)
             {
-                performanceMultiplier += (TickerPrediction.BuyMultiplier - TickerPrediction.SellMultiplier).DoubleReduce(0.75, -0.75).Curve6(4).DoubleReduce(1, 0, 0.6, -0.2);
+                //performanceMultiplier += (TickerPrediction.BuyMultiplier - TickerPrediction.SellMultiplier).DoubleReduce(0.75, -0.75).Curve6(4).DoubleReduce(1, 0, 0.6, -0.2);
+                performanceMultiplier += (TickerPrediction.BuyMultiplier - TickerPrediction.SellMultiplier).DoubleReduce(1, -1).Curve6(3.2).DoubleReduce(1, 0, 0.6, -0.4);
             }
-            //if (Position != null && Position.UnrealizedProfitLossPercent.HasValue && Position.UnrealizedProfitLossPercent.Value > 0)
-            //{
-            //    performanceMultiplier *= Math.Log((Position.UnrealizedProfitLossPercent.Value * Ticker.DividendYield.DoubleReduce(0.03, 0)) + Math.E);
-            //}
             return Math.Max(performanceMultiplier, 0);
         }
     }
