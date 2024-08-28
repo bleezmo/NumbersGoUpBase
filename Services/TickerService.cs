@@ -182,7 +182,7 @@ namespace NumbersGoUp.Services
                         }
                         else if(ticker != null && bankTicker == null)
                         {
-                            ticker.PerformanceVector = ((1 - PICK_WEIGHT) * Math.Max(ticker.PerformanceVector - 5, 0)) + (PICK_WEIGHT * tickerPick.Score);
+                            ticker.PerformanceVector = Math.Max(PICK_WEIGHT * tickerPick.Score, ticker.PerformanceVector - 5);
                             ticker.LastCalculated = now.UtcDateTime;
                             ticker.LastCalculatedMillis = nowMillis;
                             stocksContext.Tickers.Update(ticker);
