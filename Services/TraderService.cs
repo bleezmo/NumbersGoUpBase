@@ -222,6 +222,17 @@ namespace NumbersGoUp.Services
             await ExecuteSells(stocks.Where(r => r.Diff < 0).ToArray());
             _logger.LogInformation("Executing buys");
             await ExecuteBuys(stocks.Where(r => r.Diff > 0).ToArray(), remainingBuyAmount);
+            if(now.DayOfWeek == DayOfWeek.Friday)
+            {
+                PrintRebalancers(stocks);
+            }
+        }
+        private void PrintRebalancers(IEnumerable<StockRebalancer> rebalancers)
+        {
+            foreach(var rebalancer in rebalancers)
+            {
+                _logger.LogInformation($"Rebalancer {rebalancer.Symbol}: {rebalancer.Diff:C2} Buy/Sell: {rebalancer.Prediction.BuyMultiplier}/{rebalancer.Prediction.SellMultiplier}");
+            }
         }
         private async Task ExecuteSells(StockRebalancer[] rebalancers)
         {
