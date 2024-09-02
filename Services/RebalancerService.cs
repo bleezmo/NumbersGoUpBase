@@ -190,7 +190,7 @@ namespace NumbersGoUpBase.Services
         private static double PerformanceValue(PerformanceTicker performanceTicker)
         {
             var performanceValue = performanceTicker.Ticker.PerformanceVector;
-            var performanceMultiplier = 2 - performanceTicker.Ticker.SMASMAAvg.DoubleReduce(30, 0);
+            var performanceMultiplier = 3 - performanceTicker.Ticker.SMASMAAvg.DoubleReduce(30, 0, 2, 0);
             return performanceValue * performanceMultiplier * (1 + performanceValue.DoubleReduce(100, 0).Curve1(2));
         }
     }
