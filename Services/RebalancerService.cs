@@ -51,7 +51,6 @@ namespace NumbersGoUpBase.Services
                     _logger.LogError($"Ticker not found for position {position.Symbol}. Manual intervention required");
                 }
             }
-            var totalPerformance = 0.0;
             var selectedTickers = new List<PerformanceTicker>();
             foreach(var ticker in allTickers)
             {
@@ -74,7 +73,7 @@ namespace NumbersGoUpBase.Services
                     });
                 }
             }
-
+            double totalPerformance = 0.0, maxPerformance = 0.0;
             foreach (var performanceTicker in selectedTickers)
             {
                 performanceTicker.TickerPrediction = day.HasValue ? await _predicterService.Predict(performanceTicker.Ticker, day.Value) : 
@@ -85,6 +84,7 @@ namespace NumbersGoUpBase.Services
                     _logger.LogError($"Position exists for {performanceTicker.Ticker.Symbol} but prediction returned null");
                 }
                 totalPerformance += PerformanceValue(performanceTicker);
+                maxPerformance += performanceTicker.Ticker.PerformanceVector;
             }
             var rebalancers = new List<IRebalancer>();
             if(totalPerformance == 0)
@@ -92,6 +92,7 @@ namespace NumbersGoUpBase.Services
                 _logger.LogError("Total Performance calculation error. Cancelling rebalancer process.");
                 return rebalancers;
             }
+            //totalPerformance = Math.Max(totalPerformance, maxPerformance / 10.0);
             var tickerEquity = equity * _predicterService.EncouragementMultiplier.DoubleReduce(0, -1) * _stockBondPerc;
             foreach (var performanceTicker in selectedTickers)
             {

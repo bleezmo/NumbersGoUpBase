@@ -4,6 +4,10 @@
     <TargetFramework>net6.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>
+    <Configurations>Debug;Release;Debug2</Configurations>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='DEBUG2'">
+    <DefineConstants>DEBUG</DefineConstants>
   </PropertyGroup>
 	<ItemGroup>
 		<PackageReference Include="Alpaca.Markets" Version="6.0.6" />
