@@ -117,16 +117,22 @@ namespace NumbersGoUp.Utils
             }
             return sum / (barsDesc.Length - 1);
         }
-        public static double CalculateVelocityAlma(this double[] barsDesc)
+        public static double CalculateAvgWeightedVelocity<T>(this T[] barsDesc, Func<T, double> valuefn)
         {
-            var size = barsDesc.Length - 1;
-            if (size < 2) { throw new Exception("Length does not meet minimum requirements to calculate acceleration"); }
-            var vels = new List<double>();
-            for (var i = 0; i < size; i++)
+            if (barsDesc.Length < 2) { throw new Exception("Length does not meet minimum requirements to calculate velocity"); }
+            var velocities = barsDesc.CalculateVelocitiesDesc(valuefn);
+            double accum = 0, denom = 0;
+            for (var i = 0; i < velocities.Length; i++)
             {
-                vels.Add(barsDesc[i] - barsDesc[i + 1]);
+                var coeff = Math.Exp(-i / velocities.Length);
+                accum += velocities[0] * coeff;
+                denom += coeff;
             }
-            return vels.ToArray().ApplyAlma();
+            return accum / (denom * velocities.Length);
+        }
+        public static double CalculateVelocityAlma<T>(this T[] barsDesc, Func<T, double> valuefn)
+        {
+            return barsDesc.CalculateVelocitiesDesc(valuefn).ApplyAlma();
         }
         public static double CalculateVelocityStDev<T>(this T[] barsDesc, Func<T, double> angleValueFn)
         {
@@ -144,10 +150,12 @@ namespace NumbersGoUp.Utils
             }
             return Math.Sqrt(sum / (barsDesc.Length - 1));
         }
-        public static double[] CalculateVelocities<T>(this T[] barsDesc, Func<T, double> valueFn)
+        public static double[] CalculateVelocitiesDesc<T>(this T[] barsDesc, Func<T, double> valueFn)
         {
-            var velocities = new double[barsDesc.Length - 1];
-            for(var i = 0; i < velocities.Length; i++)
+            var size = barsDesc.Length - 1;
+            if (size < 1) { throw new Exception("Length does not meet minimum requirements to calculate velocity"); }
+            var velocities = new double[size];
+            for(var i = 0; i < size; i++)
             {
                 velocities[i] = valueFn(barsDesc[i]) - valueFn(barsDesc[i + 1]);
             }
@@ -176,16 +184,21 @@ namespace NumbersGoUp.Utils
             }
             return sum / size;
         }
-        public static double CalculateAccelerationAlma(this double[] barsDesc)
+        public static double[] CalculateAccelerationsDesc<T>(this T[] barsDesc, Func<T, double> valueFn)
         {
             var size = barsDesc.Length - 2;
-            if (size < 2) { throw new Exception("Length does not meet minimum requirements to calculate acceleration"); }
-            var accels = new List<double>();
+            if (size < 1) { throw new Exception("Length does not meet minimum requirements to calculate acceleration"); }
+            double[] accelerations = new double[size];
             for (var i = 0; i < size; i++)
             {
-                accels.Add(barsDesc[i] - barsDesc[i + 1] - barsDesc[i + 1] + barsDesc[i + 2]);
+                accelerations[i] = valueFn(barsDesc[i]) - valueFn(barsDesc[i + 1]) - valueFn(barsDesc[i + 1]) + valueFn(barsDesc[i + 2]);
             }
-            return accels.ToArray().ApplyAlma();
+            return accelerations;
+        }
+
+        public static double CalculateAccelerationAlma<T>(this T[] barsDesc, Func<T, double> valuefn)
+        {
+            return barsDesc.CalculateAccelerationsDesc(valuefn).ApplyAlma();
         }
         public static (double avg, double stdev) CalculateAvgStDev<T>(this IEnumerable<T> values, Func<T, double> valueFn)
         {
