@@ -1,5 +1,4 @@
-﻿using Alpaca.Markets;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using NumbersGoUp.Services;
 using System;
 using System.Collections.Generic;

@@ -73,7 +73,7 @@ namespace NumbersGoUpBase.Services
                     });
                 }
             }
-            double totalPerformance = 0.0, maxPerformance = 0.0;
+            double totalPerformance = 0.0;
             foreach (var performanceTicker in selectedTickers)
             {
                 performanceTicker.TickerPrediction = day.HasValue ? await _predicterService.Predict(performanceTicker.Ticker, day.Value) : 
@@ -84,7 +84,6 @@ namespace NumbersGoUpBase.Services
                     _logger.LogError($"Position exists for {performanceTicker.Ticker.Symbol} but prediction returned null");
                 }
                 totalPerformance += PerformanceValue(performanceTicker);
-                maxPerformance += performanceTicker.Ticker.PerformanceVector;
             }
             var rebalancers = new List<IRebalancer>();
             if(totalPerformance == 0)
@@ -92,7 +91,6 @@ namespace NumbersGoUpBase.Services
                 _logger.LogError("Total Performance calculation error. Cancelling rebalancer process.");
                 return rebalancers;
             }
-            //totalPerformance = Math.Max(totalPerformance, maxPerformance / 10.0);
             var tickerEquity = equity * _predicterService.EncouragementMultiplier.DoubleReduce(0, -1) * _stockBondPerc;
             foreach (var performanceTicker in selectedTickers)
             {
@@ -191,9 +189,7 @@ namespace NumbersGoUpBase.Services
         private static double PerformanceValue(PerformanceTicker performanceTicker)
         {
             var performanceValue = performanceTicker.Ticker.PerformanceVector;
-            return performanceValue * (performanceTicker.TickerPrediction?.BuyMultiplier ?? 0);
-            var performanceMultiplier = 3 - performanceTicker.Ticker.SMASMAAvg.DoubleReduce(30, 0, 2, 0);
-            return performanceValue * performanceMultiplier * (1 + performanceValue.DoubleReduce(100, 0).Curve1(2));
+            return (performanceTicker.TickerPrediction?.BuyMultiplier ?? 0);
         }
     }
     public class PerformanceTicker
