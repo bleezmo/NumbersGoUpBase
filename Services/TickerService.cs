@@ -18,13 +18,12 @@ namespace NumbersGoUp.Services
 {
     public class TickerService
     {
-        public const int PERFORMANCE_CUTOFF = 20;
         public const int PERFORMANCE_AVGS_LOOKBACK = 375;
 
         public const DayOfWeek RUN_AVGS = DayOfWeek.Wednesday;
         public const DayOfWeek RUN_LOAD = DayOfWeek.Tuesday;
 
-        private const double PICK_WEIGHT = 0.5;
+        private const double PICK_WEIGHT = 0.25;
 
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<TickerService> _logger;
@@ -47,7 +46,7 @@ namespace NumbersGoUp.Services
         {
             using (var stocksContext = _contextFactory.CreateDbContext())
             {
-                var tickers = await stocksContext.Tickers.Where(t => t.PerformanceVector > PERFORMANCE_CUTOFF)
+                var tickers = await stocksContext.Tickers.Where(t => t.PerformanceVector > 0)
                                                   .OrderByDescending(t => t.PerformanceVector).ToListAsync(_appCancellation.Token);
                 return tickers;
             }

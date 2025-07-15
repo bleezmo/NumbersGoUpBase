@@ -6,7 +6,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace NumbersGoUp.Services
 {
-    public class TickerBankService
+    public interface ITickerBankService
+    {
+        Task Load();
+    }
+    public class TickerBankService : ITickerBankService
     {
         private const string EARNINGS_MULTIPLE_CUTOFF_KEY = "EarningsMultipleCutoff";
 

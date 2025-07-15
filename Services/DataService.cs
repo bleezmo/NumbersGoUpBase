@@ -22,13 +22,13 @@ namespace NumbersGoUp.Services
         private readonly ILogger<DataService> _logger;
         private readonly IAppCancellation _appCancellation;
         private readonly TickerService _tickerService;
-        private readonly TickerBankService _tickerBankService;
+        private readonly ITickerBankService _tickerBankService;
         private readonly IStocksContextFactory _contextFactory;
 
         public int LookbackYears { get; }
 
         public DataService(IBrokerService brokerService, ILogger<DataService> logger, IAppCancellation appCancellation, IRuntimeSettings runtimeSettings,
-                           TickerService tickerService, TickerBankService tickerBankService, IStocksContextFactory contextFactory)
+                           TickerService tickerService, ITickerBankService tickerBankService, IStocksContextFactory contextFactory)
         {
             _brokerService = brokerService;
             _logger = logger;

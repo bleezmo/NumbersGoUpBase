@@ -51,10 +51,11 @@ namespace NumbersGoUpBase.Services
                     _logger.LogError($"Ticker not found for position {position.Symbol}. Manual intervention required");
                 }
             }
+            var performanceCutoff = allTickers.Count() > 100 ? allTickers.OrderByDescending(t => t.PerformanceVector).Skip(100).First().PerformanceVector : 0;
             var selectedTickers = new List<PerformanceTicker>();
             foreach(var ticker in allTickers)
             {
-                var meetsConditions = ticker.PerformanceVector > TickerService.PERFORMANCE_CUTOFF;
+                var meetsConditions = ticker.PerformanceVector > performanceCutoff;
                 meetsConditions = day.HasValue ? meetsConditions && tickerPicks.Any(t => t.Symbol == ticker.Symbol) : meetsConditions;
                 if (meetsConditions)
                 {
@@ -188,8 +189,8 @@ namespace NumbersGoUpBase.Services
 
         private static double PerformanceValue(PerformanceTicker performanceTicker)
         {
-            var performanceValue = performanceTicker.Ticker.PerformanceVector;
-            return (performanceTicker.TickerPrediction?.BuyMultiplier ?? 0);
+            const double coeff = 0.4;
+            return (coeff * performanceTicker.Ticker.PerformanceVector.DoubleReduce(100, 0)) + ((1 - coeff) * (performanceTicker.TickerPrediction?.BuyMultiplier ?? 0));
         }
     }
     public class PerformanceTicker

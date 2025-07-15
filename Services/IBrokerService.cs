@@ -14,8 +14,6 @@ namespace NumbersGoUp.Services
 
         Task<IEnumerable<HistoryBar>> GetBarHistoryDay(string symbol, DateTime from);
 
-        Task<TickerInfo> GetTickerInfo(string symbol);
-
         Task<Quote> GetLastTrade(string symbol);
 
         Task<IEnumerable<Position>> GetPositions();
