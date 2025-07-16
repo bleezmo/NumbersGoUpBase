@@ -28,7 +28,8 @@ namespace NumbersGoUpBase.Services
         private static readonly JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
         };
 
         private readonly ISchwabAccessTokenService _accessTokenService;
@@ -57,6 +58,11 @@ namespace NumbersGoUpBase.Services
         private async Task Init()
         {
             var accessToken = await _accessTokenService.GetAccessToken();
+            if (accessToken == null)
+            {
+                _logger.LogError("Access token unavailable. Shutting down.");
+                await _appCancellation.Shutdown();
+            }
             _schwabClient.BaseAddress = new Uri(SchwabConfig.BaseUrl);
             _schwabClient.DefaultRequestHeaders.Add("Accept", "application/json");
             _schwabClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {accessToken}");

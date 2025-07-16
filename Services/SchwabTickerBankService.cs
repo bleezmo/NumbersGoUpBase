@@ -14,13 +14,15 @@ namespace NumbersGoUpBase.Services
 {
     public class SchwabTickerBankService : ITickerBankService
     {
+        public const DayOfWeek RUN_TICKERBANK = DayOfWeek.Monday;
+
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<SchwabTickerBankService> _logger;
         private readonly ITickerPickProcessor _tickerPickProcessor;
         private readonly IStocksContextFactory _contextFactory;
         private readonly int _lookbackYears;
         private readonly DateTime _lookbackDate;
-
+        private readonly IRuntimeSettings _runtimeSettings;
         private readonly SchwabService _brokerService;
 
         public SchwabTickerBankService(IConfiguration configuration, IStocksContextFactory contextFactory, IRuntimeSettings runtimeSettings, ITickerPickProcessor tickerPickProcessor,
@@ -31,12 +33,18 @@ namespace NumbersGoUpBase.Services
             _tickerPickProcessor = tickerPickProcessor;
             _contextFactory = contextFactory;
             _brokerService = brokerService as SchwabService;
+            _runtimeSettings = runtimeSettings;
             _lookbackYears = runtimeSettings.LookbackYears;
             _lookbackDate = DateTime.Now.AddYears(-_lookbackYears);
         }
         public async Task Load()
         {
+            if(!_runtimeSettings.ForceDataCollection && DateTime.Now.DayOfWeek != RUN_TICKERBANK)
+            {
+                return;
+            }
             await _brokerService.Ready();
+            _logger.LogInformation("Starting bank ticker imports and calculations");
             try
             {
                 await LoadBankTickers();
@@ -46,7 +54,7 @@ namespace NumbersGoUpBase.Services
                 _logger.LogError(e, "Error occurred when loading ticker bank data");
             }
             await CalculatePerformance();
-            _logger.LogInformation("Completed bank ticker performance calculation");
+            _logger.LogInformation("Completed bank ticker imports and calculations");
         }
         private async Task LoadBankTickers()
         {
@@ -123,7 +131,7 @@ namespace NumbersGoUpBase.Services
                 var tickers = new List<BankTicker>();
                 foreach (var t in dbTickers)
                 {
-                    if (t.EPS > 0 && t.Earnings > 0 && t.PriceChangeAvg > -10)
+                    if (t.EPS > 0 && t.Earnings > 0 && t.PriceChangeAvg > -10 && t.DebtEquityRatio < 10)
                     {
                         tickers.Add(t);
                     }
@@ -139,9 +147,9 @@ namespace NumbersGoUpBase.Services
                 Func<BankTicker, double> performanceFn1 = (t) => Math.Sqrt(t.Earnings);
                 Func<BankTicker, double> performanceFn2 = (t) => t.EPS; 
                 Func<BankTicker, double> performanceFn3 = (t) => t.PriceChangeAvg;
-                Func<BankTicker, double> performanceFn4 = (t) => t.CurrentRatio;
-                Func<BankTicker, double> performanceFn5 = (t) => Math.Min(t.DividendYield, 0.06);
-                Func<BankTicker, double> performanceRFn1 = (t) => t.DebtEquityRatio;
+                Func<BankTicker, double> performanceFn4 = (t) => Math.Max(t.CurrentRatio, 0);
+                Func<BankTicker, double> performanceFn5 = (t) => t.DividendYield.ZeroReduceSlow(0.06, 0);
+                Func<BankTicker, double> performanceRFn1 = (t) => Math.Max(t.DebtEquityRatio, 0);
                 var minmax1 = new MinMaxStore<BankTicker>(performanceFn1);
                 var minmax2 = new MinMaxStore<BankTicker>(performanceFn2);
                 var minmax3 = new MinMaxStore<BankTicker>(performanceFn3);
@@ -157,12 +165,12 @@ namespace NumbersGoUpBase.Services
                     minmax5.Run(ticker);
                     minmax6.Run(ticker);
                 }
-                Func<BankTicker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 30) +
+                Func<BankTicker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 25) +
                                                                      (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 25) +
-                                                                     (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 25) +
+                                                                     (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 30) +
                                                                      (performanceFn4(t).DoubleReduce(minmax4.Max, minmax4.Min) * 5) +
                                                                      (performanceFn5(t).DoubleReduce(minmax5.Max, minmax5.Min) * 5) +
-                                                                     (performanceRFn1(t).DoubleReduce(minmax6.Max, minmax6.Min) * 10);
+                                                                     ((1 - performanceRFn1(t).DoubleReduce(minmax6.Max, minmax6.Min)) * 10);
                 var minmaxTotal = new MinMaxStore<BankTicker>(performanceFnTotal);
                 foreach (var ticker in tickers)
                 {

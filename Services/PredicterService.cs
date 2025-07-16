@@ -1,7 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using NumbersGoUp.JsonModels;
 using NumbersGoUp.Models;
 using NumbersGoUp.Utils;
 using System;
