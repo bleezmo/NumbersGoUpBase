@@ -51,12 +51,12 @@ namespace NumbersGoUpBase.Services
                     _logger.LogError($"Ticker not found for position {position.Symbol}. Manual intervention required");
                 }
             }
-            var performanceCutoff = allTickers.Count() > 100 ? allTickers.OrderByDescending(t => t.PerformanceVector).Skip(100).First().PerformanceVector : 0;
+            const int maxTickerCount = 100;
+            var performanceCutoff = allTickers.Count() > maxTickerCount ? allTickers.OrderByDescending(t => t.PerformanceVector).Skip(maxTickerCount).First().PerformanceVector : 0;
             var selectedTickers = new List<PerformanceTicker>();
             foreach(var ticker in allTickers)
             {
                 var meetsConditions = ticker.PerformanceVector > performanceCutoff;
-                meetsConditions = day.HasValue ? meetsConditions && tickerPicks.Any(t => t.Symbol == ticker.Symbol) : meetsConditions;
                 if (meetsConditions)
                 {
                     selectedTickers.Add(new PerformanceTicker
