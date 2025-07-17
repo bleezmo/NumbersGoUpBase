@@ -102,7 +102,7 @@ namespace NumbersGoUp.Services
                     await ExecuteOrders(rebalancers);
                     _logger.LogInformation("Cleaning up");
                     await CleanUp();
-                    await AccountPerformancePrint(positions);
+                    //await AccountPerformancePrint(positions);
                 }
                 else
                 {

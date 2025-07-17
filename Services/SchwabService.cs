@@ -292,42 +292,97 @@ namespace NumbersGoUpBase.Services
 
         public async Task<BrokerOrder> Sell(string symbol, double qty, double? limit = null)
         {
+            await Ready();
+            await _rateLimiter.LimitSchwabRate();
             var order = limit.HasValue ? SchwabOrder.DefaultLimitSell(limit.Value, qty, symbol) : SchwabOrder.DefaultMarketSell(qty, symbol);
-            var response = await _schwabClient.PostAsJsonAsync($"/trader/v1/accounts{_accountHashValue}/orders", order, jsonSerializerOptions, _appCancellation.Token);
+            var response = await _schwabClient.PostAsJsonAsync(string.Format(SchwabConfig.OrderEndpoint, _accountHashValue), order, jsonSerializerOptions, _appCancellation.Token);
             response.EnsureSuccessStatusCode();
-            var content = response.Content.ReadAsStringAsync(_appCancellation.Token);
             var location = response.Headers.Location;
-            return null;
+            var responseOrder = await GetResponse<SchwabOrder>(location.AbsolutePath);
+            var executionLeg = responseOrder.OrderActivityCollection?.FirstOrDefault()?.ExecutionLegs?.FirstOrDefault();
+            return new BrokerOrder
+            {
+                BrokerOrderId = responseOrder.OrderId.ToString(),
+                OrderSide = OrderSide.Sell,
+                Symbol = symbol
+            };
         }
 
         public async Task<BrokerOrder> Buy(string symbol, double qty, double? limit = null)
         {
+            await Ready();
+            await _rateLimiter.LimitSchwabRate();
             var order = limit.HasValue ? SchwabOrder.DefaultLimitBuy(limit.Value, qty, symbol) : SchwabOrder.DefaultMarketBuy(qty, symbol);
-            var response = await _schwabClient.PostAsJsonAsync($"/trader/v1/accounts/{_accountHashValue}/orders", order, jsonSerializerOptions, _appCancellation.Token);
+            var response = await _schwabClient.PostAsJsonAsync(string.Format(SchwabConfig.OrderEndpoint, _accountHashValue), order, jsonSerializerOptions, _appCancellation.Token);
             response.EnsureSuccessStatusCode();
-            var content = response.Content.ReadAsStringAsync(_appCancellation.Token);
             var location = response.Headers.Location;
-            return null;
+            var responseOrder = await GetResponse<SchwabOrder>(location.AbsolutePath);
+            var executionLeg = responseOrder.OrderActivityCollection?.FirstOrDefault()?.ExecutionLegs?.FirstOrDefault();
+            return new BrokerOrder
+            {
+                BrokerOrderId = responseOrder.OrderId.ToString(),
+                OrderSide = OrderSide.Buy,
+                Symbol = symbol
+            };
         }
 
-        public Task<BrokerOrder> ClosePositionAtMarket(string symbol)
+        public async Task<IEnumerable<BrokerOrder>> GetOpenOrders()
         {
-            throw new NotImplementedException();
+            await Ready();
+            await _rateLimiter.LimitSchwabRate();
+            const string isodateformat = "yyyy-MM-ddTHH:mm:ss.fffZ";
+            var now = DateTime.UtcNow;
+            var from = now.AddHours(-24);
+            var queryParams = $"fromEnteredTime={from.ToString(isodateformat)}&toEnteredTime={now.ToString(isodateformat)}";
+            var orders = await GetResponse<IEnumerable<SchwabOrder>>($"{string.Format(SchwabConfig.OrderEndpoint, _accountHashValue)}?{queryParams}");
+            return orders.Where(o => new[] { 
+                SchwabOrderStatus.ACCEPTED,
+                SchwabOrderStatus.NEW,
+                SchwabOrderStatus.QUEUED,
+                SchwabOrderStatus.WORKING,
+                SchwabOrderStatus.PENDING_ACTIVATION
+            }.Any(status => o.Status == status)).Select(o =>
+            {
+                var (brokerOrder, error) = o.ToBrokerOrder();
+                if (brokerOrder == null)
+                {
+                    _logger.LogError(error);
+                }
+                return brokerOrder;
+            }).Where(o => o != null);
         }
 
-        public Task<IEnumerable<BrokerOrder>> GetOpenOrders()
+        public async Task<IEnumerable<BrokerOrder>> GetClosedOrders(DateTime? from = null)
         {
-            throw new NotImplementedException();
+            await Ready();
+            await _rateLimiter.LimitSchwabRate();
+            const string isodateformat = "yyyy-MM-ddTHH:mm:ss.fffZ";
+            var now = DateTime.UtcNow;
+            from = from ?? now.AddYears(-1);
+            var queryParams = $"fromEnteredTime={from.Value.ToString(isodateformat)}&toEnteredTime={now.ToString(isodateformat)}&status=FILLED";
+            var orders = await GetResponse<IEnumerable<SchwabOrder>>($"{string.Format(SchwabConfig.OrderEndpoint, _accountHashValue)}?{queryParams}");
+            return orders.Select(o =>
+            {
+                var (brokerOrder, error) = o.ToBrokerOrder();
+                if (brokerOrder == null)
+                {
+                    _logger.LogError(error);
+                }
+                return brokerOrder;
+            }).Where(o => o != null);
         }
 
-        public Task<IEnumerable<BrokerOrder>> GetClosedOrders(DateTime? from = null)
+        public async Task<BrokerOrder> GetOrder(string brokerOrderId)
         {
-            throw new NotImplementedException();
-        }
-
-        public Task<BrokerOrder> GetOrder(string brokerOrderId)
-        {
-            throw new NotImplementedException();
+            await Ready();
+            await _rateLimiter.LimitSchwabRate();
+            var order = await GetResponse<SchwabOrder>($"{string.Format(SchwabConfig.OrderEndpoint, _accountHashValue)}/{brokerOrderId}");
+            var (brokerOrder, error) = order.ToBrokerOrder();
+            if(brokerOrder == null)
+            {
+                _logger.LogError(error);
+            }
+            return brokerOrder;
         }
 
         public async Task<DateTime> GetMarketClose()
@@ -353,7 +408,11 @@ namespace NumbersGoUpBase.Services
             await Ready();
             await _rateLimiter.LimitSchwabRate();
             var fundamentals = await GetResponse<SchwabFundamentals>(string.Format(SchwabConfig.FinancialsEndpoint, symbol));
-            return null;
+            return fundamentals.Instruments.Select(i => new Financials
+            {
+                EBIT = i.Fundamental.EpsTTM * i.Fundamental.SharesOutstanding,
+                EPS = i.Fundamental.EpsTTM
+            }).FirstOrDefault();
         }
 
         public async Task<IEnumerable<SchwabFundamental>> GetSchwabFinancials(string[] symbols)
@@ -369,9 +428,17 @@ namespace NumbersGoUpBase.Services
             throw new NotImplementedException();
         }
 
-        public Task<(Dictionary<string, List<AccountHistoryEvent>> trades, double dividends)> GetAccountHistory()
+        public async Task<(Dictionary<string, List<AccountHistoryEvent>> trades, double dividends)> GetAccountHistory()
         {
-            throw new NotImplementedException();
+            await Ready();
+            await _rateLimiter.LimitSchwabRate();
+            const string isodateformat = "yyyy-MM-ddTHH:mm:ss.fffZ";
+            var end = DateTime.UtcNow;
+            var start = end.AddMonths(-1);
+            var response = await _schwabClient.GetAsync(string.Format(SchwabConfig.TransactionHistoryTradeEndpoint, _accountHashValue, start.ToString(isodateformat), end.ToString(isodateformat)), _appCancellation.Token);
+            response.EnsureSuccessStatusCode();
+            var json = await response.Content.ReadAsStringAsync();
+            return (null, 0);
         }
 
         public void Dispose()

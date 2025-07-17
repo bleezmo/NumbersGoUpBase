@@ -10,8 +10,6 @@ namespace NumbersGoUp.Models
     {
         public string BrokerOrderId { get; set; }
 
-        public string ClientOrderId { get; set; }
-
         public DateTime? FilledAt { get; set; }
 
         public string Symbol { get; set; }

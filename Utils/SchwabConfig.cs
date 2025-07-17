@@ -17,8 +17,9 @@ namespace NumbersGoUpBase.Utils
         public const string AccountsEndpoint = "/trader/v1/accounts/accountNumbers";
         public const string AccountDetailsEndpoint = "/trader/v1/accounts/{0}?fields=positions";
         public const string MarketHoursEndpoint = "/marketdata/v1/markets/equity?date={0}";
-        public const string TransactionHistoryTradeEndpoint = "/trader/v1/accounts/{0}/transactions?startDate={1}&endDate={2}&types=TRADE";
+        public const string TransactionHistoryTradeEndpoint = "/trader/v1/accounts/{0}/transactions?startDate={1}&endDate={2}&types=TRADE&types=DIVIDEND_OR_INTEREST";
         public const string FinancialsEndpoint = "/marketdata/v1/instruments?symbol={0}&projection=fundamental";
+        public const string OrderEndpoint = "/trader/v1/accounts/{0}/orders";
     }
 
     public interface ISchwabAccessTokenService

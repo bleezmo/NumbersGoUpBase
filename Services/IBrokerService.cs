@@ -24,8 +24,6 @@ namespace NumbersGoUp.Services
 
         Task<BrokerOrder> Buy(string symbol, double qty, double? limit = null);
 
-        Task<BrokerOrder> ClosePositionAtMarket(string symbol);
-
         Task<IEnumerable<BrokerOrder>> GetOpenOrders();
 
         Task<IEnumerable<BrokerOrder>> GetClosedOrders(DateTime? from = null);
