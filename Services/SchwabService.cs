@@ -294,7 +294,7 @@ namespace NumbersGoUpBase.Services
         {
             await Ready();
             await _rateLimiter.LimitSchwabRate();
-            var order = limit.HasValue ? SchwabOrder.DefaultLimitSell(limit.Value, qty, symbol) : SchwabOrder.DefaultMarketSell(qty, symbol);
+            var order = limit.HasValue ? SchwabOrder.DefaultLimitSell(Math.Round(limit.Value, 2, MidpointRounding.AwayFromZero), qty, symbol) : SchwabOrder.DefaultMarketSell(qty, symbol);
             var response = await _schwabClient.PostAsJsonAsync(string.Format(SchwabConfig.OrderEndpoint, _accountHashValue), order, jsonSerializerOptions, _appCancellation.Token);
             response.EnsureSuccessStatusCode();
             var location = response.Headers.Location;
@@ -312,7 +312,7 @@ namespace NumbersGoUpBase.Services
         {
             await Ready();
             await _rateLimiter.LimitSchwabRate();
-            var order = limit.HasValue ? SchwabOrder.DefaultLimitBuy(limit.Value, qty, symbol) : SchwabOrder.DefaultMarketBuy(qty, symbol);
+            var order = limit.HasValue ? SchwabOrder.DefaultLimitBuy(Math.Round(limit.Value, 2, MidpointRounding.AwayFromZero), qty, symbol) : SchwabOrder.DefaultMarketBuy(qty, symbol);
             var response = await _schwabClient.PostAsJsonAsync(string.Format(SchwabConfig.OrderEndpoint, _accountHashValue), order, jsonSerializerOptions, _appCancellation.Token);
             response.EnsureSuccessStatusCode();
             var location = response.Headers.Location;
