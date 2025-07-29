@@ -8,16 +8,12 @@ using System.Threading.Tasks;
 namespace NumbersGoUp.Models
 {
     [Index(nameof(Symbol), IsUnique = true)]
-    [Index(nameof(LastCalculatedMillis))]
-    [Index(nameof(LastCalculatedPerformanceMillis))]
-    [Index(nameof(LastCalculatedAvgsMillis))]
     [Index(nameof(PerformanceVector))]
     public class Ticker : ITicker
     {
         public long Id { get; set; }
         public string Symbol { get; set; }
         public string Sector { get; set; }
-        public double MaxMonthConsecutiveLosses { get; set; }
         public double PerformanceVector { get; set; }
         public DateTime LastCalculated { get; set; }
         public long LastCalculatedMillis { get; set; }
@@ -27,6 +23,8 @@ namespace NumbersGoUp.Models
         public long? LastCalculatedAvgsMillis { get; set; }
         public double SMASMAAvg { get; set; }
         public double SMASMAStDev { get; set; }
+        public double SMA2SMAAvg { get; set; }
+        public double SMA2SMAStDev { get; set; }
         public double AlmaSma1Avg { get; set; }
         public double AlmaSma1StDev { get; set; }
         public double AlmaSma2Avg { get; set; }

@@ -87,7 +87,6 @@ namespace NumbersGoUp.Services
                 {
                     var nowMillis = now.ToUnixTimeMilliseconds();
                     var tickers = await stocksContext.Tickers.ToListAsync(_appCancellation.Token);
-                    //var nowTestMillis = new DateTimeOffset(now.AddYears(-5)).ToUnixTimeMilliseconds();
                     foreach (var ticker in tickers)
                     {
                         var bars = await stocksContext.BarMetrics.Where(b => b.Symbol == ticker.Symbol).OrderByDescending(b => b.BarDayMilliseconds).Take(PERFORMANCE_AVGS_LOOKBACK).ToArrayAsync(_appCancellation.Token);
@@ -103,6 +102,9 @@ namespace NumbersGoUp.Services
                         }
                         ticker.SMASMAAvg = bars.Average(b => b.SMASMA);
                         ticker.SMASMAStDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.SMASMA - ticker.SMASMAAvg, 2)) / bars.Length);
+
+                        ticker.SMA2SMAAvg = bars.Average(b => b.SMA2SMA);
+                        ticker.SMA2SMAStDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.SMA2SMA - ticker.SMA2SMAAvg, 2)) / bars.Length);
 
                         ticker.AlmaSma1Avg = bars.Average(b => b.AlmaSMA1);
                         ticker.AlmaSma1StDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.AlmaSMA1 - ticker.AlmaSma1Avg, 2)) / bars.Length);
@@ -121,16 +123,6 @@ namespace NumbersGoUp.Services
 
                         (ticker.WeekTrendAvg, ticker.WeekTrendStDev) = bars.CalculateAvgStDev(b => b.WeekTrend);
                         ticker.WeekTrendVelStDev = bars.CalculateVelocityStDev(b => b.WeekTrend);
-
-                        var maxMonthConsecutiveLosses = 0.0;
-                        var consecutiveLosses = 0;
-                        const int monthLength = 20;
-                        for (var i = 0; i < bars.Length; i += monthLength)
-                        {
-                            consecutiveLosses = bars.Skip(i).Take(monthLength).Average(b => b.SMASMA) > 0 ? 0 : (consecutiveLosses + 1);
-                            maxMonthConsecutiveLosses = maxMonthConsecutiveLosses < consecutiveLosses ? consecutiveLosses : maxMonthConsecutiveLosses;
-                        }
-                        ticker.MaxMonthConsecutiveLosses = maxMonthConsecutiveLosses;
 
                         ticker.LastCalculatedAvgs = now.UtcDateTime;
                         ticker.LastCalculatedAvgsMillis = nowMillis;
@@ -163,6 +155,8 @@ namespace NumbersGoUp.Services
                             TickerCopy(ticker, bankTicker, tickerPick);
                             ticker.LastCalculated = now.UtcDateTime;
                             ticker.LastCalculatedMillis = nowMillis;
+                            ticker.LastCalculatedPerformance = now.UtcDateTime;
+                            ticker.LastCalculatedPerformanceMillis = nowMillis;
                             stocksContext.Tickers.Update(ticker);
                         }
                         else if(ticker == null && bankTicker != null)
@@ -173,7 +167,9 @@ namespace NumbersGoUp.Services
                                 {
                                     Symbol = bankTicker.Symbol,
                                     LastCalculated = now.UtcDateTime,
-                                    LastCalculatedMillis = nowMillis
+                                    LastCalculatedMillis = nowMillis,
+                                    LastCalculatedPerformance = now.UtcDateTime,
+                                    LastCalculatedPerformanceMillis = nowMillis
                                 }, bankTicker, tickerPick));
                             }
                         }
@@ -182,6 +178,8 @@ namespace NumbersGoUp.Services
                             ticker.PerformanceVector = Math.Max(PICK_WEIGHT * tickerPick.Score, ticker.PerformanceVector - 5);
                             ticker.LastCalculated = now.UtcDateTime;
                             ticker.LastCalculatedMillis = nowMillis;
+                            ticker.LastCalculatedPerformance = now.UtcDateTime;
+                            ticker.LastCalculatedPerformanceMillis = nowMillis;
                             stocksContext.Tickers.Update(ticker);
                         }
                         else if (positions.Any(p => p.Symbol == tickerPick.Symbol))
@@ -202,6 +200,8 @@ namespace NumbersGoUp.Services
                                 ticker.PerformanceVector = Math.Max(ticker.PerformanceVector - 5, 0);
                                 ticker.LastCalculated = now.UtcDateTime;
                                 ticker.LastCalculatedMillis = nowMillis;
+                                ticker.LastCalculatedPerformance = now.UtcDateTime;
+                                ticker.LastCalculatedPerformanceMillis = nowMillis;
                                 stocksContext.Tickers.Update(ticker);
                             }
                             else if (bankTicker != null && hasPosition)
@@ -211,6 +211,8 @@ namespace NumbersGoUp.Services
                                 ticker.PerformanceVector = Math.Max(pv - 5, 0);
                                 ticker.LastCalculated = now.UtcDateTime;
                                 ticker.LastCalculatedMillis = nowMillis;
+                                ticker.LastCalculatedPerformance = now.UtcDateTime;
+                                ticker.LastCalculatedPerformanceMillis = nowMillis;
                                 stocksContext.Tickers.Update(ticker);
                             }
                             else if (!hasPosition)

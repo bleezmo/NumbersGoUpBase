@@ -305,10 +305,8 @@ namespace NumbersGoUp.Services
                 barMetric.AlmaSMA1 = GetPerc(alma - sma, smaUpper - sma);
                 barMetric.AlmaSMA2 = GetPerc(alma - sma2, sma2Upper - sma2);
                 barMetric.AlmaSMA3 = GetPerc(alma - sma3, sma3Upper - sma3);
-                barMetric.PriceSMA1 = GetPerc(bars[0].Price() - sma, smaUpper - sma);
-                barMetric.PriceSMA2 = GetPerc(bars[0].Price() - sma2, sma2Upper - sma2);
-                barMetric.PriceSMA3 = GetPerc(bars[0].Price() - sma3, sma3Upper - sma3);
                 barMetric.SMASMA = GetPerc(sma - sma3, sma3Upper - sma3);
+                barMetric.SMA2SMA = GetPerc(sma2 - sma3, sma3Upper - sma3);
                 barMetric.ProfitLossPerc = (bars.First().Price() - bars.Last().Price()) * 100 / bars.Last().Price();
                 barMetric.WeekTrend = GetWeekTrend(bars.Take(SMA2_LENGTH).Reverse().ToArray());
                 var volAlma = almaBars.ApplyAlma((bar) => Convert.ToDouble(bar.Volume));

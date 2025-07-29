@@ -149,7 +149,7 @@ namespace NumbersGoUp.Services
                     TimeLocalMilliseconds = new DateTimeOffset(brokerOrder.FilledAt.Value).ToUnixTimeMilliseconds(),
                     NextBuy = brokerOrder.FilledAt.Value.AddDays(daysToNextBuy).ToUniversalTime(),
                     NextSell = brokerOrder.FilledAt.Value.AddDays(daysToNextSell).ToUniversalTime(),
-                    ProfitLossPerc = order.AvgEntryPrice > 0 ? ((brokerOrder.AverageFillPrice.Value / order.AvgEntryPrice) - 1) : 0.0,
+                    ProfitLossPerc = order.AvgEntryPrice > 0 ? ((brokerOrder.AverageFillPrice.Value / order.AvgEntryPrice) - 1) : brokerOrder.AverageFillPrice.Value,
                     Account = order.Account,
                     BrokerOrderId = order.BrokerOrderId
                 };
@@ -309,7 +309,7 @@ namespace NumbersGoUp.Services
         }
 
         private async Task<double> GetCurrentPrice(StockRebalancer sr) => sr.Position?.AssetLastPrice != null ? sr.Position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(sr.Symbol)).Price;
-        private double priorityOrdering(BuyState bss) => bss.Rebalancer.Diff * bss.Rebalancer.Ticker.PerformanceVector;
+        private double priorityOrdering(BuyState bss) => bss.Rebalancer.Prediction.BuyMultiplier * bss.Rebalancer.Ticker.PerformanceVector;
         private async Task ExecuteBuys(StockRebalancer[] rebalancers, double remainingBuyAmount)
         {
             if (_disableBuys) 
