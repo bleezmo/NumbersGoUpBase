@@ -86,10 +86,25 @@ namespace NumbersGoUpBase.Services
                         dbTicker.DebtEquityRatio = fundamental.TotalDebtToEquity / 100;
                         dbTicker.DividendYield = fundamental.DividendYield / 100;
                         dbTicker.CurrentRatio = fundamental.CurrentRatio;
-                        dbTicker.Earnings = fundamental.EpsTTM * fundamental.SharesOutstanding;
                         dbTicker.EPS = fundamental.EpsTTM;
                         dbTicker.MarketCap = fundamental.MarketCap;
                         dbTicker.PERatio = fundamental.PeRatio;
+                        if (fundamental.SharesOutstanding == 0)
+                        {
+                            if(fundamental.PeRatio > 0 && fundamental.EpsTTM > 0)
+                            {
+                                fundamental.SharesOutstanding = fundamental.MarketCap / (fundamental.PeRatio * fundamental.EpsTTM);
+                            }
+                            else
+                            {
+                                var quote = await _brokerService.GetLastTrade(dbTicker.Symbol);
+                                if (quote != null && quote.Price > 0)
+                                {
+                                    fundamental.SharesOutstanding = fundamental.MarketCap / quote.Price;
+                                }
+                            }
+                        }
+                        dbTicker.Earnings = fundamental.EpsTTM * fundamental.SharesOutstanding;
                         dbTicker.Shares = fundamental.SharesOutstanding;
                         if (isNew) { toAdd.Add(dbTicker); }
                         else { toUpdate.Add(dbTicker); }
