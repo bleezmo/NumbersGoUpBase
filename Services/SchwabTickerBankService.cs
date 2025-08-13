@@ -180,8 +180,8 @@ namespace NumbersGoUpBase.Services
                     minmax5.Run(ticker);
                     minmax6.Run(ticker);
                 }
-                Func<BankTicker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 30) +
-                                                                     (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 10) +
+                Func<BankTicker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 35) +
+                                                                     (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 5) +
                                                                      (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 40) +
                                                                      (performanceFn4(t).DoubleReduce(minmax4.Max, minmax4.Min) * 5) +
                                                                      (performanceFn5(t).DoubleReduce(minmax5.Max, minmax5.Min) * 5) +
