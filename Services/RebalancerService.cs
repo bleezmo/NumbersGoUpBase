@@ -205,7 +205,7 @@ namespace NumbersGoUpBase.Services
             var performanceMultiplier = MeetsRequirements ? 1.0 : 0.9;
             if (TickerPrediction != null)
             {
-                performanceMultiplier += (TickerPrediction.BuyMultiplier - TickerPrediction.SellMultiplier).DoubleReduce(1, -1).Curve6(3.2).DoubleReduce(1, 0, 0.6, -0.4);
+                performanceMultiplier += (TickerPrediction.BuyMultiplier - TickerPrediction.SellMultiplier).DoubleReduce(1, -1).Curve6(3.2).DoubleReduce(1, 0, 0.5, -0.5);
             }
             return Math.Max(performanceMultiplier, 0);
         }

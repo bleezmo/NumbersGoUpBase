@@ -205,8 +205,13 @@ namespace NumbersGoUp.Services
             rebalancers = rebalancers.Where(r => !currentOrders.Any(o => o.Symbol == r.Symbol)).Where(r => !remainingOrders.Any(o => o.Symbol == r.Symbol));
             var (stocks, bonds) = (rebalancers.Where(r => r.IsStock && !_ignoreList.Any(s => s == r.Symbol)).Select(r => r as StockRebalancer), 
                                    rebalancers.Where(r => r.IsBond).Select(r => r as BondRebalancer));
-            var maxDailyBuy = stocks.Any(r => r.Diff > 0) ? Math.Max((await Task.WhenAll(stocks.Where(r => r.Diff > 0).Select(sr => GetCurrentPrice(sr)))).Max(), _maxDailyBuy) : _maxDailyBuy;
-            var remainingBuyAmount = Math.Min(maxDailyBuy, _account.Balance.TradableCash);
+            var remainingBuyAmount = _account.Balance.TradableCash;
+            if(_maxDailyBuy < _account.Balance.TradableCash)
+            {
+                var maxDailyBuy = Math.Max(_maxDailyBuy, _account.Balance.TradeableEquity * 0.02);
+                maxDailyBuy = stocks.Any(r => r.Diff > 0) ? Math.Max((await Task.WhenAll(stocks.Where(r => r.Diff > 0).Select(GetCurrentPrice))).Max(), maxDailyBuy) : maxDailyBuy;
+                remainingBuyAmount = Math.Min(maxDailyBuy, remainingBuyAmount);
+            }
 
             remainingBuyAmount -= currentOrders.Select(o => o.Side == OrderSide.Buy ? o.AppliedAmt : 0).Sum();
             _logger.LogInformation($"Starting balance {_account.Balance.TradableCash:C2} and remaining buy amount {remainingBuyAmount:C2}");
