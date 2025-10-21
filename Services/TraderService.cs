@@ -13,7 +13,6 @@ namespace NumbersGoUp.Services
         public const double MAX_COOLDOWN_DAYS = 35;
         private const string DISABLE_SELLS = "DisableSells";
         private const string DISABLE_BUYS = "DisableBuys";
-        public const string MAX_DAILY_BUY = "MaxDailyBuy";
         private const string IGNORE_LIST = "IgnoreList";
 
         private readonly IAppCancellation _appCancellation;
@@ -26,7 +25,6 @@ namespace NumbersGoUp.Services
         private readonly IStocksContextFactory _contextFactory;
         private readonly bool _disableBuys;
         private readonly bool _disableSells;
-        private readonly double _maxDailyBuy;
         private readonly string[] _ignoreList;
         private Account _account;
         private double _cashEquityRatio;
@@ -44,7 +42,6 @@ namespace NumbersGoUp.Services
             _contextFactory = contextFactory;
             _disableBuys = bool.TryParse(configuration[DISABLE_BUYS], out var disableBuys) ? disableBuys : false;
             _disableSells = bool.TryParse(configuration[DISABLE_SELLS], out var disableSells) ? disableSells : false;
-            _maxDailyBuy = double.TryParse(configuration[MAX_DAILY_BUY], out var maxBuy) ? maxBuy : 2000;
             var ignoreList = configuration[IGNORE_LIST];
             _ignoreList = string.IsNullOrWhiteSpace(ignoreList) ? new string[] { } : ignoreList.Split(',').Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
         }
@@ -206,10 +203,10 @@ namespace NumbersGoUp.Services
             var (stocks, bonds) = (rebalancers.Where(r => r.IsStock && !_ignoreList.Any(s => s == r.Symbol)).Select(r => r as StockRebalancer), 
                                    rebalancers.Where(r => r.IsBond).Select(r => r as BondRebalancer));
             var remainingBuyAmount = _account.Balance.TradableCash;
-            if(_maxDailyBuy < _account.Balance.TradableCash)
+            var maxDailyBuy = _account.Balance.TradeableEquity * 0.02;
+            if (maxDailyBuy < remainingBuyAmount)
             {
-                var maxDailyBuy = Math.Max(_maxDailyBuy, _account.Balance.TradeableEquity * 0.02);
-                maxDailyBuy = stocks.Any(r => r.Diff > 0) ? Math.Max((await Task.WhenAll(stocks.Where(r => r.Diff > 0).Select(GetCurrentPrice))).Max(), maxDailyBuy) : maxDailyBuy;
+                maxDailyBuy = Math.Max(stocks.Where(r => r.Diff > 0).Select(r => r.Position?.AssetLastPrice ?? 0.0).Max(0.0), maxDailyBuy);
                 remainingBuyAmount = Math.Min(maxDailyBuy, remainingBuyAmount);
             }
 
@@ -330,20 +327,24 @@ namespace NumbersGoUp.Services
                 double percProfit = 0.0;
                 if(rebalancer.Position != null) 
                 {
-                    if (rebalancer.Position.UnrealizedProfitLossPercent.HasValue)
+                    var position = rebalancer.Position;
+                    if (position.UnrealizedProfitLossPercent.HasValue)
                     {
-                        percProfit = rebalancer.Position.UnrealizedProfitLossPercent.Value * 100;
+                        percProfit = position.UnrealizedProfitLossPercent.Value * 100;
                     }
                     else
                     {
-                        var currentPrice = await GetCurrentPrice(rebalancer);
-                        if(rebalancer.Position.CostBasis > 0)
+                        if(position.CostBasis > 0 && position.AssetLastPrice.HasValue)
                         {
-                            percProfit = (currentPrice - rebalancer.Position.CostBasis) * 100 / rebalancer.Position.CostBasis;
+                            percProfit = (position.AssetLastPrice.Value - position.CostBasis) * 100 / position.CostBasis;
                         }
-                        else
+                        else if(position.CostBasis > 0)
                         {
-                            _logger.LogError($"Cost basis somehow zero. Ticker {rebalancer.Position.Symbol}");
+                            _logger.LogError($"Could not retrieve current price. Ticker {position.Symbol}");
+                        }
+                        else if (position.AssetLastPrice.HasValue)
+                        {
+                            _logger.LogError($"Cost basis somehow zero. Ticker {position.Symbol}");
                         }
                     }
                 }

@@ -87,6 +87,7 @@ namespace NumbersGoUpBase.Services
                         dbTicker.DividendYield = fundamental.DividendYield / 100;
                         dbTicker.CurrentRatio = fundamental.CurrentRatio;
                         dbTicker.EPS = fundamental.EpsTTM;
+                        dbTicker.Growth = (0.6 * fundamental.RevChangeTTM) + (0.4 * Math.Min(fundamental.EpsChangePercentTTM, fundamental.RevChangeTTM));
                         dbTicker.MarketCap = fundamental.MarketCap;
                         dbTicker.PERatio = fundamental.PeRatio;
                         if (fundamental.SharesOutstanding == 0)
@@ -160,16 +161,14 @@ namespace NumbersGoUpBase.Services
                 }
                 await stocksContext.SaveChangesAsync(_appCancellation.Token);
                 Func<BankTicker, double> performanceFn1 = (t) => Math.Sqrt(t.Earnings);
-                Func<BankTicker, double> performanceFn2 = (t) => t.EPS; 
+                Func<BankTicker, double> performanceFn2 = (t) => t.Growth;
                 Func<BankTicker, double> performanceFn3 = (t) => t.PriceChangeAvg;
                 Func<BankTicker, double> performanceFn4 = (t) => Math.Max(t.CurrentRatio, 0);
-                Func<BankTicker, double> performanceFn5 = (t) => t.DividendYield.ZeroReduceSlow(0.06, 0);
                 Func<BankTicker, double> performanceRFn1 = (t) => Math.Max(t.DebtEquityRatio, 0);
                 var minmax1 = new MinMaxStore<BankTicker>(performanceFn1);
                 var minmax2 = new MinMaxStore<BankTicker>(performanceFn2);
                 var minmax3 = new MinMaxStore<BankTicker>(performanceFn3);
                 var minmax4 = new MinMaxStore<BankTicker>(performanceFn4);
-                var minmax5 = new MinMaxStore<BankTicker>(performanceFn5);
                 var minmax6 = new MinMaxStore<BankTicker>(performanceRFn1);
                 foreach (var ticker in tickers)
                 {
@@ -177,14 +176,12 @@ namespace NumbersGoUpBase.Services
                     minmax2.Run(ticker);
                     minmax3.Run(ticker);
                     minmax4.Run(ticker);
-                    minmax5.Run(ticker);
                     minmax6.Run(ticker);
                 }
-                Func<BankTicker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 35) +
-                                                                     (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 5) +
-                                                                     (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 40) +
+                Func<BankTicker, double> performanceFnTotal = (t) => (performanceFn1(t).DoubleReduce(minmax1.Max, minmax1.Min) * 40) +
+                                                                     (performanceFn2(t).DoubleReduce(minmax2.Max, minmax2.Min) * 15) +
+                                                                     (performanceFn3(t).DoubleReduce(minmax3.Max, minmax3.Min) * 30) +
                                                                      (performanceFn4(t).DoubleReduce(minmax4.Max, minmax4.Min) * 5) +
-                                                                     (performanceFn5(t).DoubleReduce(minmax5.Max, minmax5.Min) * 5) +
                                                                      ((1 - performanceRFn1(t).DoubleReduce(minmax6.Max, minmax6.Min)) * 10);
                 var minmaxTotal = new MinMaxStore<BankTicker>(performanceFnTotal);
                 foreach (var ticker in tickers)

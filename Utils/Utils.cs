@@ -365,6 +365,11 @@ namespace NumbersGoUp.Utils
             }
             return (max, min);
         }
+        public static double Max(this IEnumerable<double> values, double defaultMin)
+        {
+            if(values == null || !values.Any()) {  return defaultMin; }
+            else { return values.Max(); }
+        }
     }
     public class MinMaxStore<T>
     {
@@ -387,6 +392,6 @@ namespace NumbersGoUp.Utils
             return result;
         }
 
-        public double Rank(T data) => _perfFn(data).DoubleReduce(Max, Min);
+        public double Rank(T data) => Max > Min ? _perfFn(data).DoubleReduce(Max, Min) : 1;
     }
 }

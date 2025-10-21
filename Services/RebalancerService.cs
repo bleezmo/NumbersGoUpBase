@@ -189,7 +189,7 @@ namespace NumbersGoUpBase.Services
 
         private static double PerformanceValue(PerformanceTicker performanceTicker)
         {
-            const double coeff = 0.4;
+            const double coeff = 0.5;
             return (coeff * performanceTicker.Ticker.PerformanceVector.DoubleReduce(100, 0)) + ((1 - coeff) * (performanceTicker.TickerPrediction?.BuyMultiplier ?? 0));
         }
     }

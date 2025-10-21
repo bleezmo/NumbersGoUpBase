@@ -25,6 +25,7 @@ namespace NumbersGoUp.Models
         public double DebtEquityRatio { get; set; }
         public double DividendYield { get; set; }
         public double DebtMinusCash { get; set; }
+        public double Growth { get; set; }
         public double Shares { get; set; }
         public double PriceChangeAvg { get; set; }
         public double PerformanceVector { get; set; }
