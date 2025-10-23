@@ -189,7 +189,7 @@ namespace NumbersGoUpBase.Services
 
         private static double PerformanceValue(PerformanceTicker performanceTicker)
         {
-            const double coeff = 0.5;
+            const double coeff = 0.4;
             return (coeff * performanceTicker.Ticker.PerformanceVector.DoubleReduce(100, 0)) + ((1 - coeff) * (performanceTicker.TickerPrediction?.BuyMultiplier ?? 0));
         }
     }
@@ -203,9 +203,10 @@ namespace NumbersGoUpBase.Services
         public double PerformanceMultiplier()
         {
             var performanceMultiplier = MeetsRequirements ? 1.0 : 0.9;
+            var buyMultiplierOffset = Ticker.PerformanceVector.DoubleReduce(100, 0, 1, 0);
             if (TickerPrediction != null)
             {
-                performanceMultiplier += (TickerPrediction.BuyMultiplier - TickerPrediction.SellMultiplier).DoubleReduce(1, -1).Curve6(3.2).DoubleReduce(1, 0, 0.5, -0.5);
+                performanceMultiplier += (TickerPrediction.BuyMultiplier - TickerPrediction.SellMultiplier).DoubleReduce(1, -1).Curve6(3.2).DoubleReduce(1, 0, buyMultiplierOffset, -0.5);
             }
             return Math.Max(performanceMultiplier, 0);
         }
