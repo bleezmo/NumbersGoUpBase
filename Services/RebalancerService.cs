@@ -203,7 +203,7 @@ namespace NumbersGoUpBase.Services
         public double PerformanceMultiplier()
         {
             var performanceMultiplier = MeetsRequirements ? 1.0 : 0.9;
-            var buyMultiplierOffset = Ticker.PerformanceVector.DoubleReduce(100, 0, 1, 0);
+            var buyMultiplierOffset = Ticker.PerformanceVector.DoubleReduce(100, 0);
             if (TickerPrediction != null)
             {
                 performanceMultiplier += (TickerPrediction.BuyMultiplier - TickerPrediction.SellMultiplier).DoubleReduce(1, -1).Curve6(3.2).DoubleReduce(1, 0, buyMultiplierOffset, -0.5);
