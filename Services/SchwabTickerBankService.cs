@@ -160,7 +160,7 @@ namespace NumbersGoUpBase.Services
                     }
                 }
                 await stocksContext.SaveChangesAsync(_appCancellation.Token);
-                Func<BankTicker, double> performanceFn1 = (t) => Math.Sqrt(t.Earnings);
+                Func<BankTicker, double> performanceFn1 = (t) => t.Earnings;
                 Func<BankTicker, double> performanceFn2 = (t) => t.Growth;
                 Func<BankTicker, double> performanceFn3 = (t) => t.PriceChangeAvg;
                 Func<BankTicker, double> performanceFn4 = (t) => Math.Max(t.CurrentRatio, 0);
