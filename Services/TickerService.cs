@@ -21,7 +21,7 @@ namespace NumbersGoUp.Services
         public const DayOfWeek RUN_AVGS = DayOfWeek.Wednesday;
         public const DayOfWeek RUN_LOAD = DayOfWeek.Tuesday;
 
-        private const double PICK_WEIGHT = 0.15;
+        private const double DEFAULT_PICK_WEIGHT = 0.2;
 
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<TickerService> _logger;
@@ -29,9 +29,10 @@ namespace NumbersGoUp.Services
         private readonly IStocksContextFactory _contextFactory;
         private readonly IRuntimeSettings _runtimeSettings;
         private readonly ITickerPickProcessor _tickerPickProcessor;
+        private readonly double _pickWeight;
 
         public TickerService(IStocksContextFactory contextFactory, IRuntimeSettings runtimeSettings, IAppCancellation appCancellation, 
-                                ILogger<TickerService> logger, IBrokerService brokerService, ITickerPickProcessor tickerPickProcessor)
+                                ILogger<TickerService> logger, IBrokerService brokerService, ITickerPickProcessor tickerPickProcessor, IConfiguration configuration)
         {
             _appCancellation = appCancellation;
             _logger = logger;
@@ -39,6 +40,8 @@ namespace NumbersGoUp.Services
             _contextFactory = contextFactory;
             _runtimeSettings = runtimeSettings;
             _tickerPickProcessor = tickerPickProcessor;
+            _pickWeight = double.TryParse(configuration["PickWeight"], out var pickWeight) ? pickWeight : DEFAULT_PICK_WEIGHT;
+            
         }
         public async Task<IEnumerable<Ticker>> GetTickers()
         {
@@ -152,7 +155,8 @@ namespace NumbersGoUp.Services
                         var ticker = tickers.FirstOrDefault(t => t.Symbol == tickerPick.Symbol);
                         if(ticker != null && bankTicker != null)
                         {
-                            TickerCopy(ticker, bankTicker, tickerPick);
+                            TickerCopy(ticker, bankTicker);
+                            ticker.PerformanceVector = (_pickWeight * tickerPick.Score) + ((1 - _pickWeight) * bankTicker.PerformanceVector);
                             ticker.LastCalculated = now.UtcDateTime;
                             ticker.LastCalculatedMillis = nowMillis;
                             ticker.LastCalculatedPerformance = now.UtcDateTime;
@@ -163,19 +167,22 @@ namespace NumbersGoUp.Services
                         {
                             if(tickerPick.Score > 0)
                             {
-                                stocksContext.Tickers.Add(TickerCopy(new Ticker
+                                ticker = new Ticker
                                 {
                                     Symbol = bankTicker.Symbol,
                                     LastCalculated = now.UtcDateTime,
                                     LastCalculatedMillis = nowMillis,
                                     LastCalculatedPerformance = now.UtcDateTime,
                                     LastCalculatedPerformanceMillis = nowMillis
-                                }, bankTicker, tickerPick));
+                                };
+                                TickerCopy(ticker, bankTicker);
+                                ticker.PerformanceVector = (_pickWeight * tickerPick.Score) + ((1 - _pickWeight) * bankTicker.PerformanceVector);
+                                stocksContext.Tickers.Add(ticker);
                             }
                         }
                         else if(ticker != null && bankTicker == null)
                         {
-                            ticker.PerformanceVector = Math.Max(PICK_WEIGHT * tickerPick.Score, ticker.PerformanceVector - 5);
+                            ticker.PerformanceVector = Math.Max(_pickWeight * tickerPick.Score, ticker.PerformanceVector - 5);
                             ticker.LastCalculated = now.UtcDateTime;
                             ticker.LastCalculatedMillis = nowMillis;
                             ticker.LastCalculatedPerformance = now.UtcDateTime;
@@ -231,12 +238,6 @@ namespace NumbersGoUp.Services
             ticker.DividendYield = bankTicker.DividendYield;
             ticker.Earnings = bankTicker.Earnings;
             ticker.PerformanceVector = 0;
-        }
-        private static Ticker TickerCopy(Ticker ticker, BankTicker bankTicker, TickerPick tickerPick)
-        {
-            TickerCopy(ticker, bankTicker);
-            ticker.PerformanceVector = (PICK_WEIGHT * tickerPick.Score) + ((1 - PICK_WEIGHT) * bankTicker.PerformanceVector);
-            return ticker;
         }
     }
 }

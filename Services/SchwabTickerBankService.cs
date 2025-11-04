@@ -1,14 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using NumbersGoUp.Models;
 using NumbersGoUp.Services;
 using NumbersGoUp.Utils;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace NumbersGoUpBase.Services
 {
@@ -25,7 +19,7 @@ namespace NumbersGoUpBase.Services
         private readonly IRuntimeSettings _runtimeSettings;
         private readonly SchwabService _brokerService;
 
-        public SchwabTickerBankService(IConfiguration configuration, IStocksContextFactory contextFactory, IRuntimeSettings runtimeSettings, ITickerPickProcessor tickerPickProcessor,
+        public SchwabTickerBankService(IStocksContextFactory contextFactory, IRuntimeSettings runtimeSettings, ITickerPickProcessor tickerPickProcessor,
                                 IAppCancellation appCancellation, ILogger<SchwabTickerBankService> logger, IBrokerService brokerService)
         {
             _appCancellation = appCancellation;
