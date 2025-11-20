@@ -140,6 +140,7 @@ namespace NumbersGoUp.Services
             var now = DateTimeOffset.UtcNow;
             if (_runtimeSettings.ForceDataCollection || now.DayOfWeek == RUN_LOAD) //don't need to check every day
             {
+                _logger.LogInformation($"Running ticker performance check using PickWeight: {_pickWeight}");
                 await _brokerService.Ready();
                 var nowMillis = now.ToUnixTimeMilliseconds();
                 var positions = await _brokerService.GetPositions();
