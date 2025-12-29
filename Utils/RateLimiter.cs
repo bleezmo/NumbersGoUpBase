@@ -23,7 +23,7 @@ namespace NumbersGoUp.Utils
         }
         public async Task LimitTradierRate() => await LimitRate(_environment.IsProduction() ? 5000 : 10000, _semTradier);
         public async Task LimitTradierTradeRate() => await LimitRate(10000, _semTradierTrade);
-        public async Task LimitSchwabRate() => await LimitRate(600, _semSchwab);
+        public async Task LimitSchwabRate() => await LimitRate(500, _semSchwab);
         private async Task LimitRate(int limit, SemaphoreSlim sem)
         {
             await sem.WaitAsync(_appCancellation.Token);

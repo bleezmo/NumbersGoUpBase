@@ -99,7 +99,7 @@ namespace NumbersGoUpBase.Services
                                 }
                             }
                         }
-                        dbTicker.Earnings = fundamental.EpsTTM * fundamental.SharesOutstanding;
+                        dbTicker.Earnings = Math.Round(fundamental.EpsTTM * fundamental.SharesOutstanding);
                         dbTicker.Shares = fundamental.SharesOutstanding;
                         if (isNew) { toAdd.Add(dbTicker); }
                         else { toUpdate.Add(dbTicker); }
