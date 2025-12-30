@@ -128,10 +128,16 @@ namespace NumbersGoUpBase.Services
                         }
                         else
                         {
-                            diffPerc *= prediction.SellMultiplier.Curve3(2);
+                            double sellModifier = 2;
+                            if (position.UnrealizedProfitLossPercent.HasValue)
+                            {
+                                var plperc = position.UnrealizedProfitLossPercent.Value.DoubleReduce(1.1, -1, 2, -1.9);
+                                sellModifier += plperc;
+                            }
+                            diffPerc *= prediction.SellMultiplier.Curve3(2) / sellModifier;
                         }
 
-                        var diffCutoff = diff < 0 ? 20.0 : 10.0;
+                        const double diffCutoff = 10.0;
 
                         if (Math.Abs(diffPerc) > diffCutoff)
                         {
