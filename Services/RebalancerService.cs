@@ -199,8 +199,12 @@ namespace NumbersGoUpBase.Services
 
         private static double PerformanceValue(PerformanceTicker performanceTicker)
         {
-            const double coeff = 0.4;
-            return (coeff * performanceTicker.Ticker.PerformanceVector.DoubleReduce(100, 0)) + ((1 - coeff) * (performanceTicker.TickerPrediction?.BuyMultiplier ?? 0));
+            double predictMultiplier = 0;
+            if (performanceTicker.TickerPrediction != null)
+            {
+                predictMultiplier = Math.Max(performanceTicker.TickerPrediction.BuyMultiplier - performanceTicker.TickerPrediction.SellMultiplier, 0) * 6;
+            }
+            return performanceTicker.Ticker.PerformanceVector.DoubleReduce(100, 0, 4, 0) + predictMultiplier;
         }
     }
     public class PerformanceTicker
