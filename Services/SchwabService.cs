@@ -278,7 +278,7 @@ namespace NumbersGoUpBase.Services
                 {
                     BuyingPower = 0,
                     LastEquity = _account.CurrentBalances.LiquidationValue,
-                    TradableCash = Math.Max(_account.CurrentBalances.CashAvailableForTrading - _cashMinimum, 0),
+                    TradableCash = Math.Max(_account.CurrentBalances.CashBalance - _cashMinimum, 0),
                     TradeableEquity = Math.Max(_account.CurrentBalances.LiquidationValue - _cashMinimum, 0)
                 }
             };
