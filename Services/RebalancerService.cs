@@ -105,11 +105,7 @@ namespace NumbersGoUpBase.Services
                 var position = performanceTicker.Position;
                 if (position == null && targetValue > 0 && performanceTicker.MeetsRequirements && cash > 0)
                 {
-                    var cutoff = 1;// performanceTicker.TickerPrediction.BuyMultiplier - performanceTicker.TickerPrediction.SellMultiplier;
-                    if (cutoff > 0)
-                    {
-                        rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, targetValue * (1 - performanceTicker.TickerPrediction.SellMultiplier), prediction));
-                    }
+                    rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, targetValue * (1 - performanceTicker.TickerPrediction.SellMultiplier), prediction));
                 }
                 else if (position != null && position.MarketValue.HasValue && position.MarketValue.Value > 0)
                 {
@@ -203,7 +199,6 @@ namespace NumbersGoUpBase.Services
             if (performanceTicker.TickerPrediction != null)
             {
                 predictMultiplier = Math.Max(performanceTicker.TickerPrediction.BuyMultiplier - performanceTicker.TickerPrediction.SellMultiplier, 0) * performanceTicker.Ticker.PerformanceVector.DoubleReduce(100, 0, 6, 0);
-                //predictMultiplier = (1 - performanceTicker.TickerPrediction.SellMultiplier) * performanceTicker.Ticker.PerformanceVector.DoubleReduce(100, 0, 6, 0);
             }
             return performanceTicker.Ticker.PerformanceVector.DoubleReduce(100, 0, 4, 0) + predictMultiplier;
         }
@@ -222,7 +217,6 @@ namespace NumbersGoUpBase.Services
             if (TickerPrediction != null)
             {
                 performanceMultiplier += (1 - TickerPrediction.SellMultiplier.Curve6(3.2)).DoubleReduce(1, 0, buyMultiplierOffset, -0.5);
-                //performanceMultiplier += (TickerPrediction.BuyMultiplier - TickerPrediction.SellMultiplier).DoubleReduce(1, -1).Curve6(3.2).DoubleReduce(1, 0, buyMultiplierOffset, -0.5);
             }
             return Math.Max(performanceMultiplier, 0);
         }
