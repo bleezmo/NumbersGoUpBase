@@ -14,6 +14,7 @@ namespace NumbersGoUpBase.Services
 {
     public class RebalancerService
     {
+        public const int MAX_TICKER_COUNT = 50;
         private readonly ILogger<PredicterService> _logger;
         private readonly TickerService _tickerService;
         private readonly PredicterService _predicterService;
@@ -51,8 +52,7 @@ namespace NumbersGoUpBase.Services
                     _logger.LogError($"Ticker not found for position {position.Symbol}. Manual intervention required");
                 }
             }
-            const int maxTickerCount = 50;
-            var performanceCutoff = allTickers.Count() > maxTickerCount ? allTickers.OrderByDescending(t => t.PerformanceVector).Skip(maxTickerCount).First().PerformanceVector : 0;
+            var performanceCutoff = allTickers.Count() > MAX_TICKER_COUNT ? allTickers.OrderByDescending(t => t.PerformanceVector).Skip(MAX_TICKER_COUNT).First().PerformanceVector : 0;
             var selectedTickers = new List<PerformanceTicker>();
             foreach(var ticker in allTickers)
             {
@@ -216,7 +216,7 @@ namespace NumbersGoUpBase.Services
             var buyMultiplierOffset = Ticker.PerformanceVector.DoubleReduce(100, 0);
             if (TickerPrediction != null)
             {
-                performanceMultiplier += (1 - TickerPrediction.SellMultiplier.Curve6(3.2)).DoubleReduce(1, 0, buyMultiplierOffset, -0.5);
+                performanceMultiplier += (1 - TickerPrediction.SellMultiplier.Curve6(3.2)).DoubleReduce(1, 0, buyMultiplierOffset, -1);
             }
             return Math.Max(performanceMultiplier, 0);
         }
