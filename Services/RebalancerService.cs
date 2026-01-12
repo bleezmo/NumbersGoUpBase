@@ -14,6 +14,7 @@ namespace NumbersGoUpBase.Services
 {
     public class RebalancerService
     {
+        public const int MAX_TICKER_COUNT = 50;
         private readonly ILogger<PredicterService> _logger;
         private readonly TickerService _tickerService;
         private readonly PredicterService _predicterService;
@@ -33,17 +34,52 @@ namespace NumbersGoUpBase.Services
             _predicterService = predicterService;
             _tickerPickProcessor = tickerPickProcessor;
         }
+#if DEBUG
+        private static Ticker[] _tickers;
+        public async Task<Ticker[]> PerformanceVectorOverride()
+        {
+            if(_tickers == null)
+            {
+                _logger.LogInformation("Generating test performance data");
+                var rnd = new Random();
+                var tickers = (await _tickerService.GetFullTickerList()).Where(t => t.PerformanceVector > 0).ToArray();
+                foreach (var ticker in tickers)
+                {
+                    ticker.PerformanceVector = rnd.NextDouble() * 100;
+                }
+                _tickers = tickers;
+            }
+            else
+            {
+                var tickers = (await _tickerService.GetFullTickerList()).ToArray();
+                foreach (var ticker in _tickers)
+                {
+                    ticker.PerformanceVector = tickers.FirstOrDefault(t => t.Symbol == ticker.Symbol).PerformanceVector;
+                }
+                _tickers = tickers;
+            }
+            return _tickers;
+        }
+#endif
         public async Task<IEnumerable<IRebalancer>> Rebalance(IEnumerable<Position> positions, Balance balance, DateTime? day = null)
         {
             var equity = balance.TradeableEquity;
             var cash = balance.TradableCash;
-            if(equity < 1)
+#if DEBUG
+            var sellNegModifier = 0;
+#else
+            var sellNegModifier = cash < 0 ? 0.2 : 0;
+#endif
+            if (equity < 1)
             {
                 _logger.LogError($"No equity available! Skipping rebalance.");
                 return Enumerable.Empty<IRebalancer>();
             }
+#if DEBUG
+            var allTickers = day.HasValue ? await PerformanceVectorOverride() : await _tickerService.GetFullTickerList();
+#else
             var allTickers = await _tickerService.GetFullTickerList();
-            var tickerPicks = await _tickerPickProcessor.GetTickers();
+#endif
             foreach(var position in positions.Where(p => !BondSymbols.Contains(p.Symbol)))
             {
                 if(!allTickers.Any(t => t.Symbol == position.Symbol))
@@ -51,8 +87,7 @@ namespace NumbersGoUpBase.Services
                     _logger.LogError($"Ticker not found for position {position.Symbol}. Manual intervention required");
                 }
             }
-            const int maxTickerCount = 50;
-            var performanceCutoff = allTickers.Count() > maxTickerCount ? allTickers.OrderByDescending(t => t.PerformanceVector).Skip(maxTickerCount).First().PerformanceVector : 0;
+            var performanceCutoff = allTickers.Count() > MAX_TICKER_COUNT ? allTickers.OrderByDescending(t => t.PerformanceVector).Skip(MAX_TICKER_COUNT).First().PerformanceVector : 0;
             var selectedTickers = new List<PerformanceTicker>();
             foreach(var ticker in allTickers)
             {
@@ -79,6 +114,11 @@ namespace NumbersGoUpBase.Services
             {
                 performanceTicker.TickerPrediction = day.HasValue ? await _predicterService.Predict(performanceTicker.Ticker, day.Value) : 
                                                                     await _predicterService.Predict(performanceTicker.Ticker);
+                if(cash < 0 && performanceTicker.TickerPrediction != null)
+                {
+                    performanceTicker.TickerPrediction.BuyMultiplier *= (1 - sellNegModifier);
+                    performanceTicker.TickerPrediction.SellMultiplier += (1 - performanceTicker.TickerPrediction.SellMultiplier) * sellNegModifier;
+                }
                 performanceTicker.Position = positions.FirstOrDefault(p => p.Symbol == performanceTicker.Ticker.Symbol);
                 if(performanceTicker.Position != null && performanceTicker.TickerPrediction == null)
                 {
@@ -92,7 +132,7 @@ namespace NumbersGoUpBase.Services
                 _logger.LogError("Total Performance calculation error. Cancelling rebalancer process.");
                 return rebalancers;
             }
-            var tickerEquity = equity * _predicterService.EncouragementMultiplier.DoubleReduce(0, -1) * _stockBondPerc;
+            var tickerEquity = equity * _predicterService.EncouragementMultiplier.DoubleReduce(0, -1) * _stockBondPerc * (cash < 0 ? (1 - sellNegModifier) : 1);
             foreach (var performanceTicker in selectedTickers)
             {
                 var prediction = performanceTicker.TickerPrediction;
@@ -216,7 +256,7 @@ namespace NumbersGoUpBase.Services
             var buyMultiplierOffset = Ticker.PerformanceVector.DoubleReduce(100, 0);
             if (TickerPrediction != null)
             {
-                performanceMultiplier += (1 - TickerPrediction.SellMultiplier.Curve6(3.2)).DoubleReduce(1, 0, buyMultiplierOffset, -0.5);
+                performanceMultiplier += (1 - TickerPrediction.SellMultiplier.Curve6(3.2)).DoubleReduce(1, 0, buyMultiplierOffset, -1);
             }
             return Math.Max(performanceMultiplier, 0);
         }
