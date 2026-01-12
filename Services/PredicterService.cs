@@ -12,7 +12,6 @@ namespace NumbersGoUp.Services
 {
     public class PredicterService
     {
-        public static double? BullBearTest = null;
         public const int FEATURE_HISTORY_DAY = 7;
         private readonly ILogger<PredicterService> _logger;
         private readonly IAppCancellation _appCancellation;
