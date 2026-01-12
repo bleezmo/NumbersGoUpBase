@@ -274,7 +274,7 @@ namespace NumbersGoUp.Services
                 }
                 if(qty > 0)
                 {
-                    _logger.LogInformation($"Selling {qty} shares of {rebalancer.Symbol} with multiplier {rebalancer.Prediction.SellMultiplier}");
+                    _logger.LogInformation($"Selling {qty} shares of {rebalancer.Symbol} with buy/sell multiplier {rebalancer.Prediction.BuyMultiplier}/{rebalancer.Prediction.SellMultiplier}");
                     BrokerOrder brokerOrder = await _brokerService.Sell(rebalancer.Symbol, qty, targetPrice);
                     if (brokerOrder != null)
                     {
@@ -376,7 +376,7 @@ namespace NumbersGoUp.Services
                 if(qty > 0)
                 {
                     buyAmt = qty * targetPrice;
-                    _logger.LogInformation($"Buying {qty} shares of {rebalancer.Symbol} with multiplier {rebalancer.Prediction.BuyMultiplier}");
+                    _logger.LogInformation($"Buying {qty} shares of {rebalancer.Symbol} with buy/sell multiplier {rebalancer.Prediction.BuyMultiplier}/{rebalancer.Prediction.SellMultiplier}");
                     var brokerOrder = await _brokerService.Buy(rebalancer.Symbol, qty, targetPrice);
                     if (brokerOrder != null)
                     {
