@@ -35,48 +35,37 @@ namespace NumbersGoUpBase.Services
             _tickerPickProcessor = tickerPickProcessor;
         }
 #if DEBUG
-        private static Ticker[] _tickers;
-        public async Task<Ticker[]> PerformanceVectorOverride()
+        public static bool OverridePerformance = false;
+        public async Task<IEnumerable<Ticker>> PerformanceOverride()
         {
-            if(_tickers == null)
+            if (!OverridePerformance)
             {
-                _logger.LogInformation("Generating test performance data");
-                var rnd = new Random();
-                var tickers = (await _tickerService.GetFullTickerList()).Where(t => t.PerformanceVector > 0).ToArray();
-                foreach (var ticker in tickers)
-                {
-                    ticker.PerformanceVector = rnd.NextDouble() * 100;
-                }
-                _tickers = tickers;
+                return await _tickerService.GetFullTickerList();
             }
-            else
+            var tickers = (await _tickerService.GetFullTickerList()).ToArray();
+            var minmax = new MinMaxStore<Ticker>(t => t.SMASMAAvg);
+            foreach (var ticker in tickers)
             {
-                var tickers = (await _tickerService.GetFullTickerList()).ToArray();
-                foreach (var ticker in _tickers)
-                {
-                    ticker.PerformanceVector = tickers.FirstOrDefault(t => t.Symbol == ticker.Symbol).PerformanceVector;
-                }
-                _tickers = tickers;
+                minmax.Run(ticker);
             }
-            return _tickers;
+            foreach (var ticker in tickers)
+            {
+                ticker.PerformanceVector = ticker.SMASMAAvg.DoubleReduce(minmax.Max, minmax.Min, 100, 0);
+            }
+            return tickers;
         }
 #endif
         public async Task<IEnumerable<IRebalancer>> Rebalance(IEnumerable<Position> positions, Balance balance, DateTime? day = null)
         {
             var equity = balance.TradeableEquity;
             var cash = balance.TradableCash;
-#if DEBUG
-            var sellNegModifier = 0;
-#else
-            var sellNegModifier = cash < 0 ? 0.2 : 0;
-#endif
             if (equity < 1)
             {
                 _logger.LogError($"No equity available! Skipping rebalance.");
                 return Enumerable.Empty<IRebalancer>();
             }
 #if DEBUG
-            var allTickers = day.HasValue ? await PerformanceVectorOverride() : await _tickerService.GetFullTickerList();
+            var allTickers = day.HasValue ? await PerformanceOverride() : await _tickerService.GetFullTickerList();
 #else
             var allTickers = await _tickerService.GetFullTickerList();
 #endif
@@ -114,11 +103,6 @@ namespace NumbersGoUpBase.Services
             {
                 performanceTicker.TickerPrediction = day.HasValue ? await _predicterService.Predict(performanceTicker.Ticker, day.Value) : 
                                                                     await _predicterService.Predict(performanceTicker.Ticker);
-                if(cash < 0 && performanceTicker.TickerPrediction != null)
-                {
-                    performanceTicker.TickerPrediction.BuyMultiplier *= (1 - sellNegModifier);
-                    performanceTicker.TickerPrediction.SellMultiplier += (1 - performanceTicker.TickerPrediction.SellMultiplier) * sellNegModifier;
-                }
                 performanceTicker.Position = positions.FirstOrDefault(p => p.Symbol == performanceTicker.Ticker.Symbol);
                 if(performanceTicker.Position != null && performanceTicker.TickerPrediction == null)
                 {
@@ -132,7 +116,7 @@ namespace NumbersGoUpBase.Services
                 _logger.LogError("Total Performance calculation error. Cancelling rebalancer process.");
                 return rebalancers;
             }
-            var tickerEquity = equity * _predicterService.EncouragementMultiplier.DoubleReduce(0, -1) * _stockBondPerc * (cash < 0 ? (1 - sellNegModifier) : 1);
+            var tickerEquity = equity * _predicterService.EncouragementMultiplier.DoubleReduce(0, -1) * _stockBondPerc;
             foreach (var performanceTicker in selectedTickers)
             {
                 var prediction = performanceTicker.TickerPrediction;
