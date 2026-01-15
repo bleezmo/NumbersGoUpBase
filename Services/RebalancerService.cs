@@ -129,7 +129,11 @@ namespace NumbersGoUpBase.Services
                 var position = performanceTicker.Position;
                 if (position == null && targetValue > 0 && performanceTicker.MeetsRequirements && cash > 0)
                 {
-                    rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, targetValue * (1 - performanceTicker.TickerPrediction.SellMultiplier), prediction));
+                    var cutoff = performanceTicker.TickerPrediction.BuyMultiplier - performanceTicker.TickerPrediction.SellMultiplier;
+                    if (cutoff > 0)//2.328 //2.346
+                    {
+                        rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, targetValue * (1 - performanceTicker.TickerPrediction.SellMultiplier), prediction));
+                    }
                 }
                 else if (position != null && position.MarketValue.HasValue && position.MarketValue.Value > 0)
                 {
@@ -142,7 +146,8 @@ namespace NumbersGoUpBase.Services
                         {
                             if (performanceTicker.MeetsRequirements && cash > (position.AssetLastPrice ?? 0))
                             {
-                                diffPerc *= 1 - prediction.SellMultiplier;
+                                //diffPerc *= prediction.BuyMultiplier; //2.963//2.631 //3.848
+                                diffPerc *= (1 - prediction.SellMultiplier) * prediction.BuyMultiplier.Curve2(1);
                             }
                             else { diffPerc = 0; }
                         }
@@ -154,6 +159,7 @@ namespace NumbersGoUpBase.Services
                                 var plperc = position.UnrealizedProfitLossPercent.Value.DoubleReduce(1.1, -1, 2, -1.9);
                                 sellModifier += plperc;
                             }
+                            //diffPerc *= prediction.SellMultiplier.Curve6(2) / sellModifier; //3.991
                             diffPerc *= prediction.SellMultiplier.Curve3(2) / sellModifier;
                         }
 
@@ -220,11 +226,16 @@ namespace NumbersGoUpBase.Services
         private static double PerformanceValue(PerformanceTicker performanceTicker)
         {
             double predictMultiplier = 0;
-            if (performanceTicker.TickerPrediction != null)
+            double coeff = 0; //2.328 
+            //coeff = 3; //2.298
+            //coeff = 6; //2.265
+            //coeff = 10; //2.049
+            if (performanceTicker.TickerPrediction != null && coeff > 0)
             {
-                predictMultiplier = Math.Max(performanceTicker.TickerPrediction.BuyMultiplier - performanceTicker.TickerPrediction.SellMultiplier, 0) * performanceTicker.Ticker.PerformanceVector.DoubleReduce(100, 0, 6, 0);
+                predictMultiplier = Math.Max(performanceTicker.TickerPrediction.BuyMultiplier - performanceTicker.TickerPrediction.SellMultiplier, 0) * performanceTicker.Ticker.PerformanceVector.DoubleReduce(100, 0, coeff, 0);
+                //predictMultiplier = Math.Max(performanceTicker.TickerPrediction.BuyMultiplier - performanceTicker.TickerPrediction.SellMultiplier, 0) * coeff;
             }
-            return performanceTicker.Ticker.PerformanceVector.DoubleReduce(100, 0, 4, 0) + predictMultiplier;
+            return performanceTicker.Ticker.PerformanceVector.DoubleReduce(100, 0, 10 - coeff, 0) + predictMultiplier;
         }
     }
     public class PerformanceTicker
@@ -238,9 +249,17 @@ namespace NumbersGoUpBase.Services
         {
             var performanceMultiplier = MeetsRequirements ? 1.0 : 0.8;
             var buyMultiplierOffset = Ticker.PerformanceVector.DoubleReduce(100, 0);
+            //var buyMultiplierOffset = Ticker.PerformanceVector.DoubleReduce(100, 0, 0.5, 0);
             if (TickerPrediction != null)
             {
-                performanceMultiplier += (1 - TickerPrediction.SellMultiplier.Curve6(3.2)).DoubleReduce(1, 0, buyMultiplierOffset, -1);
+                //performanceMultiplier += (TickerPrediction.BuyMultiplier - TickerPrediction.SellMultiplier).DoubleReduce(1, -1).Curve6(3.2).DoubleReduce(1, 0, buyMultiplierOffset, -0.5);
+                
+                var offset = (1 - TickerPrediction.SellMultiplier).DoubleReduce(1, 0, buyMultiplierOffset, -1);
+                offset += (1 - offset.DoubleReduce(1, 0)) * (TickerPrediction.BuyMultiplier - TickerPrediction.SellMultiplier).DoubleReduce(1, 0, 0.5, 0);
+                performanceMultiplier += offset;
+
+                //performanceMultiplier += (1 - TickerPrediction.SellMultiplier).DoubleReduce(1, 0, buyMultiplierOffset, -1);
+                //performanceMultiplier += (TickerPrediction.BuyMultiplier - TickerPrediction.SellMultiplier).DoubleReduce(1, 0, 0.5, 0); //4.002
             }
             return Math.Max(performanceMultiplier, 0);
         }
