@@ -67,7 +67,7 @@ namespace NumbersGoUp.Services
                     var currentBarMetrics = new List<BarMetric>();
                     using (var stocksContext = _contextFactory.CreateDbContext())
                     {
-                        foreach(var position in positions.Where(p => !_rebalancerService.BondSymbols.Contains(p.Symbol)))
+                        foreach(var position in positions)
                         {
                             var barMetric = await stocksContext.BarMetrics.Where(b => b.Symbol == position.Symbol).OrderByDescending(m => m.BarDayMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
                             if (barMetric != null) { currentBarMetrics.Add(barMetric); }
@@ -189,7 +189,7 @@ namespace NumbersGoUp.Services
                 }
             }
         }
-        private async Task ExecuteOrders(IEnumerable<IRebalancer> rebalancers)
+        private async Task ExecuteOrders(IEnumerable<StockRebalancer> rebalancers)
         {
             var now = DateTime.Now;
             var dayStart = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds();
@@ -200,33 +200,24 @@ namespace NumbersGoUp.Services
             }
             var remainingOrders = await _brokerService.GetOpenOrders();
             rebalancers = rebalancers.Where(r => !currentOrders.Any(o => o.Symbol == r.Symbol)).Where(r => !remainingOrders.Any(o => o.Symbol == r.Symbol));
-            var (stocks, bonds) = (rebalancers.Where(r => r.IsStock && !_ignoreList.Any(s => s == r.Symbol)).Select(r => r as StockRebalancer), 
-                                   rebalancers.Where(r => r.IsBond).Select(r => r as BondRebalancer));
             var remainingBuyAmount = _account.Balance.TradableCash;
             var maxDailyBuy = _account.Balance.TradeableEquity * 0.02;
             if (maxDailyBuy < remainingBuyAmount)
             {
-                maxDailyBuy = Math.Max(stocks.Where(r => r.Diff > 0).Select(r => r.Position?.AssetLastPrice ?? 0.0).Max(0.0), maxDailyBuy);
+                maxDailyBuy = Math.Max(rebalancers.Where(r => r.Diff > 0).Select(r => r.Position?.AssetLastPrice ?? 0.0).Max(0.0), maxDailyBuy);
                 remainingBuyAmount = Math.Min(maxDailyBuy, remainingBuyAmount);
             }
 
             remainingBuyAmount -= currentOrders.Select(o => o.Side == OrderSide.Buy ? o.AppliedAmt : 0).Sum();
             _logger.LogInformation($"Starting balance {_account.Balance.TradableCash:C2} and remaining buy amount {remainingBuyAmount:C2}");
-            foreach(var bond in bonds)
-            {
-                if (bond.Diff > 0)
-                {
-                    remainingBuyAmount = await ExecuteBondBuy(bond, remainingBuyAmount);
-                }
-                else if (bond.Diff < 0) { await ExecuteBondSell(bond); }
-            }
+
             _logger.LogInformation("Executing sells");
-            await ExecuteSells(stocks.Where(r => r.Diff < 0).ToArray());
+            await ExecuteSells(rebalancers.Where(r => r.Diff < 0).ToArray());
             _logger.LogInformation("Executing buys");
-            await ExecuteBuys(stocks.Where(r => r.Diff > 0).ToArray(), remainingBuyAmount);
+            await ExecuteBuys(rebalancers.Where(r => r.Diff > 0).ToArray(), remainingBuyAmount);
             if(now.DayOfWeek == DayOfWeek.Friday)
             {
-                PrintRebalancers(stocks);
+                PrintRebalancers(rebalancers);
             }
         }
         private void PrintRebalancers(IEnumerable<StockRebalancer> rebalancers)
@@ -411,77 +402,6 @@ namespace NumbersGoUp.Services
                 }
             }
         }
-
-        private async Task ExecuteBondSell(BondRebalancer rebalancer)
-        {
-            var position = rebalancer.Position;
-            if (position == null)
-            {
-                _logger.LogError($"No position found for {rebalancer.Symbol}!!! Can't Sell!!!");
-                return;
-            }
-            var targetPrice = position.AssetLastPrice.HasValue ? position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(rebalancer.Symbol)).Price;
-            var sellAmt = Math.Abs(rebalancer.Diff);
-            if (targetPrice > 0)
-            {
-                var qty = Math.Floor(sellAmt / targetPrice);
-                var currentQty = position.Quantity;
-                if (qty > currentQty)
-                {
-                    qty = currentQty;
-                }
-                if (qty > 0)
-                {
-                    _logger.LogInformation($"Selling {qty} shares of bond {rebalancer.Symbol}");
-                    BrokerOrder brokerOrder = await _brokerService.Sell(rebalancer.Symbol, qty, targetPrice);
-                    if (brokerOrder != null)
-                    {
-                        _logger.LogInformation($"Submitted sell order for {rebalancer.Symbol} at price {targetPrice:C2}");
-                    }
-                    else
-                    {
-                        _logger.LogError($"Failed to execute sell order for {rebalancer.Symbol}");
-                    }
-                }
-            }
-            else
-            {
-                _logger.LogError($"Target price zero when selling bond. Ticker {position.Symbol}");
-            }
-        }
-
-        private async Task<double> ExecuteBondBuy(BondRebalancer rebalancer, double remainingBuyAmount)
-        {
-            var position = rebalancer.Position;
-            var buy = rebalancer.Diff;
-            if (remainingBuyAmount < buy) { buy = remainingBuyAmount; }
-            var targetPrice = position?.AssetLastPrice != null ? position.AssetLastPrice.Value : (await _brokerService.GetLastTrade(rebalancer.Symbol)).Price;
-            if(targetPrice > 0)
-            {
-                var qty = Math.Floor(buy / targetPrice);
-                if (qty > 0)
-                {
-                    buy = qty * targetPrice;
-                    _logger.LogInformation($"Buying {qty} shares of bond {rebalancer.Symbol}");
-                    var brokerOrder = await _brokerService.Buy(rebalancer.Symbol, qty, targetPrice);
-                    if (brokerOrder != null)
-                    {
-                        //just approximate here. it's probably fine
-                        remainingBuyAmount -= buy;
-                        _logger.LogInformation($"Submitted buy order for bond {rebalancer.Symbol} at price {targetPrice:C2}. Remaining amount for buys {remainingBuyAmount:C2}");
-                    }
-                    else
-                    {
-                        _logger.LogError($"Failed to execute buy order for {rebalancer.Symbol}");
-                    }
-                }
-            }
-            else
-            {
-                _logger.LogError($"Target price zero when buying bond. Ticker {position.Symbol}");
-            }
-            return remainingBuyAmount;
-        }
         private async Task AccountPerformancePrint(IEnumerable<Position> positions)
         {
             var (historyEvents, dividends) = await _brokerService.GetAccountHistory();
@@ -523,14 +443,7 @@ namespace NumbersGoUp.Services
             {
                 if (position.UnrealizedProfitLossPercent.HasValue)
                 {
-                    if(_rebalancerService.BondSymbols.Any(s => s == position.Symbol))
-                    {
-                        totalUnRealizedBonds.Add((position.CostBasis, position.MarketValue ?? 0.0, position.UnrealizedProfitLossPercent.Value));
-                    }
-                    else
-                    {
-                        totalUnRealizedStocks.Add((position.CostBasis, position.MarketValue ?? 0.0, position.UnrealizedProfitLossPercent.Value));
-                    }
+                    totalUnRealizedStocks.Add((position.CostBasis, position.MarketValue ?? 0.0, position.UnrealizedProfitLossPercent.Value));
                 }
             }
             var (totalUnrealizedStocksCost, totalUnrealizedStocksCurrent, totalUnrealizedStocksProfitPerc) = TotalProfit(totalUnRealizedStocks);

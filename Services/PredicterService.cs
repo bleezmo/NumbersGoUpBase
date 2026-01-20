@@ -29,7 +29,7 @@ namespace NumbersGoUp.Services
             _contextFactory = contextFactory;
             EncouragementMultiplier = Math.Min(Math.Max(double.TryParse(configuration["EncouragementMultiplier"], out var encouragementMultiplier) ? encouragementMultiplier : 0, -1), 1);
         }
-        public async Task<Prediction> Predict(Ticker ticker, DateTime? day = null)
+        public async Task<Prediction> Predict(Ticker ticker)
         {
             var symbol = ticker.Symbol;
             BarMetric[] barMetrics;
@@ -37,7 +37,7 @@ namespace NumbersGoUp.Services
             {
                 if (!IsValidTicker(ticker))
                 {
-                    if (!day.HasValue && DateTime.Now.DayOfWeek != TickerService.RUN_LOAD)
+                    if (DateTime.Now.DayOfWeek != TickerService.RUN_LOAD)
                     {
                         _logger.LogWarning($"Ticker {ticker.Symbol} has invalid metric averages");
                     }
@@ -45,39 +45,23 @@ namespace NumbersGoUp.Services
                 }
                 using (var stocksContext = _contextFactory.CreateDbContext())
                 {
-                    IQueryable<BarMetric> barMetricQuery = null;
-                    if (day.HasValue)
-                    {
-                        var cutoff = new DateTimeOffset(day.Value.Date).ToUnixTimeMilliseconds();
-                        barMetricQuery = stocksContext.BarMetrics.Where(p => p.Symbol == symbol && p.BarDayMilliseconds <= cutoff);
-                    }
-                    else
-                    {
-                        barMetricQuery = stocksContext.BarMetrics.Where(p => p.Symbol == symbol);
-                    }
-                    barMetrics = await barMetricQuery.OrderByDescending(b => b.BarDayMilliseconds).Take(FEATURE_HISTORY_DAY)
+                    barMetrics = await stocksContext.BarMetrics.Where(p => p.Symbol == symbol).OrderByDescending(b => b.BarDayMilliseconds).Take(FEATURE_HISTORY_DAY)
                                                      .Include(b => b.HistoryBar).ToArrayAsync(_appCancellation.Token);
                 }
                 if (barMetrics.Length != FEATURE_HISTORY_DAY)
                 {
-#if !DEBUG
                     _logger.LogError($"BarMetrics for {symbol} did not return the required history (retrieved {barMetrics.Length} results). returning default prediction");
-#endif
                     if (barMetrics.Length == 0)
                     {
-#if !DEBUG
                         _logger.LogError($"BarMetrics for {symbol} did not return any history. Assume ticker is no longer valid.");
-#endif
                         return null;
                     }
                     return null;
                 }
-                DateTime checkDay = day.HasValue ? day.Value.AddDays(-7) : (await _brokerService.GetLastMarketDay()).Date.AddDays(-1);
+                DateTime checkDay = (await _brokerService.GetLastMarketDay()).Date.AddDays(-1);
                 if (barMetrics[0].BarDay.CompareTo(checkDay) < 0)
                 {
-#if !DEBUG
                     _logger.LogError($"BarMetrics data for {symbol} isn't up to date! Returning default prediction.");
-#endif
                     return null;
                 }
                 return new Prediction
@@ -98,7 +82,7 @@ namespace NumbersGoUp.Services
             if (barMetrics.Length == FEATURE_HISTORY_DAY)
             {
                 double pricePrediction;
-                
+
                 if (buy)
                 {
 
@@ -110,22 +94,22 @@ namespace NumbersGoUp.Services
                                       ((1 - barMetrics[0].SMASMA.DoubleReduce(ticker.SMASMAAvg, ticker.SMASMAAvg - (ticker.SMASMAStDev * 1.5))) *
                                        barMetrics.CalculateAvgAcceleration(b => b.SMASMA).DoubleReduce(ticker.SMAVelStDev, -ticker.SMAVelStDev) * 0.2) +
                                       (barMetrics[0].WeekTrend.DoubleReduce(ticker.WeekTrendAvg + ticker.WeekTrendStDev, ticker.WeekTrendAvg - ticker.WeekTrendStDev) * 0.2);
-                    //pricePrediction *= (2 - ticker.SMASMAAvg.DoubleReduce(20, -20) - (ticker.ProfitLossAvg / ticker.ProfitLossStDev).DoubleReduce()) / 2;
                 }
                 else
                 {
-                    
+
                     pricePrediction = ((
                                         (barMetrics[0].AlmaSMA1.DoubleReduce(ticker.AlmaSma1Avg + (ticker.AlmaSma1StDev * 1.5), ticker.AlmaSma1Avg - ticker.AlmaSma1StDev) * 0.2) +
                                         (barMetrics[0].AlmaSMA2.DoubleReduce(ticker.AlmaSma2Avg + (ticker.AlmaSma2StDev * 1.5), ticker.AlmaSma2Avg - ticker.AlmaSma2StDev) * 0.2) +
                                         (barMetrics[0].AlmaSMA3.DoubleReduce(ticker.AlmaSma3Avg + (ticker.AlmaSma3StDev * 1.5), ticker.AlmaSma3Avg - ticker.AlmaSma3StDev) * 0.2)
                                        ) * barMetrics.CalculateAvgVelocity(b => b.AlmaSMA3).DoubleReduce(ticker.AlmaVelStDev, -ticker.AlmaVelStDev) * (1 - barMetrics.CalculateAvgAcceleration(b => b.AlmaSMA3).DoubleReduce(ticker.AlmaVelStDev, -ticker.AlmaVelStDev))
                                       ) +
-                                      ((1 - barMetrics.CalculateAvgAcceleration(b => b.SMASMA).DoubleReduce(ticker.SMAVelStDev, -ticker.SMAVelStDev)) * 0.2) +
-                                    ((1 - barMetrics[0].WeekTrend.DoubleReduce(ticker.WeekTrendAvg + ticker.WeekTrendStDev, ticker.WeekTrendAvg - ticker.WeekTrendStDev)) * 0.2);
-                    pricePrediction *= (ticker.SMASMAAvg.DoubleReduce(20, -20) + (ticker.ProfitLossAvg / ticker.ProfitLossStDev).DoubleReduce()) / 2;
-                    //Percent profit: 2.4327589295903764 - 5.750542288115003 = -3.317783358524627%
-                    //Percent profit: 2.4335110057696867 - 5.752012718196268 = -3.3185017124265817%
+                                      (barMetrics[0].SMASMA.DoubleReduce(ticker.SMASMAAvg + (ticker.SMASMAStDev * 1.5), ticker.SMASMAAvg) *
+                                        (1 - barMetrics.CalculateAvgAcceleration(b => b.SMASMA).DoubleReduce(ticker.SMAVelStDev, -ticker.SMAVelStDev)) * 0.2) +
+                                    ((1 - barMetrics[0].WeekTrend.DoubleReduce(ticker.WeekTrendAvg + ticker.WeekTrendStDev, ticker.WeekTrendAvg - ticker.WeekTrendStDev)) *
+                                        (1 - barMetrics.CalculateAvgVelocity(b => b.WeekTrend).DoubleReduce(ticker.WeekTrendVelStDev, 0)) * 0.2);
+                    //pricePrediction *= (ticker.SMASMAAvg.DoubleReduce(20, -20) + (ticker.ProfitLossAvg / ticker.ProfitLossStDev).DoubleReduce()) / 2;
+
                 }
 
                 if (buy)
