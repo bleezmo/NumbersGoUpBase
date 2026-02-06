@@ -93,7 +93,9 @@ namespace NumbersGoUp.Services
                 {
                     pricePrediction = barMetrics[0].SMASMA.ZeroReduce(ticker.SMASMAStDev, -ticker.SMASMAStDev) *
                                      barMetrics[0].SMA2SMA.DoubleReduce(ticker.SMA2SMAStDev, 0) *
-                                     barMetrics[0].AlmaSMA3.DoubleReduce(ticker.AlmaSma3Avg + ticker.AlmaSma3StDev, ticker.AlmaSma3Avg);
+                                     barMetrics[0].AlmaSMA3.DoubleReduce(ticker.AlmaSma3Avg + ticker.AlmaSma3StDev, ticker.AlmaSma3Avg) *
+                                     (1 - barMetrics[0].AlmaSMA3.DoubleReduce(ticker.AlmaSma3Avg + (ticker.AlmaSma3StDev * 3), ticker.AlmaSma3Avg + ticker.AlmaSma3StDev));
+
                 }
 
                 if (buy)
