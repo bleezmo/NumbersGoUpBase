@@ -18,7 +18,7 @@ namespace NumbersGoUp.Services
         private readonly IBrokerService _brokerService;
         private readonly IStocksContextFactory _contextFactory;
 
-        public double EncouragementMultiplier { get; }
+        public double EncouragementMultiplier { get; set; }
 
         public PredicterService(IAppCancellation appCancellation, ILogger<PredicterService> logger, IBrokerService brokerService, 
                                 IStocksContextFactory contextFactory, IConfiguration configuration)
@@ -27,7 +27,6 @@ namespace NumbersGoUp.Services
             _appCancellation = appCancellation;
             _brokerService = brokerService;
             _contextFactory = contextFactory;
-            EncouragementMultiplier = Math.Min(Math.Max(double.TryParse(configuration["EncouragementMultiplier"], out var encouragementMultiplier) ? encouragementMultiplier : 0, -1), 1);
         }
         public async Task<Prediction> Predict(Ticker ticker)
         {

@@ -1,16 +1,8 @@
 ﻿using Microsoft.Extensions.Configuration;
 using NumbersGoUp.Models;
 using NumbersGoUp.Utils;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Text;
-using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Hosting;
 
 namespace NumbersGoUp.Services
 {
@@ -40,7 +32,7 @@ namespace NumbersGoUp.Services
             _contextFactory = contextFactory;
             _runtimeSettings = runtimeSettings;
             _tickerPickProcessor = tickerPickProcessor;
-            _pickWeight = double.TryParse(configuration["PickWeight"], out var pickWeight) ? pickWeight : DEFAULT_PICK_WEIGHT;
+            _pickWeight = double.TryParse(configuration[EnvParamKeys.PICK_WEIGHT], out var pickWeight) ? pickWeight : DEFAULT_PICK_WEIGHT;
             
         }
         public async Task<IEnumerable<Ticker>> GetTickers()

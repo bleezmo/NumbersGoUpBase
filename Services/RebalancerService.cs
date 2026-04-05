@@ -1,32 +1,28 @@
-﻿using CsvHelper.Configuration.Attributes;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using NumbersGoUp.Models;
 using NumbersGoUp.Services;
 using NumbersGoUp.Utils;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace NumbersGoUpBase.Services
 {
     public class RebalancerService
     {
+        public double CashMinimum { get; }
         public const int MAX_TICKER_COUNT = 50;
         private readonly ILogger<PredicterService> _logger;
         private readonly TickerService _tickerService;
         private readonly PredicterService _predicterService;
-        private readonly ITickerPickProcessor _tickerPickProcessor;
+        private readonly double _encouragementMultiplier;
 
         public RebalancerService(ILogger<PredicterService> logger, TickerService tickerService, IConfiguration configuration, 
-                                 PredicterService predicterService, ITickerPickProcessor tickerPickProcessor)
+                                 PredicterService predicterService)
         {
             _logger = logger;
             _tickerService = tickerService;
             _predicterService = predicterService;
-            _tickerPickProcessor = tickerPickProcessor;
+            CashMinimum = double.TryParse(configuration[EnvParamKeys.CASH_MIN], out var cashMinimum) ? cashMinimum : 0;
+            _encouragementMultiplier = Math.Min(Math.Max(double.TryParse(configuration[EnvParamKeys.ENCOURAGEMENT_MULTIPLIER], out var encouragementMultiplier) ? encouragementMultiplier : 0, -1), 1);
         }
         public async Task<IEnumerable<StockRebalancer>> Rebalance(IEnumerable<Position> positions, Balance balance)
         {
@@ -36,6 +32,14 @@ namespace NumbersGoUpBase.Services
             {
                 _logger.LogError($"No equity available! Skipping rebalance.");
                 return Enumerable.Empty<StockRebalancer>();
+            }
+            if (CashMinimum > 0 && cash < CashMinimum)
+            {
+                _predicterService.EncouragementMultiplier = Math.Min(_encouragementMultiplier, Math.Max(cash / CashMinimum, 0) - 1);
+            }
+            else
+            {
+                _predicterService.EncouragementMultiplier = _encouragementMultiplier;
             }
             var allTickers = await _tickerService.GetFullTickerList();
             foreach(var position in positions)
@@ -137,6 +141,25 @@ namespace NumbersGoUpBase.Services
                 else if (cash > 0 && targetValue > 0)
                 {
                     _logger.LogError($"Unable to rebalance {performanceTicker.Ticker.Symbol}. Position unavailable");
+                }
+            }
+            if (cash < CashMinimum)
+            {
+                var sells = rebalancers.Where(r => r.Diff < 0).ToList();
+                if (sells.Count > 0)
+                {
+                    var remaining = CashMinimum - cash;
+                    var newRebalancers = new List<StockRebalancer>();
+                    newRebalancers.AddRange(newRebalancers.Where(r => r.Diff > 0));
+                    foreach (var rebalancer in sells.OrderBy(r => r.Ticker.PerformanceVector * (1 - r.Prediction.SellMultiplier)))
+                    {
+                        if (remaining > 0)
+                        {
+                            newRebalancers.Add(rebalancer);
+                        }
+                        remaining += rebalancer.Diff;
+                    }
+                    return newRebalancers;
                 }
             }
             return rebalancers;

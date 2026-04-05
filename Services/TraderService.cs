@@ -13,37 +13,28 @@ namespace NumbersGoUp.Services
         public const double MAX_COOLDOWN_DAYS = 35;
         private const string DISABLE_SELLS = "DisableSells";
         private const string DISABLE_BUYS = "DisableBuys";
-        private const string IGNORE_LIST = "IgnoreList";
 
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<TraderService> _logger;
         private readonly IBrokerService _brokerService;
         private readonly RebalancerService _rebalancerService;
-        private readonly TickerService _tickerService;
         private readonly DataService _dataService;
-        private readonly string _environmentName;
         private readonly IStocksContextFactory _contextFactory;
         private readonly bool _disableBuys;
         private readonly bool _disableSells;
-        private readonly string[] _ignoreList;
         private Account _account;
-        private double _cashEquityRatio;
 
-        public TraderService(IConfiguration configuration, IAppCancellation appCancellation, IHostEnvironment environment, ILogger<TraderService> logger, TickerService tickerService, 
+        public TraderService(IConfiguration configuration, IAppCancellation appCancellation, IHostEnvironment environment, ILogger<TraderService> logger, 
                              IBrokerService brokerService, RebalancerService rebalancerService, DataService dataService, IStocksContextFactory contextFactory)
         {
             _appCancellation = appCancellation;
             _logger = logger;
             _brokerService = brokerService;
             _rebalancerService = rebalancerService;
-            _tickerService = tickerService;
             _dataService = dataService;
-            _environmentName = environment.EnvironmentName;
             _contextFactory = contextFactory;
             _disableBuys = bool.TryParse(configuration[DISABLE_BUYS], out var disableBuys) ? disableBuys : false;
             _disableSells = bool.TryParse(configuration[DISABLE_SELLS], out var disableSells) ? disableSells : false;
-            var ignoreList = configuration[IGNORE_LIST];
-            _ignoreList = string.IsNullOrWhiteSpace(ignoreList) ? new string[] { } : ignoreList.Split(',').Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
         }
         public async Task Run()
         {
@@ -74,14 +65,6 @@ namespace NumbersGoUp.Services
                             else { _logger.LogError($"Bar metric not found for position {position.Symbol}"); }
                         }
                     }
-                    var cashEquityRatioOffset = 1.0;
-                    if (currentBarMetrics.Count > 1)
-                    {
-                        var smasmaMode = currentBarMetrics.OrderBy(b => b.SMASMA).Skip(currentBarMetrics.Count / 2).Take(1).First().SMASMA;
-                        cashEquityRatioOffset = smasmaMode.DoubleReduce(0, -20);
-                    }
-                    _cashEquityRatio = equity > 0 ? (Math.Max(cash / equity, 0) * cashEquityRatioOffset) : 0;
-                    _logger.LogInformation($"Using Cash-Equity Ratio: {_cashEquityRatio}");
 
                     _logger.LogInformation("Running previous-day metrics");
                     await PreviousDayTradeMetrics();
@@ -200,7 +183,7 @@ namespace NumbersGoUp.Services
             }
             var remainingOrders = await _brokerService.GetOpenOrders();
             rebalancers = rebalancers.Where(r => !currentOrders.Any(o => o.Symbol == r.Symbol)).Where(r => !remainingOrders.Any(o => o.Symbol == r.Symbol));
-            var remainingBuyAmount = _account.Balance.TradableCash;
+            var remainingBuyAmount = _account.Balance.TradableCash - _rebalancerService.CashMinimum;
             var maxDailyBuy = _account.Balance.TradeableEquity * 0.02;
             if (maxDailyBuy < remainingBuyAmount)
             {
@@ -213,8 +196,11 @@ namespace NumbersGoUp.Services
 
             _logger.LogInformation("Executing sells");
             await ExecuteSells(rebalancers.Where(r => r.Diff < 0).ToArray());
-            _logger.LogInformation("Executing buys");
-            await ExecuteBuys(rebalancers.Where(r => r.Diff > 0).ToArray(), remainingBuyAmount);
+            if (remainingBuyAmount > 0)
+            {
+                _logger.LogInformation("Executing buys");
+                await ExecuteBuys(rebalancers.Where(r => r.Diff > 0).ToArray(), remainingBuyAmount);
+            }
             if(now.DayOfWeek == DayOfWeek.Friday)
             {
                 PrintRebalancers(rebalancers);

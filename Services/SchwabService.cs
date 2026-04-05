@@ -22,9 +22,6 @@ namespace NumbersGoUpBase.Services
 {
     public class SchwabService : IBrokerService
     {
-        private const string CASH_MIN = "CashMinimum";
-        private const string CASH_PERC = "CashPerc";
-
         private static readonly JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true,
@@ -41,7 +38,6 @@ namespace NumbersGoUpBase.Services
         private Task _startTask;
         private SchwabAccountDetails _account;
         private string _accountHashValue;
-        private double _cashMinimum = 0;
         private MarketDay _marketDay;
         private MarketDay _lastMarketDay;
         private static readonly SemaphoreSlim _taskSem = new SemaphoreSlim(1, 1);
@@ -83,11 +79,6 @@ namespace NumbersGoUpBase.Services
             if(_account == null) { 
                 _logger.LogError("Account retrieval failed!");
                 await _appCancellation.Shutdown();
-            }
-            double.TryParse(_configuration[CASH_MIN], out var _cashMinimum);
-            if (double.TryParse(_configuration[CASH_PERC], out var cashPerc))
-            {
-                _cashMinimum = Math.Max(_cashMinimum, cashPerc.DoubleReduce(1, 0) * _account.CurrentBalances.LiquidationValue);
             }
         }
         private async Task LoadMarketDays()
@@ -278,8 +269,8 @@ namespace NumbersGoUpBase.Services
                 {
                     BuyingPower = 0,
                     LastEquity = _account.CurrentBalances.LiquidationValue,
-                    TradableCash = Math.Max(_account.CurrentBalances.CashBalance - _cashMinimum, 0),
-                    TradeableEquity = Math.Max(_account.CurrentBalances.LiquidationValue - _cashMinimum, 0)
+                    TradableCash = _account.CurrentBalances.CashBalance,
+                    TradeableEquity = _account.CurrentBalances.LiquidationValue
                 }
             };
         }
