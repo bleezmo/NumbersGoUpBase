@@ -94,7 +94,7 @@ namespace NumbersGoUpBase.Services
                 var position = performanceTicker.Position;
                 if (position == null && targetValue > 0 && performanceTicker.MeetsRequirements && cash > 0)
                 {
-                    rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, targetValue * (1 - prediction.SellMultiplier), prediction));
+                    rebalancers.Add(new StockRebalancer(performanceTicker.Ticker, targetValue, prediction));
 
                 }
                 else if (position != null && position.MarketValue.HasValue && position.MarketValue.Value > 0)
@@ -183,13 +183,7 @@ namespace NumbersGoUpBase.Services
         public bool MeetsRequirements { get; set; }
         public virtual double PerformanceMultiplier()
         {
-            var performanceMultiplier = MeetsRequirements ? 1.0 : 0.9;
-            var buyMultiplierOffset = Ticker.PerformanceVector.DoubleReduce(100, 0, 0.5, 0);
-            if (TickerPrediction != null)
-            {
-                performanceMultiplier += (1 - TickerPrediction.SellMultiplier.Curve6(3.2)).DoubleReduce(1, 0, buyMultiplierOffset, -0.5);
-            }
-            return Math.Max(performanceMultiplier, 0);
+            return MeetsRequirements ? 1.0 : 0.9;
         }
     }
 
