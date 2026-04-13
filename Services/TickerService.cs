@@ -13,7 +13,7 @@ namespace NumbersGoUp.Services
         public const DayOfWeek RUN_AVGS = DayOfWeek.Wednesday;
         public const DayOfWeek RUN_LOAD = DayOfWeek.Tuesday;
 
-        private const double DEFAULT_PICK_WEIGHT = 0.2;
+        private const double DEFAULT_PICK_WEIGHT = 0.1;
 
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<TickerService> _logger;
