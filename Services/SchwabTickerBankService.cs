@@ -236,9 +236,10 @@ namespace NumbersGoUpBase.Services
                     }
                 }
             }
-            if (priceChanges.Count > 3 && priceChanges.Any())
+            var priceChangesArr = priceChanges.ToArray();
+            if (priceChangesArr.Length > 3)
             {
-                return Math.Min(priceChanges.Average(), regressionTotal / stdevTotal);
+                return new[] { priceChangesArr.ApplyAlma(), priceChangesArr.Average(), regressionTotal / stdevTotal }.Min();
             }
             else
             {
