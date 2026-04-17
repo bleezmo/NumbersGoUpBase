@@ -85,16 +85,14 @@ namespace NumbersGoUp.Services
                 if (buy)
                 {
                     pricePrediction = barMetrics[0].SMASMA.ZeroReduce(ticker.SMASMAStDev, -ticker.SMASMAStDev) *
-                                        (1 - barMetrics[0].SMA2SMA.DoubleReduce(0, -ticker.SMA2SMAStDev)) *
+                                        (1 - barMetrics[0].SMA2SMA.DoubleReduce(0, -ticker.SMA2SMAStDev)) * barMetrics.CalculateVelocity(b => b.AlmaSMA3).ZeroReduceSlow(ticker.AlmaVelStDev, -ticker.AlmaVelStDev) *
                                         (1 - barMetrics[0].AlmaSMA3.DoubleReduce(ticker.AlmaSma3Avg, ticker.AlmaSma3Avg - ticker.AlmaSma3StDev));
                 }
                 else
                 {
                     pricePrediction = barMetrics[0].SMASMA.ZeroReduce(ticker.SMASMAStDev, -ticker.SMASMAStDev) *
-                                     barMetrics[0].SMA2SMA.DoubleReduce(ticker.SMA2SMAStDev, 0) *
-                                     barMetrics[0].AlmaSMA3.DoubleReduce(ticker.AlmaSma3Avg + ticker.AlmaSma3StDev, ticker.AlmaSma3Avg) *
-                                     (1 - barMetrics[0].AlmaSMA3.DoubleReduce(ticker.AlmaSma3Avg + (ticker.AlmaSma3StDev * 3), ticker.AlmaSma3Avg + ticker.AlmaSma3StDev));
-
+                                     barMetrics[0].SMA2SMA.DoubleReduce(ticker.SMA2SMAStDev, 0) * barMetrics.CalculateVelocity(b => b.AlmaSMA3).ZeroReduceSlow(ticker.AlmaVelStDev, -ticker.AlmaVelStDev) *
+                                    barMetrics[0].AlmaSMA3.DoubleReduce(ticker.AlmaSma3Avg + ticker.AlmaSma3StDev, ticker.AlmaSma3Avg);
                 }
 
                 if (buy)
