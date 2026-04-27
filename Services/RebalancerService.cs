@@ -82,6 +82,7 @@ namespace NumbersGoUpBase.Services
                 return rebalancers;
             }
             var tickerEquity = equity * _predicterService.EncouragementMultiplier.DoubleReduce(0, -1);
+            var barMetrics = new List<BarMetric>();
             foreach (var performanceTicker in selectedTickers)
             {
                 var prediction = performanceTicker.TickerPrediction;
@@ -89,6 +90,7 @@ namespace NumbersGoUpBase.Services
                 {
                     continue;
                 }
+                if (prediction.RecentBarMetric != null) { barMetrics.Add(prediction.RecentBarMetric); }
                 var calculatedPerformance = tickerEquity * PerformanceValue(performanceTicker) * performanceTicker.PerformanceMultiplier();
                 var targetValue = totalPerformance > 0 ? (calculatedPerformance / totalPerformance) : 0.0;
                 var position = performanceTicker.Position;
@@ -151,17 +153,18 @@ namespace NumbersGoUpBase.Services
                     var remaining = CashMinimum - cash;
                     var newRebalancers = new List<StockRebalancer>();
                     newRebalancers.AddRange(newRebalancers.Where(r => r.Diff > 0));
-                    foreach (var rebalancer in sells.OrderBy(r => r.Ticker.PerformanceVector * (1 - r.Prediction.SellMultiplier)))
+                    foreach (var rebalancer in sells.OrderBy(r => r.Ticker.PerformanceVector.DoubleReduce(100, 0, 1 - r.Prediction.SellMultiplier, 0) * (r.Position.UnrealizedProfitLossPercent?.DoubleReduce(0, -1) ?? 1)))
                     {
                         if (remaining > 0)
                         {
                             newRebalancers.Add(rebalancer);
+                            remaining += rebalancer.Diff;
                         }
-                        remaining += rebalancer.Diff;
                     }
                     return newRebalancers;
                 }
             }
+            PrintVolatility(barMetrics);
             return rebalancers;
         }
 
@@ -173,6 +176,13 @@ namespace NumbersGoUpBase.Services
                 predictMultiplier = Math.Max(performanceTicker.TickerPrediction.BuyMultiplier - performanceTicker.TickerPrediction.SellMultiplier, 0) * performanceTicker.Ticker.PerformanceVector.DoubleReduce(100, 0, 2, 0);
             }
             return performanceTicker.Ticker.PerformanceVector.DoubleReduce(100, 0, 8, 0) + predictMultiplier;
+        }
+        private void PrintVolatility(IEnumerable<BarMetric> barMetrics)
+        {
+            foreach (var barMetric in barMetrics.OrderByDescending(b => b.VolAlmaSMA).Take(5))
+            {
+                _logger.LogInformation($"Volatility of {barMetric.Symbol} - {barMetric.VolAlmaSMA:G4}");
+            }
         }
     }
     public class PerformanceTicker

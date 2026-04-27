@@ -117,19 +117,6 @@ namespace NumbersGoUp.Utils
             }
             return sum / (barsDesc.Length - 1);
         }
-        public static double CalculateAvgWeightedVelocity<T>(this T[] barsDesc, Func<T, double> valuefn)
-        {
-            if (barsDesc.Length < 2) { throw new Exception("Length does not meet minimum requirements to calculate velocity"); }
-            var velocities = barsDesc.CalculateVelocitiesDesc(valuefn);
-            double accum = 0, denom = 0;
-            for (var i = 0; i < velocities.Length; i++)
-            {
-                var coeff = Math.Exp(-i / velocities.Length);
-                accum += velocities[0] * coeff;
-                denom += coeff;
-            }
-            return accum / (denom * velocities.Length);
-        }
         public static double CalculateVelocityAlma<T>(this T[] barsDesc, Func<T, double> valuefn)
         {
             return barsDesc.CalculateVelocitiesDesc(valuefn).ApplyAlma();
