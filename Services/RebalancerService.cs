@@ -181,7 +181,7 @@ namespace NumbersGoUpBase.Services
         {
             foreach (var barMetric in barMetrics.OrderByDescending(b => b.VolAlmaSMA).Take(5))
             {
-                _logger.LogInformation($"Volatility of {barMetric.Symbol} - {barMetric.VolAlmaSMA:G4}");
+                _logger.LogInformation($"Volatility {barMetric.Symbol}: {barMetric.VolAlmaSMA:G4} AlmaSMA3: {barMetric.AlmaSMA3}");
             }
         }
     }
