@@ -33,9 +33,16 @@ namespace NumbersGoUpBase.Services
                 _logger.LogError($"No equity available! Skipping rebalance.");
                 return Enumerable.Empty<StockRebalancer>();
             }
-            if (CashMinimum > 0 && cash < CashMinimum)
+            if (cash < CashMinimum && (CashMinimum > 0 || cash < 0))
             {
-                _predicterService.EncouragementMultiplier = Math.Min(_encouragementMultiplier, Math.Max(cash / CashMinimum, 0) - 1);
+                if (CashMinimum > 0)
+                {
+                    _predicterService.EncouragementMultiplier = Math.Min(_encouragementMultiplier, Math.Max(cash / CashMinimum, 0) - 1);
+                }
+                else if (cash < 0)
+                {
+                    _predicterService.EncouragementMultiplier = Math.Min(_encouragementMultiplier, Math.Max(Math.Abs(cash) * 20 / equity, 0) - 1);
+                }
             }
             else
             {
@@ -67,7 +74,13 @@ namespace NumbersGoUpBase.Services
             double totalPerformance = 0.0;
             foreach (var performanceTicker in selectedTickers)
             {
-                performanceTicker.TickerPrediction = await _predicterService.Predict(performanceTicker.Ticker);
+                var prediction = await _predicterService.Predict(performanceTicker.Ticker);
+                if (prediction != null)
+                {
+                    prediction.SellMultiplier = performanceTicker.MeetsRequirements ? 0 : prediction.SellMultiplier;
+                    prediction.BuyMultiplier = performanceTicker.MeetsRequirements ? prediction.BuyMultiplier : 0;
+                }
+                performanceTicker.TickerPrediction = prediction;
                 performanceTicker.Position = positions.FirstOrDefault(p => p.Symbol == performanceTicker.Ticker.Symbol);
                 if(performanceTicker.Position != null && performanceTicker.TickerPrediction == null)
                 {
@@ -153,7 +166,7 @@ namespace NumbersGoUpBase.Services
                     var remaining = CashMinimum - cash;
                     var newRebalancers = new List<StockRebalancer>();
                     newRebalancers.AddRange(newRebalancers.Where(r => r.Diff > 0));
-                    foreach (var rebalancer in sells.OrderBy(r => r.Ticker.PerformanceVector.DoubleReduce(100, 0, 1 - r.Prediction.SellMultiplier, 0) * (r.Position.UnrealizedProfitLossPercent?.DoubleReduce(0, -1) ?? 1)))
+                    foreach (var rebalancer in sells.OrderBy(SellValue))
                     {
                         if (remaining > 0)
                         {
@@ -168,6 +181,13 @@ namespace NumbersGoUpBase.Services
             return rebalancers;
         }
 
+        private static double SellValue(StockRebalancer rebalancer)
+        {
+            var sellValue = rebalancer.Ticker.PerformanceVector;
+            sellValue *= 1 + (rebalancer.Position.UnrealizedProfitLossPercent ?? 0);
+            sellValue *= 1 - rebalancer.Prediction.RecentBarMetric.SMASMA.DoubleReduce(100, 0);
+            return sellValue;
+        }
         private static double PerformanceValue(PerformanceTicker performanceTicker)
         {
             double predictMultiplier = 0;
@@ -179,7 +199,11 @@ namespace NumbersGoUpBase.Services
         }
         private void PrintVolatility(IEnumerable<BarMetric> barMetrics)
         {
-            foreach (var barMetric in barMetrics.OrderByDescending(b => b.VolAlmaSMA).Take(5))
+            foreach (var barMetric in barMetrics.OrderByDescending(b => b.VolAlmaSMA).Take(3))
+            {
+                _logger.LogInformation($"Volatility {barMetric.Symbol}: {barMetric.VolAlmaSMA:G4} AlmaSMA3: {barMetric.AlmaSMA3}");
+            }
+            foreach (var barMetric in barMetrics.OrderBy(b => b.VolAlmaSMA).Take(3))
             {
                 _logger.LogInformation($"Volatility {barMetric.Symbol}: {barMetric.VolAlmaSMA:G4} AlmaSMA3: {barMetric.AlmaSMA3}");
             }
