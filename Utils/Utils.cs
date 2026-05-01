@@ -104,8 +104,9 @@ namespace NumbersGoUp.Utils
         }
         public static double CalculateVelocity<T>(this IEnumerable<T> barsDesc, Func<T, double> angleValueFn)
         {
-            if (barsDesc.Count() < 2) { throw new Exception("Length does not meet minimum requirements to calculate velocity"); }
-            return angleValueFn(barsDesc.First()) - angleValueFn(barsDesc.Last());
+            var count = barsDesc.Count();
+            if (count < 2) { throw new Exception("Length does not meet minimum requirements to calculate velocity"); }
+            return (angleValueFn(barsDesc.First()) - angleValueFn(barsDesc.Last())) / (count - 1);
         }
         public static double CalculateAvgVelocity<T>(this T[] barsDesc, Func<T, double> angleValueFn)
         {
@@ -150,9 +151,11 @@ namespace NumbersGoUp.Utils
         }
         public static double CalculateAcceleration<T>(this IEnumerable<T> barsDesc, Func<T, double> angleValueFn)
         {
-            var size = barsDesc.Count();
+            double size = barsDesc.Count();
             if (size < 3) { throw new Exception("Length does not meet minimum requirements to calculate acceleration"); }
-            return (angleValueFn(barsDesc.First()) - angleValueFn(barsDesc.Skip(size / 2).First())) - (angleValueFn(barsDesc.Skip(size / 2).First()) - angleValueFn(barsDesc.Last()));
+            var v1 = barsDesc.Take((int)Math.Round(size / 2, MidpointRounding.ToPositiveInfinity)).CalculateVelocity(angleValueFn);
+            var v2 = barsDesc.Skip((int)Math.Round(size / 2, MidpointRounding.ToNegativeInfinity)).CalculateVelocity(angleValueFn);
+            return (v1 - v2) / (size - 2);
         }
         public static double CalculateAcceleration(this double[] valuesDesc)
         {

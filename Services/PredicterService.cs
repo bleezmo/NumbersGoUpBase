@@ -86,15 +86,21 @@ namespace NumbersGoUp.Services
                 {
                     pricePrediction = barMetrics[0].SMASMA.ZeroReduce(ticker.SMASMAAvg + ticker.SMASMAStDev, ticker.SMASMAAvg - ticker.SMASMAStDev) *
                                         (1 - barMetrics[0].SMA2SMA.DoubleReduce(ticker.SMA2SMAAvg, ticker.SMA2SMAAvg - ticker.SMA2SMAStDev)) *
-                                        barMetrics.CalculateVelocity(b => b.AlmaSMA3).ZeroReduceSlow(ticker.AlmaVelStDev, -ticker.AlmaVelStDev) *
+                                        barMetrics.CalculateVelocity(b => b.AlmaSMA3).ZeroReduce(ticker.AlmaVelStDev, -ticker.AlmaVelStDev) *
+                                     barMetrics.CalculateAcceleration(b => b.AlmaSMA3).DoubleReduce(0, -ticker.AlmaVelStDev) *
                                         (1 - barMetrics[0].AlmaSMA3.DoubleReduce(ticker.AlmaSma3Avg, ticker.AlmaSma3Avg - ticker.AlmaSma3StDev));
                 }
                 else
                 {
                     pricePrediction = barMetrics[0].SMASMA.ZeroReduce(ticker.SMASMAAvg + ticker.SMASMAStDev, ticker.SMASMAAvg - ticker.SMASMAStDev) *
                                      barMetrics[0].SMA2SMA.DoubleReduce(ticker.SMA2SMAStDev + ticker.SMA2SMAAvg, ticker.SMA2SMAAvg) *
-                                     barMetrics.CalculateVelocity(b => b.AlmaSMA3).ZeroReduceSlow(ticker.AlmaVelStDev, -ticker.AlmaVelStDev) *
-                                    barMetrics[0].AlmaSMA3.DoubleReduce(ticker.AlmaSma3Avg + ticker.AlmaSma3StDev, ticker.AlmaSma3Avg);
+                                     barMetrics.CalculateVelocity(b => b.AlmaSMA3).ZeroReduce(ticker.AlmaVelStDev, -ticker.AlmaVelStDev) *
+                                        (1 - barMetrics.CalculateAcceleration(b => b.AlmaSMA3).DoubleReduce(ticker.AlmaVelStDev, 0)) *
+                                     barMetrics[0].AlmaSMA3.DoubleReduce(ticker.AlmaSma3Avg + ticker.AlmaSma3StDev, ticker.AlmaSma3Avg);
+                    if(pricePrediction > 0)
+                    {
+                        _logger.LogInformation($"Sell predict {pricePrediction:G4} for {ticker.Symbol}: AlmaSMA3:{barMetrics[0].AlmaSMA3:G4} SMASMA:{barMetrics[0].AlmaSMA3:G4} SMA2SMA:{barMetrics[0].SMA2SMA:G4} VolAlmaSMA:{barMetrics[0].VolAlmaSMA}");
+                    }
                 }
 
                 if (buy)
