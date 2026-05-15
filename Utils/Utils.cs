@@ -199,16 +199,14 @@ namespace NumbersGoUp.Utils
             var stdev = Math.Sqrt(values.Sum(v => Math.Pow(valueFn(v) - avg, 2)) / count);
             return (avg, stdev);
         }
-        public static double CalculateAvgStDevRatio(this IEnumerable<double> values)
+        public static (double avg, double stdev) CalculateAvgStDev(this double[] values)
         {
-            var count = values.Count();
-            if (count == 0) return 0;
-            if (count == 1) return values.First();
+            var count = values?.Length ?? 0;
+            if (count == 0) return (0, 0);
+            if (count == 1) return (values[0], 0);
             var avg = values.Average();
-            return avg / Math.Sqrt(values.Select((v, i) =>
-            {
-                return Math.Pow(v - avg, 2);
-            }).Sum() / count);
+            var stdev = Math.Sqrt(values.Sum(v => Math.Pow(v - avg, 2)) / count);
+            return (avg, stdev);
         }
         public static (double slope, double yintercept) CalculateRegression<T>(this T[] itemsAsc, Func<T, double> valueFn)
         {

@@ -177,7 +177,6 @@ namespace NumbersGoUpBase.Services
                     return newRebalancers;
                 }
             }
-            PrintVolatility(barMetrics);
             return rebalancers;
         }
 
@@ -196,17 +195,6 @@ namespace NumbersGoUpBase.Services
                 predictMultiplier = Math.Max(performanceTicker.TickerPrediction.BuyMultiplier - performanceTicker.TickerPrediction.SellMultiplier, 0) * performanceTicker.Ticker.PerformanceVector.DoubleReduce(100, 0, 2, 0);
             }
             return performanceTicker.Ticker.PerformanceVector.DoubleReduce(100, 0, 8, 0) + predictMultiplier;
-        }
-        private void PrintVolatility(IEnumerable<BarMetric> barMetrics)
-        {
-            foreach (var barMetric in barMetrics.OrderByDescending(b => b.VolAlmaSMA).Take(3))
-            {
-                _logger.LogInformation($"Volatility {barMetric.Symbol}: {barMetric.VolAlmaSMA:G4} AlmaSMA3: {barMetric.AlmaSMA3}");
-            }
-            foreach (var barMetric in barMetrics.OrderBy(b => b.VolAlmaSMA).Take(3))
-            {
-                _logger.LogInformation($"Volatility {barMetric.Symbol}: {barMetric.VolAlmaSMA:G4} AlmaSMA3: {barMetric.AlmaSMA3}");
-            }
         }
     }
     public class PerformanceTicker

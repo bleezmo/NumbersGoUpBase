@@ -1,6 +1,6 @@
-﻿using NumbersGoUp.Models;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Microsoft.EntityFrameworkCore;
+using NumbersGoUp.Models;
 using NumbersGoUp.Utils;
 
 namespace NumbersGoUp.Services
@@ -302,9 +302,7 @@ namespace NumbersGoUp.Services
                 var (sma3, sma3Upper, sma3Lower) = BollingerBands(bars.Take(SMA3_LENGTH).ToArray(), DefaultBarFn);
                 var almaBars = bars.Take(ALMA_LENGTH).ToArray();
                 var alma = almaBars.ApplyAlma(DefaultBarFn);
-                barMetric.AlmaSMA1 = GetPerc(alma - sma, smaUpper - sma);
-                barMetric.AlmaSMA2 = GetPerc(alma - sma2, sma2Upper - sma2);
-                barMetric.AlmaSMA3 = GetPerc(alma - sma3, sma3Upper - sma3);
+                barMetric.AlmaSMA = GetPerc(alma - sma3, sma3Upper - sma3);
                 barMetric.SMASMA = GetPerc(sma - sma3, sma3Upper - sma3);
                 barMetric.SMA2SMA = GetPerc(sma2 - sma3, sma3Upper - sma3);
                 barMetric.ProfitLossPerc = (bars.First().Price() - bars.Last().Price()) * 100 / bars.Last().Price();
@@ -312,9 +310,30 @@ namespace NumbersGoUp.Services
                 var volAlma = almaBars.ApplyAlma((bar) => Convert.ToDouble(bar.Volume));
                 var (volSma, volSmaUpper, volSmaLower) = BollingerBands(bars.Take(SMA_LENGTH).ToArray(), (bar) => Convert.ToDouble(bar.Volume));
                 barMetric.VolAlmaSMA = GetPerc(volAlma - volSma, volSmaUpper - volSma);
+                (barMetric.Volatility, barMetric.VolatilitySMA) = VolatilitySMA(bars.Take(SMA2_LENGTH).ToArray(), DefaultBarFn);
                 stocksContext.BarMetrics.Add(barMetric);
             }
             await stocksContext.SaveChangesAsync(_appCancellation.Token);
+        }
+        private (double curVolatility, double volatilitySMA) VolatilitySMA(HistoryBar[] barsDesc, Func<HistoryBar, double> barFn)
+        {
+            double volatilityMultiplier = Math.Sqrt(252);
+            int size = barsDesc.Length / 2;
+            var stdevs = new double[size];
+            for(var windex = 0; windex < size; windex++)
+            {
+                var logreturns = new double[size];
+                for (var i = 0; i < size; i++)
+                {
+                    logreturns[i] = Math.Log(barFn(barsDesc[i + windex]) / barFn(barsDesc[i + windex + 1]));
+                }
+                var (avg, stdev) = logreturns.CalculateAvgStDev();
+                stdevs[windex] = stdev * volatilityMultiplier;
+            }
+            var (sma, smaUpper, smaLower) = BollingerBands(stdevs, std => std);
+            var curVolatility = stdevs[0] * 100;
+            var volitilitySMA = GetPerc(stdevs[0] - sma, smaUpper - sma);
+            return (curVolatility, volitilitySMA);
         }
         private double GetWeekTrend(HistoryBar[] barsAsc)
         {
@@ -333,7 +352,7 @@ namespace NumbersGoUp.Services
         }
 
         private static double DefaultBarFn(HistoryBar bar) => bar.Price();
-        private static (double sma, double smaUpper, double smaLower) BollingerBands(HistoryBar[] bars, Func<HistoryBar, double> barFn)
+        private static (double sma, double smaUpper, double smaLower) BollingerBands<T>(T[] bars, Func<T, double> barFn)
         {
             var sma = bars.Aggregate(0.0, (acc, bar) => acc + barFn(bar)) / bars.Length;
             var stdev = Math.Sqrt(bars.Aggregate(0.0, (acc, bar) => acc + Math.Pow(barFn(bar) - sma, 2)) / bars.Length);
@@ -351,6 +370,15 @@ namespace NumbersGoUp.Services
         public async Task GenerateMetricsExternal(bool collectHistory = true)
         {
             var tickers = await _tickerService.GetFullTickerList();
+            if (collectHistory)
+            {
+                await StartCollection(tickers);
+            }
+            await GenerateMetrics(tickers);
+        }
+        public async Task GenerateMetricsExternal(string symbol, bool collectHistory = true)
+        {
+            var tickers = await _tickerService.GetTickers(new[] {symbol});
             if (collectHistory)
             {
                 await StartCollection(tickers);

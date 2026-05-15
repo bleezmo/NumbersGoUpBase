@@ -101,19 +101,13 @@ namespace NumbersGoUp.Services
                         ticker.SMA2SMAAvg = bars.Average(b => b.SMA2SMA);
                         ticker.SMA2SMAStDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.SMA2SMA - ticker.SMA2SMAAvg, 2)) / bars.Length);
 
-                        ticker.AlmaSma1Avg = bars.Average(b => b.AlmaSMA1);
-                        ticker.AlmaSma1StDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.AlmaSMA1 - ticker.AlmaSma1Avg, 2)) / bars.Length);
-
-                        ticker.AlmaSma2Avg = bars.Average(b => b.AlmaSMA2);
-                        ticker.AlmaSma2StDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.AlmaSMA2 - ticker.AlmaSma2Avg, 2)) / bars.Length);
-
-                        ticker.AlmaSma3Avg = bars.Average(b => b.AlmaSMA3);
-                        ticker.AlmaSma3StDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.AlmaSMA3 - ticker.AlmaSma3Avg, 2)) / bars.Length);
+                        ticker.AlmaSmaAvg = bars.Average(b => b.AlmaSMA);
+                        ticker.AlmaSmaStDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.AlmaSMA - ticker.AlmaSmaAvg, 2)) / bars.Length);
 
                         ticker.ProfitLossAvg = bars.Average(b => b.ProfitLossPerc);
                         ticker.ProfitLossStDev = Math.Sqrt(bars.Sum(b => Math.Pow(b.ProfitLossPerc - ticker.ProfitLossAvg, 2)) / bars.Length);
 
-                        ticker.AlmaVelStDev = (bars.CalculateVelocityStDev(b => b.AlmaSMA1) + bars.CalculateVelocityStDev(b => b.AlmaSMA2) + bars.CalculateVelocityStDev(b => b.AlmaSMA3)) / 3;
+                        ticker.AlmaVelStDev = bars.CalculateVelocityStDev(b => b.AlmaSMA);
                         ticker.SMAVelStDev = bars.CalculateVelocityStDev(b => b.SMASMA);
 
                         (ticker.WeekTrendAvg, ticker.WeekTrendStDev) = bars.CalculateAvgStDev(b => b.WeekTrend);

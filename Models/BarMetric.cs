@@ -16,13 +16,13 @@ namespace NumbersGoUp.Models
         public long HistoryBarId { get; set; }
         [ForeignKey("HistoryBarId")]
         public HistoryBar HistoryBar { get; set; }
-        public double AlmaSMA1 { get; set; }
-        public double AlmaSMA2 { get; set; }
-        public double AlmaSMA3 { get; set; }
+        public double AlmaSMA { get; set; }
         public double SMASMA { get; set; }
         public double SMA2SMA { get; set; }
         public double ProfitLossPerc { get; set; }
         public double WeekTrend { get; set; }
         public double VolAlmaSMA { get; set; }
+        public double VolatilitySMA { get; set; }
+        public double Volatility { get; set; }
     }
 }

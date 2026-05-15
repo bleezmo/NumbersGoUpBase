@@ -25,12 +25,8 @@ namespace NumbersGoUp.Models
         public double SMASMAStDev { get; set; }
         public double SMA2SMAAvg { get; set; }
         public double SMA2SMAStDev { get; set; }
-        public double AlmaSma1Avg { get; set; }
-        public double AlmaSma1StDev { get; set; }
-        public double AlmaSma2Avg { get; set; }
-        public double AlmaSma2StDev { get; set; }
-        public double AlmaSma3Avg { get; set; }
-        public double AlmaSma3StDev { get; set; }
+        public double AlmaSmaAvg { get; set; }
+        public double AlmaSmaStDev { get; set; }
         public double ProfitLossAvg { get; set; }
         public double ProfitLossStDev { get; set; }
         public double Earnings { get; set; }
