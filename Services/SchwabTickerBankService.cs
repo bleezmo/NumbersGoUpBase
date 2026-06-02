@@ -8,7 +8,7 @@ namespace NumbersGoUpBase.Services
 {
     public class SchwabTickerBankService : ITickerBankService
     {
-        public const DayOfWeek RUN_TICKERBANK = DayOfWeek.Monday;
+        public const DayOfWeek RUN_TICKERBANK = DayOfWeek.Tuesday;
 
         private readonly IAppCancellation _appCancellation;
         private readonly ILogger<SchwabTickerBankService> _logger;

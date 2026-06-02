@@ -10,8 +10,8 @@ namespace NumbersGoUp.Services
     {
         public const int PERFORMANCE_AVGS_LOOKBACK = 375;
 
-        public const DayOfWeek RUN_AVGS = DayOfWeek.Wednesday;
-        public const DayOfWeek RUN_LOAD = DayOfWeek.Tuesday;
+        public const DayOfWeek RUN_AVGS = DayOfWeek.Thursday;
+        public const DayOfWeek RUN_LOAD = DayOfWeek.Wednesday;
 
         private const double DEFAULT_PICK_WEIGHT = 0.1;
 

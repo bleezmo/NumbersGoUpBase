@@ -91,7 +91,7 @@ namespace NumbersGoUp.Services
                                         (1 - barMetrics[0].AlmaSMA.DoubleReduce(ticker.AlmaSmaAvg, ticker.AlmaSmaAvg - ticker.AlmaSmaStDev));
                     if (pricePrediction > 0.25)
                     {
-                        _logger.LogInformation($"Buy {pricePrediction:G4} for {ticker.Symbol}: AlmaSMA3:{barMetrics[0].AlmaSMA:G4} Volatility: {barMetrics[0].Volatility} VolAlmaSMA:{barMetrics[0].VolAlmaSMA}");
+                        _logger.LogInformation($"Buy {pricePrediction:G4} for {ticker.Symbol}: AlmaSMA3:{barMetrics[0].AlmaSMA:G4} VolatilitySMA: {barMetrics[0].VolatilitySMA} Velocity:{barMetrics.CalculateAvgVelocity(b => b.VolatilitySMA)}");
                     }
                 }
                 else
@@ -103,7 +103,7 @@ namespace NumbersGoUp.Services
                                      barMetrics[0].AlmaSMA.DoubleReduce(ticker.AlmaSmaAvg + ticker.AlmaSmaStDev, ticker.AlmaSmaAvg);
                     if(pricePrediction > 0.25)
                     {
-                        _logger.LogInformation($"Sell {pricePrediction:G4} for {ticker.Symbol}: AlmaSMA3:{barMetrics[0].AlmaSMA:G4} Volatility: {barMetrics[0].Volatility} VolAlmaSMA:{barMetrics[0].VolAlmaSMA}");
+                        _logger.LogInformation($"Sell {pricePrediction:G4} for {ticker.Symbol}: AlmaSMA3:{barMetrics[0].AlmaSMA:G4} VolatilitySMA: {barMetrics[0].VolatilitySMA} Velocity:{barMetrics.CalculateAvgVelocity(b => b.VolatilitySMA)}");
                     }
                 }
 
