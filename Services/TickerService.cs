@@ -215,6 +215,27 @@ namespace NumbersGoUp.Services
                             }
                         }
                     }
+                    foreach(var position in positions)
+                    {
+                        var hasTicker = tickers.Any(t => t.Symbol == position.Symbol);
+                        var bankTicker = bankTickers.FirstOrDefault(t => t.Symbol == position.Symbol);
+                        var hasTickerPick = tickerPicks.Any(t => t.Symbol == position.Symbol && t.Score > 0);
+                        if(bankTicker != null && !hasTickerPick && !hasTicker)
+                        {
+                            //a position was unknowingly added. this can happen when ticker symbols change or spinoffs occur
+                            var ticker = new Ticker
+                            {
+                                Symbol = bankTicker.Symbol,
+                                LastCalculated = now.UtcDateTime,
+                                LastCalculatedMillis = nowMillis,
+                                LastCalculatedPerformance = now.UtcDateTime,
+                                LastCalculatedPerformanceMillis = nowMillis
+                            };
+                            TickerCopy(ticker, bankTicker);
+                            ticker.PerformanceVector = bankTicker.PerformanceVector;
+                            stocksContext.Tickers.Add(ticker);
+                        }
+                    }
                     await stocksContext.SaveChangesAsync(_appCancellation.Token);
                 }
             }

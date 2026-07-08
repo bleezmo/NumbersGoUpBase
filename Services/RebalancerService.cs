@@ -127,7 +127,7 @@ namespace NumbersGoUpBase.Services
                             }
                             else { diffPerc = 0; }
                         }
-                        else
+                        else if (targetValue > 0)
                         {
                             double sellModifier = 2;
                             if (position.UnrealizedProfitLossPercent.HasValue)
