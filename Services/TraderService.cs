@@ -343,7 +343,13 @@ namespace NumbersGoUp.Services
                 var buyAmt = rebalancer.Diff;
                 if (remainingBuyAmount < buyAmt) { buyAmt = remainingBuyAmount; }
                 var lastBarMetric = await _dataService.GetLastMetric(rebalancer.Symbol);
-                var targetPrice = Math.Min(lastBarMetric.HistoryBar.Price(), lastBarMetric.HistoryBar.ClosePrice);
+                Quote quote = null;
+                try
+                {
+                    quote = await _brokerService.GetLastTrade(position.Symbol);
+                }
+                catch { }
+                var targetPrice = new[] { lastBarMetric.HistoryBar.Price(), lastBarMetric.HistoryBar.ClosePrice, quote?.Price ?? double.MaxValue }.Min();
                 if (targetPrice == 0)
                 {
                     _logger.LogError($"Target price zero when buying. Ticker {position.Symbol}");
