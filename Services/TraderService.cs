@@ -343,13 +343,26 @@ namespace NumbersGoUp.Services
                 var buyAmt = rebalancer.Diff;
                 if (remainingBuyAmount < buyAmt) { buyAmt = remainingBuyAmount; }
                 var lastBarMetric = await _dataService.GetLastMetric(rebalancer.Symbol);
+                var targetPrice = Math.Min(lastBarMetric.HistoryBar.Price(), lastBarMetric.HistoryBar.ClosePrice);
                 Quote quote = null;
                 try
                 {
                     quote = await _brokerService.GetLastTrade(position.Symbol);
+                    if (quote != null)
+                    {
+                        var percChange = Math.Abs(quote.Price - targetPrice) * 100 / targetPrice;
+                        if(percChange > 5)
+                        {
+                            _logger.LogInformation($"Volatile price detected for {quote.Symbol}. Cancelling buy");
+                            continue;
+                        }
+                    }
                 }
-                catch { }
-                var targetPrice = new[] { lastBarMetric.HistoryBar.Price(), lastBarMetric.HistoryBar.ClosePrice, quote?.Price ?? double.MaxValue }.Min();
+                catch (Exception ex) 
+                {
+                    _logger.LogError(ex, $"Error getting quote from {position.Symbol}");
+                }
+                targetPrice = quote != null ? Math.Min(targetPrice, quote.Price) : targetPrice;
                 if (targetPrice == 0)
                 {
                     _logger.LogError($"Target price zero when buying. Ticker {position.Symbol}");
