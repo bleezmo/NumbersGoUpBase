@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using NumbersGoUp.Models;
 using NumbersGoUp.Services;
 using NumbersGoUp.Utils;
+using MyUtils = NumbersGoUp.Utils.Utils;
 
 namespace NumbersGoUpBase.Services
 {
@@ -57,23 +58,26 @@ namespace NumbersGoUpBase.Services
                 }
             }
             var performanceCutoff = allTickers.Count() > MAX_TICKER_COUNT ? allTickers.OrderByDescending(t => t.PerformanceVector).Skip(MAX_TICKER_COUNT).First().PerformanceVector : 0;
-            var selectedTickers = new List<PerformanceTicker>();
+            var selectedTickersBuffer = new List<PerformanceTicker>();
             foreach(var ticker in allTickers)
             {
                 var meetsConditions = ticker.PerformanceVector > performanceCutoff;
                 if (meetsConditions)
                 {
-                    selectedTickers.Add(new PerformanceTicker { Ticker = ticker, MeetsRequirements = true });
+                    selectedTickersBuffer.Add(new PerformanceTicker { Ticker = ticker, MeetsRequirements = true });
                 }
                 else if (positions.Any(p => p.Symbol == ticker.Symbol))
                 {
                     //still have to pull in the ones we have positions for
-                    selectedTickers.Add(new PerformanceTicker { Ticker = ticker });
+                    selectedTickersBuffer.Add(new PerformanceTicker { Ticker = ticker });
                 }
             }
+            var selectedTickers = selectedTickersBuffer.OrderByDescending(t => t.Ticker.PerformanceVector).ToArray();
             double totalPerformance = 0.0;
-            foreach (var performanceTicker in selectedTickers)
+            var performanceAlmaMultipliers = MyUtils.AlmaMultipliers(selectedTickers.Length, 0.5);
+            for (var i = 0; i < selectedTickers.Length; i++)
             {
+                var performanceTicker = selectedTickers[i];
                 var prediction = await _predicterService.Predict(performanceTicker.Ticker);
                 if (prediction != null)
                 {
@@ -86,7 +90,8 @@ namespace NumbersGoUpBase.Services
                 {
                     _logger.LogError($"Position exists for {performanceTicker.Ticker.Symbol} but prediction returned null");
                 }
-                totalPerformance += PerformanceValue(performanceTicker);
+                performanceTicker.FinalPerformance = PerformanceValue(performanceTicker) * performanceAlmaMultipliers[i];
+                totalPerformance += performanceTicker.FinalPerformance;
             }
             var rebalancers = new List<StockRebalancer>();
             if(totalPerformance == 0)
@@ -104,7 +109,7 @@ namespace NumbersGoUpBase.Services
                     continue;
                 }
                 if (prediction.RecentBarMetric != null) { barMetrics.Add(prediction.RecentBarMetric); }
-                var calculatedPerformance = tickerEquity * PerformanceValue(performanceTicker) * performanceTicker.PerformanceMultiplier();
+                var calculatedPerformance = tickerEquity * performanceTicker.FinalPerformance * performanceTicker.PerformanceMultiplier();
                 var targetValue = totalPerformance > 0 ? (calculatedPerformance / totalPerformance) : 0.0;
                 var position = performanceTicker.Position;
                 if (position == null && targetValue > 0 && performanceTicker.MeetsRequirements && cash > 0)
@@ -203,6 +208,7 @@ namespace NumbersGoUpBase.Services
         public Prediction TickerPrediction { get; set; }
         public Position Position { get; set; }
         public bool MeetsRequirements { get; set; }
+        public double FinalPerformance { get; set; }
         public virtual double PerformanceMultiplier()
         {
             return MeetsRequirements ? 1.0 : 0.9;

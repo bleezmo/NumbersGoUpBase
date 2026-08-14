@@ -1,7 +1,4 @@
-﻿
-using NumbersGoUp.Models;
-
-namespace NumbersGoUp.Utils
+﻿namespace NumbersGoUp.Utils
 {
     public static class Utils
     {
@@ -71,36 +68,43 @@ namespace NumbersGoUp.Utils
         public static double WExpCurve(this double x, int peaks = 2) => ((-0.5 * Math.Cos(peaks * 2 * Math.PI * x)) + 0.5)*x;
         public static double VTailCurve(this double x, int peaks = 1) => (-0.5 * Math.Cos(((peaks * 2) + 1) * Math.PI * x)) + 0.5;
         public static double VTailExpCurve(this double x, int peaks = 1) => (-0.5 * Math.Cos(((peaks * 2) + 1) * Math.PI * x)) + 0.5;
-        public static bool TickerAny(this string[] symbols, ITicker t) => symbols.Any(s => string.Equals(s, t.Symbol, StringComparison.InvariantCultureIgnoreCase));
-        public static double ApplyAlma<T>(this T[] objsDesc, Func<T, double> objFn, double? sigma = null) where T:class
+        public static double ApplyAlma<T>(this T[] objsDesc, Func<T, double> objFn) where T:class
         {
             double WtdSum = 0, WtdNorm = 0;
-            if (!sigma.HasValue)
-            {
-                sigma = objsDesc.Length * 0.6;
-            }
+            var sigma = objsDesc.Length * 0.6;
             for (int i = 0; i < objsDesc.Length; i++)
             {
-                double eq = Math.Exp(-1 * (Math.Pow(i, 2) / Math.Pow(sigma.Value, 2)));
+                double eq = Math.Exp(-1 * (Math.Pow(i, 2) / Math.Pow(sigma, 2)));
                 WtdSum = WtdSum + (eq * objFn(objsDesc[i]));
                 WtdNorm = WtdNorm + eq;
             }
             return WtdSum / WtdNorm;
         }
-        public static double ApplyAlma(this double[] valuesDesc, double? sigma = null)
+        public static double ApplyAlma(this double[] valuesDesc)
         {
             double WtdSum = 0, WtdNorm = 0;
-            if (!sigma.HasValue)
-            {
-                sigma = valuesDesc.Length * 0.6;
-            }
+            var sigma = valuesDesc.Length * 0.6;
             for (int i = 0; i < valuesDesc.Length; i++)
             {
-                double eq = Math.Exp(-1 * (Math.Pow(i, 2) / Math.Pow(sigma.Value, 2)));
+                double eq = Math.Exp(-1 * (Math.Pow(i, 2) / Math.Pow(sigma, 2)));
                 WtdSum = WtdSum + (eq * valuesDesc[i]);
                 WtdNorm = WtdNorm + eq;
             }
             return WtdSum / WtdNorm;
+        }
+        public static double[] AlmaMultipliers(int length, double? sigmaMultiplier = null)
+        {
+            double[] values = new double[length];
+            double sigma = length * 0.6;
+            if (sigmaMultiplier.HasValue)
+            {
+                sigma = length * sigmaMultiplier.Value;
+            }
+            for (int i = 0; i < length; i++)
+            {
+                values[i] = Math.Exp(-1 * (Math.Pow(i, 2) / Math.Pow(sigma, 2)));
+            }
+            return values;
         }
         public static double CalculateVelocity<T>(this IEnumerable<T> barsDesc, Func<T, double> angleValueFn)
         {
@@ -358,6 +362,7 @@ namespace NumbersGoUp.Utils
             if(values == null || !values.Any()) {  return defaultMin; }
             else { return values.Max(); }
         }
+        public static MinMaxStore<T> GenerateMinMax<T>(this IEnumerable<T> objs, Func<T, double> valueFn) => new MinMaxStore<T>(valueFn).Run(objs);
     }
     public class MinMaxStore<T>
     {
@@ -369,8 +374,16 @@ namespace NumbersGoUp.Utils
         public MinMaxStore(Func<T, double> perfFn)
         {
             _perfFn = perfFn;
-            Max = 0.0;
+            Max = double.MinValue;
             Min = double.MaxValue;
+        }
+        public MinMaxStore<T> Run(IEnumerable<T> datas)
+        {
+            foreach(var data in datas)
+            {
+                Run(data);
+            }
+            return this;
         }
         public double Run(T data)
         {
@@ -380,6 +393,6 @@ namespace NumbersGoUp.Utils
             return result;
         }
 
-        public double Rank(T data) => Max > Min ? _perfFn(data).DoubleReduce(Max, Min) : 1;
+        public double Rank(T data, double newMax = 1, double newMin = 0) => Max > Min ? _perfFn(data).DoubleReduce(Max, Min, newMax, newMin) : newMax;
     }
 }
