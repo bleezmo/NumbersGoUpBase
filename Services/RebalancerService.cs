@@ -110,7 +110,7 @@ namespace NumbersGoUpBase.Services
                 }
                 if (prediction.RecentBarMetric != null) { barMetrics.Add(prediction.RecentBarMetric); }
                 var calculatedPerformance = tickerEquity * performanceTicker.FinalPerformance * performanceTicker.PerformanceMultiplier();
-                var targetValue = totalPerformance > 0 ? (calculatedPerformance / totalPerformance) : 0.0;
+                var targetValue = totalPerformance > 0 ? Math.Round(calculatedPerformance / totalPerformance, MidpointRounding.ToZero) : 0.0;
                 var position = performanceTicker.Position;
                 if (position == null && targetValue > 0 && performanceTicker.MeetsRequirements && cash > 0)
                 {
