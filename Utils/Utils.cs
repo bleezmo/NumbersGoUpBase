@@ -106,6 +106,16 @@
             }
             return values;
         }
+        public static double AlmaNormalizedMultiplier(double x, int length, double? sigmaMultiplier = null)
+        {
+            double sigma = length * 0.6;
+            if (sigmaMultiplier.HasValue)
+            {
+                sigma = length * sigmaMultiplier.Value;
+            }
+            //integral sum of alma is sqrt(pi * sigma^2)/2
+            return 2 / (Math.Exp(Math.Pow(x, 2) / Math.Pow(sigma, 2)) * Math.Sqrt(Math.Pow(sigma, 2) * Math.PI));
+        }
         public static double CalculateVelocity<T>(this IEnumerable<T> barsDesc, Func<T, double> angleValueFn)
         {
             var count = barsDesc.Count();

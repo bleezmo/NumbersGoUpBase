@@ -74,7 +74,6 @@ namespace NumbersGoUpBase.Services
             }
             var selectedTickers = selectedTickersBuffer.OrderByDescending(t => t.Ticker.PerformanceVector).ToArray();
             double totalPerformance = 0.0;
-            var performanceAlmaMultipliers = MyUtils.AlmaMultipliers(selectedTickers.Length, 0.5);
             for (var i = 0; i < selectedTickers.Length; i++)
             {
                 var performanceTicker = selectedTickers[i];
@@ -90,7 +89,7 @@ namespace NumbersGoUpBase.Services
                 {
                     _logger.LogError($"Position exists for {performanceTicker.Ticker.Symbol} but prediction returned null");
                 }
-                performanceTicker.FinalPerformance = PerformanceValue(performanceTicker) * performanceAlmaMultipliers[i];
+                performanceTicker.FinalPerformance = PerformanceValue(performanceTicker) * MyUtils.AlmaNormalizedMultiplier(i, selectedTickers.Length, 0.8);
                 totalPerformance += performanceTicker.FinalPerformance;
             }
             var rebalancers = new List<StockRebalancer>();
@@ -109,8 +108,8 @@ namespace NumbersGoUpBase.Services
                     continue;
                 }
                 if (prediction.RecentBarMetric != null) { barMetrics.Add(prediction.RecentBarMetric); }
-                var calculatedPerformance = tickerEquity * performanceTicker.FinalPerformance * performanceTicker.PerformanceMultiplier();
-                var targetValue = totalPerformance > 0 ? Math.Round(calculatedPerformance / totalPerformance, MidpointRounding.ToZero) : 0.0;
+                var calculatedPerformance = performanceTicker.FinalPerformance * performanceTicker.PerformanceMultiplier();
+                var targetValue = totalPerformance > 0 ? Math.Round(tickerEquity * calculatedPerformance / totalPerformance, MidpointRounding.ToZero) : 0.0;
                 var position = performanceTicker.Position;
                 if (position == null && targetValue > 0 && performanceTicker.MeetsRequirements && cash > 0)
                 {
