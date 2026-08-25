@@ -80,8 +80,8 @@ namespace NumbersGoUpBase.Services
                 var prediction = await _predicterService.Predict(performanceTicker.Ticker);
                 if (prediction != null)
                 {
-                    prediction.SellMultiplier = performanceTicker.MeetsRequirements ? 0 : prediction.SellMultiplier;
-                    prediction.BuyMultiplier = performanceTicker.MeetsRequirements ? prediction.BuyMultiplier : 0;
+                    prediction.SellMultiplier = prediction.SellMultiplier * (performanceTicker.MeetsRequirements ? 0.3 : 1);
+                    prediction.BuyMultiplier = prediction.BuyMultiplier * (performanceTicker.MeetsRequirements ? 1 : 0);
                 }
                 performanceTicker.TickerPrediction = prediction;
                 performanceTicker.Position = positions.FirstOrDefault(p => p.Symbol == performanceTicker.Ticker.Symbol);
