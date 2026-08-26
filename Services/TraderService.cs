@@ -339,7 +339,6 @@ namespace NumbersGoUp.Services
                     var lastBuyOrder = await stocksContext.OrderHistories.Where(o => o.Account == _account.AccountId && o.Symbol == rebalancer.Symbol && o.NextBuy != null).OrderByDescending(o => o.TimeLocalMilliseconds).Take(1).FirstOrDefaultAsync(_appCancellation.Token);
                     if (lastBuyOrder != null && lastBuyOrder.NextBuy.Value.Date.CompareTo(now) > 0) continue;
                 }
-                var position = rebalancer.Position;
                 var buyAmt = rebalancer.Diff;
                 if (remainingBuyAmount < buyAmt) { buyAmt = remainingBuyAmount; }
                 var lastBarMetric = await _dataService.GetLastMetric(rebalancer.Symbol);
@@ -347,7 +346,7 @@ namespace NumbersGoUp.Services
                 Quote quote = null;
                 try
                 {
-                    quote = await _brokerService.GetLastTrade(position.Symbol);
+                    quote = await _brokerService.GetLastTrade(rebalancer.Symbol);
                     if (quote != null)
                     {
                         var percChange = Math.Abs(quote.Price - targetPrice) * 100 / targetPrice;
@@ -360,12 +359,12 @@ namespace NumbersGoUp.Services
                 }
                 catch (Exception ex) 
                 {
-                    _logger.LogError(ex, $"Error getting quote from {position.Symbol}");
+                    _logger.LogError(ex, $"Error getting quote from {rebalancer.Symbol}");
                 }
                 targetPrice = quote != null ? Math.Min(targetPrice, quote.Price) : targetPrice;
                 if (targetPrice == 0)
                 {
-                    _logger.LogError($"Target price zero when buying. Ticker {position.Symbol}");
+                    _logger.LogError($"Target price zero when buying. Ticker {rebalancer.Symbol}");
                     continue;
                 }
                 var qty = Math.Floor(buyAmt / targetPrice);
@@ -393,7 +392,7 @@ namespace NumbersGoUp.Services
                                 Account = _account.AccountId,
                                 Qty = qty,
                                 AppliedAmt = qty * targetPrice,
-                                AvgEntryPrice = position?.AverageEntryPrice ?? 0,
+                                AvgEntryPrice = rebalancer.Position?.AverageEntryPrice ?? 0,
                                 BrokerOrderId = brokerOrder.BrokerOrderId
                             });
                             await stocksContext.SaveChangesAsync(_appCancellation.Token);
