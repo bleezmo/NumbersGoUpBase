@@ -10,7 +10,7 @@ namespace NumbersGoUpBase.Services
     public class RebalancerService
     {
         public double CashMinimum { get; }
-        public const int MAX_TICKER_COUNT = 50;
+        private readonly int MAX_TICKER_COUNT;
         private readonly ILogger<PredicterService> _logger;
         private readonly TickerService _tickerService;
         private readonly PredicterService _predicterService;
@@ -23,6 +23,7 @@ namespace NumbersGoUpBase.Services
             _tickerService = tickerService;
             _predicterService = predicterService;
             CashMinimum = double.TryParse(configuration[EnvParamKeys.CASH_MIN], out var cashMinimum) ? cashMinimum : 0;
+            MAX_TICKER_COUNT = int.TryParse(configuration[EnvParamKeys.MAX_TICKER_COUNT], out var maxTickerCount) ? maxTickerCount : 50;
             _encouragementMultiplier = Math.Min(Math.Max(double.TryParse(configuration[EnvParamKeys.ENCOURAGEMENT_MULTIPLIER], out var encouragementMultiplier) ? encouragementMultiplier : 0, -1), 1);
         }
         public async Task<IEnumerable<StockRebalancer>> Rebalance(IEnumerable<Position> positions, Balance balance)

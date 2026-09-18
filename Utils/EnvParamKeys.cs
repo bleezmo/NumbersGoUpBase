@@ -11,5 +11,6 @@ namespace NumbersGoUp.Utils
         public const string CASH_MIN = "CashMinimum";
         public const string PICK_WEIGHT = "PickWeight";
         public const string ENCOURAGEMENT_MULTIPLIER = "EncouragementMultiplier";
+        public const string MAX_TICKER_COUNT = "MaxTickerCount";
     }
 }
